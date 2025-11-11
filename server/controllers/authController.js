@@ -19,12 +19,49 @@ const login = async (req, res) => {
       isActive: true 
     });
 
+    console.log('=== USER LOOKUP RESULT ===');
+    console.log('Search username/email:', username);
+    console.log('User found:', !!user);
+    if (user) {
+      console.log('Found user details:', {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        unit: user.unit,
+        isActive: user.isActive,
+        hasPassword: !!user.password,
+        passwordLength: user.password ? user.password.length : 0
+      });
+    } else {
+      // Check if user exists but is inactive
+      const inactiveUser = await User.findOne({ 
+        $or: [{ username }, { email: username }]
+      });
+      if (inactiveUser) {
+        console.log('User exists but is INACTIVE:', {
+          username: inactiveUser.username,
+          email: inactiveUser.email,
+          isActive: inactiveUser.isActive
+        });
+        return res.status(401).json({ message: 'Account is deactivated. Please contact administrator.' });
+      }
+    }
+
     if (!user) {
+      console.log('No user found with username/email:', username);
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
+    console.log('=== PASSWORD VERIFICATION ===');
+    console.log('Provided password:', password);
+    console.log('Stored password hash:', user.password);
+    
     const isPasswordValid = await bcrypt.compare(password, user.password);
+    console.log('Password validation result:', isPasswordValid);
+    
     if (!isPasswordValid) {
+      console.log('Password mismatch for user:', username);
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 

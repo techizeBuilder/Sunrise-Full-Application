@@ -62,6 +62,25 @@ import CategoryManagement from './CategoryManagement';
 import { apiRequest } from '@/lib/queryClient';
 import { showSmartToast } from '@/lib/toast-utils';
 
+// Helper function to get role-based API path
+function getInventoryApiPath(user) {
+  if (!user) return '/api';
+  
+  switch (user.role) {
+    case 'Super Admin':
+      return '/api/super-admin/inventory';
+    case 'Unit Head':
+      return '/api/unit-head/inventory';
+    default:
+      return '/api';
+  }
+}
+
+// Helper function to check if user has read-only access
+function isReadOnlyRole(user) {
+  return user?.role === 'Unit Head';
+}
+
 // Modern Stats Component
 function ModernStats({ stats, isLoading }) {
   const statsCards = [
@@ -132,6 +151,9 @@ export default function ModernInventoryUI() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
+  // Get role-based API path
+  const apiBasePath = getInventoryApiPath(user);
+  
   // State management
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
@@ -139,6 +161,7 @@ export default function ModernInventoryUI() {
   const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, item: null });
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedStore, setSelectedStore] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
@@ -147,19 +170,19 @@ export default function ModernInventoryUI() {
 
   // Data fetching with React Query
   const { data: itemsData, isLoading: itemsLoading } = useQuery({
-    queryKey: ['/api/items'],
+    queryKey: [`${apiBasePath}/items`],
   });
 
   const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: ['/api/inventory/stats'],
+    queryKey: [`${apiBasePath}/stats`],
   });
 
   const { data: categoriesData } = useQuery({
-    queryKey: ['/api/categories'],
+    queryKey: [`${apiBasePath}/categories`],
   });
 
   const { data: customerCategoriesData } = useQuery({
-    queryKey: ['/api/customer-categories'],
+    queryKey: [`${apiBasePath}/customer-categories`],
   });
 
   // Extract arrays from API response
@@ -169,10 +192,10 @@ export default function ModernInventoryUI() {
 
   // Mutations
   const deleteItemMutation = useMutation({
-    mutationFn: (id) => apiRequest('DELETE', `/api/items/${id}`),
+    mutationFn: (id) => apiRequest('DELETE', `${apiBasePath}/items/${id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries(['/api/items']);
-      queryClient.invalidateQueries(['/api/inventory/stats']);
+      queryClient.invalidateQueries([`${apiBasePath}/items`]);
+      queryClient.invalidateQueries([`${apiBasePath}/stats`]);
       setDeleteConfirm({ isOpen: false, item: null });
       toast({
         title: "Item Deleted",
@@ -185,10 +208,10 @@ export default function ModernInventoryUI() {
   });
 
   const createItemMutation = useMutation({
-    mutationFn: (data) => apiRequest('POST', '/api/items', data),
+    mutationFn: (data) => apiRequest('POST', `${apiBasePath}/items`, data),
     onSuccess: () => {
-      queryClient.invalidateQueries(['/api/items']);
-      queryClient.invalidateQueries(['/api/inventory/stats']);
+      queryClient.invalidateQueries([`${apiBasePath}/items`]);
+      queryClient.invalidateQueries([`${apiBasePath}/stats`]);
       setShowForm(false);
       setEditingItem(null);
       toast({
@@ -211,10 +234,10 @@ export default function ModernInventoryUI() {
   });
 
   const updateItemMutation = useMutation({
-    mutationFn: ({ id, data }) => apiRequest('PUT', `/api/items/${id}`, data),
+    mutationFn: ({ id, data }) => apiRequest('PUT', `${apiBasePath}/items/${id}`, data),
     onSuccess: () => {
-      queryClient.invalidateQueries(['/api/items']);
-      queryClient.invalidateQueries(['/api/inventory/stats']);
+      queryClient.invalidateQueries([`${apiBasePath}/items`]);
+      queryClient.invalidateQueries([`${apiBasePath}/stats`]);
       setShowForm(false);
       setEditingItem(null);
       toast({
@@ -271,10 +294,10 @@ export default function ModernInventoryUI() {
   };
 
   const handleRefresh = () => {
-    queryClient.invalidateQueries(['/api/items']);
-    queryClient.invalidateQueries(['/api/categories']);
-    queryClient.invalidateQueries(['/api/customer-categories']);
-    queryClient.invalidateQueries(['/api/inventory/stats']);
+    queryClient.invalidateQueries([`${apiBasePath}/items`]);
+    queryClient.invalidateQueries([`${apiBasePath}/categories`]);
+    queryClient.invalidateQueries([`${apiBasePath}/customer-categories`]);
+    queryClient.invalidateQueries([`${apiBasePath}/stats`]);
     toast({
       title: "Refreshed",
       description: "Inventory data has been refreshed successfully",
@@ -286,11 +309,13 @@ export default function ModernInventoryUI() {
     const matchesSearch = !searchTerm || 
       item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.description?.toLowerCase().includes(searchTerm.toLowerCase());
+      item.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.store?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesCategory = !selectedCategory || selectedCategory === 'all' || item.category === selectedCategory;
+    const matchesStore = !selectedStore || selectedStore === 'all' || item.store === selectedStore;
     
-    return matchesSearch && matchesCategory;
+    return matchesSearch && matchesCategory && matchesStore;
   }).sort((a, b) => {
     switch (sortBy) {
       case 'name':
@@ -315,10 +340,10 @@ export default function ModernInventoryUI() {
   const endIndex = startIndex + itemsPerPage;
   const paginatedItems = filteredItems.slice(startIndex, endIndex);
 
-  // Reset to first page when search or filter changes
-  React.useEffect(() => {
+    // Reset to first page when search or filter changes
+  useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedCategory]);
+  }, [searchTerm, selectedCategory, selectedStore, sortBy]);
 
   const handlePageChange = (page) => {
     setCurrentPage(page);
@@ -334,36 +359,43 @@ export default function ModernInventoryUI() {
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
             <div className="flex flex-col">
               <h2 className="text-xl font-semibold text-blue-900 dark:text-blue-100">
-                Quick Actions
+                {isReadOnlyRole(user) ? 'Inventory Monitoring' : 'Quick Actions'}
               </h2>
               <p className="text-sm text-blue-600 dark:text-blue-300">
-                Manage your inventory efficiently with these actions
+                {isReadOnlyRole(user) 
+                  ? 'Monitor inventory levels, view item details and track stock status'
+                  : 'Manage your inventory efficiently with these actions'
+                }
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
-              <Button 
-                onClick={() => setShowForm(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-200"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Item
-              </Button>
-              <Button 
-                onClick={() => setCategoryManagementOpen(true)}
-                variant="outline"
-                className="border-purple-300 text-purple-700 hover:bg-purple-50 dark:border-purple-600 dark:text-purple-300 dark:hover:bg-purple-950/30"
-              >
-                <Tag className="h-4 w-4 mr-2" />
-                Categories
-              </Button>
-              <Button 
-                onClick={() => setShowCustomerCategoryModal(true)}
-                variant="outline"
-                className="border-green-300 text-green-700 hover:bg-green-50 dark:border-green-600 dark:text-green-300 dark:hover:bg-green-950/30"
-              >
-                <Users className="h-4 w-4 mr-2" />
-                Customer Category
-              </Button>
+              {!isReadOnlyRole(user) && (
+                <>
+                  <Button 
+                    onClick={() => setShowForm(true)}
+                    className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-200"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Item
+                  </Button>
+                  <Button 
+                    onClick={() => setCategoryManagementOpen(true)}
+                    variant="outline"
+                    className="border-purple-300 text-purple-700 hover:bg-purple-50 dark:border-purple-600 dark:text-purple-300 dark:hover:bg-purple-950/30"
+                  >
+                    <Tag className="h-4 w-4 mr-2" />
+                    Categories
+                  </Button>
+                  <Button 
+                    onClick={() => setShowCustomerCategoryModal(true)}
+                    variant="outline"
+                    className="border-green-300 text-green-700 hover:bg-green-50 dark:border-green-600 dark:text-green-300 dark:hover:bg-green-950/30"
+                  >
+                    <Users className="h-4 w-4 mr-2" />
+                    Customer Category
+                  </Button>
+                </>
+              )}
               <Button 
                 onClick={handleRefresh}
                 variant="outline"
@@ -419,6 +451,38 @@ export default function ModernInventoryUI() {
                   ))}
                 </SelectContent>
               </Select>
+              <Select value={selectedStore} onValueChange={setSelectedStore}>
+                <SelectTrigger className="w-[180px] border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400">
+                  <Package2 className="h-4 w-4 mr-2 text-gray-400" />
+                  <SelectValue placeholder="All Stores" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">
+                    <div className="flex items-center gap-2">
+                      <Package2 className="h-4 w-4" />
+                      All Stores
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="Hyderabad">
+                    <div className="flex items-center gap-2">
+                      <Package2 className="h-4 w-4" />
+                      Hyderabad
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="Bengaluru">
+                    <div className="flex items-center gap-2">
+                      <Package2 className="h-4 w-4" />
+                      Bengaluru
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="Tirupati">
+                    <div className="flex items-center gap-2">
+                      <Package2 className="h-4 w-4" />
+                      Tirupati
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
               <Select value={sortBy} onValueChange={setSortBy}>
                 <SelectTrigger className="w-[150px] border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400">
                   <BarChart3 className="h-4 w-4 mr-2 text-gray-400" />
@@ -439,8 +503,9 @@ export default function ModernInventoryUI() {
                 <TableHeader>
                   <TableRow className="bg-gray-50 dark:bg-gray-800/50">
                     <TableHead className="font-semibold text-gray-900 dark:text-gray-100">Image</TableHead>
-                    <TableHead className="font-semibold text-gray-900 dark:text-gray-100">Name/Code</TableHead>
+                    <TableHead className="font-semibold text-gray-900 dark:text-gray-100">Name</TableHead>
                     <TableHead className="font-semibold text-gray-900 dark:text-gray-100">Category</TableHead>
+                    <TableHead className="font-semibold text-gray-900 dark:text-gray-100">Store Location</TableHead>
                     <TableHead className="font-semibold text-gray-900 dark:text-gray-100">Stock</TableHead>
                     <TableHead className="font-semibold text-gray-900 dark:text-gray-100">Price</TableHead>
                     <TableHead className="font-semibold text-gray-900 dark:text-gray-100">Status</TableHead>
@@ -450,13 +515,13 @@ export default function ModernInventoryUI() {
                 <TableBody>
                   {itemsLoading ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8">
+                      <TableCell colSpan={8} className="text-center py-8">
                         Loading items...
                       </TableCell>
                     </TableRow>
                   ) : filteredItems.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                         No items found. Add your first inventory item to get started.
                       </TableCell>
                     </TableRow>
@@ -487,7 +552,7 @@ export default function ModernInventoryUI() {
                         <TableCell className="py-4">
                           <div>
                             <div className="font-medium text-gray-900 dark:text-gray-100">{item.name}</div>
-                            <div className="text-sm text-gray-500 dark:text-gray-400">{item.code}</div>
+                            <div className="text-sm text-gray-500 dark:text-gray-400">{item.type}</div>
                           </div>
                         </TableCell>
                         <TableCell className="py-4">
@@ -501,6 +566,11 @@ export default function ModernInventoryUI() {
                               </div>
                             )}
                           </div>
+                        </TableCell>
+                        <TableCell className="py-4">
+                          <Badge variant="secondary" className="bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/30 dark:text-purple-300 dark:border-purple-800">
+                            {item.store || 'No location'}
+                          </Badge>
                         </TableCell>
                         <TableCell className="py-4">
                           <div>
@@ -538,24 +608,28 @@ export default function ModernInventoryUI() {
                             >
                               <Eye className="h-4 w-4 text-blue-600" />
                             </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              onClick={() => handleEdit(item)}
-                              className="h-8 w-8 p-0 hover:bg-green-50 dark:hover:bg-green-900/30"
-                              title="Edit Item"
-                            >
-                              <Edit className="h-4 w-4 text-green-600" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              onClick={() => handleDelete(item)}
-                              className="h-8 w-8 p-0 hover:bg-red-50 dark:hover:bg-red-900/30"
-                              title="Delete Item"
-                            >
-                              <Trash2 className="h-4 w-4 text-red-600" />
-                            </Button>
+                            {!isReadOnlyRole(user) && (
+                              <>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  onClick={() => handleEdit(item)}
+                                  className="h-8 w-8 p-0 hover:bg-green-50 dark:hover:bg-green-900/30"
+                                  title="Edit Item"
+                                >
+                                  <Edit className="h-4 w-4 text-green-600" />
+                                </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  onClick={() => handleDelete(item)}
+                                  className="h-8 w-8 p-0 hover:bg-red-50 dark:hover:bg-red-900/30"
+                                  title="Delete Item"
+                                >
+                                  <Trash2 className="h-4 w-4 text-red-600" />
+                                </Button>
+                              </>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -622,18 +696,21 @@ export default function ModernInventoryUI() {
         </CardContent>
       </Card>
 
-      <SimpleInventoryForm
-        isOpen={showForm}
-        onClose={() => {
-          setShowForm(false);
-          setEditingItem(null);
-        }}
-        item={editingItem}
-        categories={categories}
-        customerCategories={customerCategories}
-        onSubmit={handleFormSubmit}
-        isLoading={createItemMutation.isPending || updateItemMutation.isPending}
-      />
+      {/* Forms and Modals - Hidden for read-only users */}
+      {!isReadOnlyRole(user) && (
+        <SimpleInventoryForm
+          isOpen={showForm}
+          onClose={() => {
+            setShowForm(false);
+            setEditingItem(null);
+          }}
+          item={editingItem}
+          categories={categories}
+          customerCategories={customerCategories}
+          onSubmit={handleFormSubmit}
+          isLoading={createItemMutation.isPending || updateItemMutation.isPending}
+        />
+      )}
 
       <ViewItemModal
         isOpen={!!viewItem}
@@ -641,28 +718,34 @@ export default function ModernInventoryUI() {
         item={viewItem}
       />
 
-      <DeleteConfirmDialog
-        isOpen={deleteConfirm.isOpen}
-        onClose={() => setDeleteConfirm({ isOpen: false, item: null })}
-        onConfirm={confirmDelete}
-        title="Delete Inventory Item"
-        description="Are you sure you want to delete this inventory item?"
-        itemName={deleteConfirm.item?.name}
-        isLoading={deleteItemMutation.isPending}
-      />
+      {!isReadOnlyRole(user) && (
+        <DeleteConfirmDialog
+          isOpen={deleteConfirm.isOpen}
+          onClose={() => setDeleteConfirm({ isOpen: false, item: null })}
+          onConfirm={confirmDelete}
+          title="Delete Inventory Item"
+          description="Are you sure you want to delete this inventory item?"
+          itemName={deleteConfirm.item?.name}
+          isLoading={deleteItemMutation.isPending}
+        />
+      )}
 
-      {/* Category Management Modals */}
-      <CategoryManagement 
-        isOpen={categoryManagementOpen}
-        onClose={() => setCategoryManagementOpen(false)}
-        initialTab="product"
-      />
-      
-      <CategoryManagement 
-        isOpen={showCustomerCategoryModal}
-        onClose={() => setShowCustomerCategoryModal(false)}
-        initialTab="customer"
-      />
+      {/* Category Management Modals - Hidden for read-only users */}
+      {!isReadOnlyRole(user) && (
+        <>
+          <CategoryManagement 
+            isOpen={categoryManagementOpen}
+            onClose={() => setCategoryManagementOpen(false)}
+            initialTab="product"
+          />
+          
+          <CategoryManagement 
+            isOpen={showCustomerCategoryModal}
+            onClose={() => setShowCustomerCategoryModal(false)}
+            initialTab="customer"
+          />
+        </>
+      )}
     </div>
   );
 }

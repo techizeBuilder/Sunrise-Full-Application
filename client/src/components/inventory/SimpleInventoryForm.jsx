@@ -29,6 +29,7 @@ import { useToast } from '@/hooks/use-toast';
 const ITEM_TYPES = ['Product', 'Material', 'Spares', 'Assemblies'];
 const IMPORTANCE_LEVELS = ['Low', 'Normal', 'High', 'Critical'];
 const UNITS = ['pieces', 'kg', 'liters', 'meters', 'sheets', 'boxes', 'units', 'tons', 'cartons'];
+const STORE_LOCATIONS = ['Hyderabad', 'Bengaluru', 'Tirupati'];
 
 export default function SimpleInventoryForm({ 
   isOpen, 
@@ -61,9 +62,9 @@ export default function SimpleInventoryForm({
     mrp: 0,
     gst: 0,
     hsn: '',
-    batch: '',
-    store: '',
-    leadTime: 0,
+      batch: '',
+      store: 'Hyderabad',
+      leadTime: 0,
     internalManufacturing: false,
     purchase: true,
     internalNotes: '',
@@ -137,7 +138,7 @@ export default function SimpleInventoryForm({
       gst: 0,
       hsn: '',
       batch: '',
-      store: '',
+      store: 'Hyderabad',
       leadTime: 0,
       internalManufacturing: false,
       purchase: true,
@@ -188,6 +189,32 @@ export default function SimpleInventoryForm({
     setErrors({});
     
     try {
+      // Basic frontend validation
+      const validationErrors = {};
+      
+      if (!formData.name.trim()) {
+        validationErrors.name = 'Item name is required';
+      }
+      
+      if (!formData.store) {
+        validationErrors.store = 'Store location is required';
+      }
+      
+      if (!formData.category) {
+        validationErrors.category = 'Category is required';
+      }
+      
+      if (Object.keys(validationErrors).length > 0) {
+        setErrors(validationErrors);
+        toast({
+          title: "Validation Error",
+          description: "Please fill in all required fields",
+          variant: "destructive",
+        });
+        setIsSubmitting(false);
+        return;
+      }
+      
       // Convert string numbers to actual numbers
       const processedData = {
         ...formData,
@@ -300,16 +327,6 @@ export default function SimpleInventoryForm({
                     <p className="text-red-500 text-xs leading-tight">{errors.name}</p>
                   </div>
                 )}
-              </div>
-              <div>
-                <Label htmlFor="code" className="text-sm font-medium text-gray-700">Item Code</Label>
-                <Input
-                  id="code"
-                  value={formData.code}
-                  onChange={(e) => handleInputChange('code', e.target.value)}
-                  placeholder="Auto-generated if empty"
-                  className="mt-1"
-                />
               </div>
               <div className="md:col-span-2">
                 <Label htmlFor="description" className="text-sm font-medium text-gray-700">Description</Label>
@@ -617,14 +634,19 @@ export default function SimpleInventoryForm({
                 />
               </div>
               <div>
-                <Label htmlFor="store" className="text-sm font-medium text-gray-700">Store Location</Label>
-                <Input
-                  id="store"
-                  value={formData.store}
-                  onChange={(e) => handleInputChange('store', e.target.value)}
-                  placeholder="Enter store location"
-                  className="mt-1"
-                />
+                <Label htmlFor="store" className="text-sm font-medium text-gray-700">Store Location *</Label>
+                <Select value={formData.store} onValueChange={(value) => handleInputChange('store', value)}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Select store location" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STORE_LOCATIONS.map((location) => (
+                      <SelectItem key={location} value={location}>
+                        {location}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label htmlFor="leadTime" className="text-sm font-medium text-gray-700">Lead Time (days)</Label>

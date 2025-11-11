@@ -274,27 +274,7 @@ export default function UnitManagerDashboard() {
         </Card>
 
         {/* Total Revenue */}
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center space-x-4">
-              <div className="p-3 bg-green-100 rounded-lg">
-                <DollarSign className="h-6 w-6 text-green-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{formatCurrency(overview.totalRevenue)}</p>
-                <p className="text-sm text-muted-foreground flex items-center">
-                  Total Revenue
-                  {/* {overview.revenueGrowth && (
-                    <span className={`ml-2 flex items-center ${getGrowthColor(overview.revenueGrowth)}`}>
-                      {getGrowthIcon(overview.revenueGrowth)}
-                      {Math.abs(overview.revenueGrowth)}%
-                    </span>
-                  )} */}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      
 
         {/* Active Customers */}
         <Card>
@@ -387,7 +367,7 @@ export default function UnitManagerDashboard() {
         </Card>
 
         {/* Average Order Value */}
-        <Card>
+        {/* <Card>
           <CardContent className="p-6">
             <div className="flex items-center space-x-4">
               <div className="p-3 bg-blue-100 rounded-lg">
@@ -399,7 +379,7 @@ export default function UnitManagerDashboard() {
               </div>
             </div>
           </CardContent>
-        </Card>
+        </Card> */}
       </div>
 
       {/* Charts and Tables Grid */}

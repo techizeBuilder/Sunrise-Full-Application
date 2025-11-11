@@ -56,7 +56,8 @@ import {
   Users,
   UserCheck,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  X
 } from 'lucide-react';
 import { showSuccessToast, showSmartToast } from '@/lib/toast-utils';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -110,7 +111,6 @@ export default function SalesOrderList() {
     newStatus: '',
     notes: ''
   });
-  const [showFilters, setShowFilters] = useState(false);
   const [dateFrom, setDateFrom] = useState(null);
   const [dateTo, setDateTo] = useState(null);
   const queryClient = useQueryClient();
@@ -293,10 +293,6 @@ export default function SalesOrderList() {
             Manage and track all sales orders with advanced filtering
           </p>
         </div>
-        <Button onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/unit-manager/all-orders'] })}>
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Refresh
-        </Button>
       </div>
 
       {/* Summary Cards */}
@@ -390,15 +386,6 @@ export default function SalesOrderList() {
               </CardTitle>
             </div>
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowFilters(!showFilters)}
-                className="flex items-center gap-2"
-              >
-                <Filter className="h-4 w-4" />
-                {showFilters ? 'Hide' : 'Show'} Advanced
-              </Button>
               {activeFiltersCount > 0 && (
                 <Button
                   variant="outline"
@@ -413,197 +400,163 @@ export default function SalesOrderList() {
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          {/* Quick Search - Always visible */}
-          <div className="mb-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <Input
-                placeholder="Search by order code, customer name, email, or salesperson..."
-                value={filters.search}
-                onChange={(e) => handleSearch(e.target.value)}
-                className="pl-10"
-              />
-            </div>
+        <CardContent className="space-y-4">
+          {/* Search Bar */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              placeholder="Search by order code, customer name, email, or salesperson..."
+              value={filters.search}
+              onChange={(e) => handleSearch(e.target.value)}
+              className="pl-10"
+            />
           </div>
 
-          {/* Advanced Filters - Collapsible */}
-          {showFilters && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Status Filter */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Status</Label>
-                  <Select value={filters.status} onValueChange={handleStatusFilter}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="All Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Status</SelectItem>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="approved">Approved</SelectItem>
-                      <SelectItem value="rejected">Rejected</SelectItem>
-                      <SelectItem value="in_production">In Production</SelectItem>
-                      <SelectItem value="completed">Completed</SelectItem>
-                      <SelectItem value="cancelled">Cancelled</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+          {/* Filters Row */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 items-end">
+            {/* Status Filter */}
+            <div className="lg:col-span-2">
+              <Label className="text-xs text-gray-600 mb-1 block">Status</Label>
+              <Select value={filters.status} onValueChange={handleStatusFilter}>
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue placeholder="All Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="approved">Approved</SelectItem>
+                  <SelectItem value="rejected">Rejected</SelectItem>
+                  <SelectItem value="in_production">In Production</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-                {/* Customer Filter */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium flex items-center gap-2">
-                    <Users className="h-4 w-4" />
-                    Customer
-                  </Label>
-                  <Select value={filters.customerId} onValueChange={handleCustomerFilter}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="All Customers" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Customers</SelectItem>
-                      {customers.map((customer) => (
-                        <SelectItem key={customer._id} value={customer._id}>
-                          {customer.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+            {/* Customer Filter */}
+            <div className="lg:col-span-2">
+              <Label className="text-xs text-gray-600 mb-1 flex items-center gap-1">
+                <Users className="h-3 w-3" />
+                Customer
+              </Label>
+              <Select value={filters.customerId} onValueChange={handleCustomerFilter}>
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue placeholder="All Customers" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Customers</SelectItem>
+                  {customers.filter(customer => customer._id).map((customer) => (
+                    <SelectItem key={customer._id} value={customer._id}>
+                      {customer.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-                {/* Salesperson Filter */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium flex items-center gap-2">
-                    <UserCheck className="h-4 w-4" />
-                    Salesperson
-                  </Label>
-                  <Select value={filters.salesPersonId} onValueChange={handleSalespersonFilter}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="All Salespersons" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Salespersons</SelectItem>
-                      {salespersons.map((person) => (
-                        <SelectItem key={person._id} value={person._id}>
-                          {person.fullName || person.username}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+            {/* Salesperson Filter */}
+            <div className="lg:col-span-2">
+              <Label className="text-xs text-gray-600 mb-1 flex items-center gap-1">
+                <UserCheck className="h-3 w-3" />
+                Salesperson
+              </Label>
+              <Select value={filters.salesPersonId} onValueChange={handleSalespersonFilter}>
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue placeholder="All Salespersons" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Salespersons</SelectItem>
+                  {salespersons.length > 0 ? (
+                    salespersons.filter(person => person._id).map((person) => (
+                      <SelectItem key={person._id} value={person._id}>
+                        {person.fullName || person.username || person.email || 'Unknown'}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="no-salespersons" disabled>
+                      No salespersons found
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
 
-              {/* Date Range Filter */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium flex items-center gap-2">
-                  <CalendarIcon className="h-4 w-4" />
-                  Date Range
-                </Label>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <div className="flex-1">
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className="w-full justify-start text-left font-normal"
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {dateFrom ? format(dateFrom, "PPP") : "From date"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
-                        <CalendarComponent
-                          mode="single"
-                          selected={dateFrom}
-                          onSelect={setDateFrom}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <div className="flex-1">
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className="w-full justify-start text-left font-normal"
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {dateTo ? format(dateTo, "PPP") : "To date"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
-                        <CalendarComponent
-                          mode="single"
-                          selected={dateTo}
-                          onSelect={setDateTo}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <Button onClick={handleDateFilter} className="shrink-0">
-                    Apply Dates
+            {/* Date From */}
+            <div className="lg:col-span-2">
+              <Label className="text-xs text-gray-600 mb-1 flex items-center gap-1">
+                <CalendarIcon className="h-3 w-3" />
+                From Date
+              </Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full h-9 justify-start text-left font-normal text-sm"
+                  >
+                    <CalendarIcon className="mr-2 h-3 w-3" />
+                    {dateFrom ? format(dateFrom, "MMM dd") : "From"}
                   </Button>
-                </div>
-              </div>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <CalendarComponent
+                    mode="single"
+                    selected={dateFrom}
+                    onSelect={setDateFrom}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
 
-              {/* Active Filters Summary */}
-              {activeFiltersCount > 0 && (
-                <div className="flex flex-wrap items-center gap-2 pt-2 border-t">
-                  <span className="text-sm font-medium text-gray-600">Active filters:</span>
-                  {filters.status !== 'all' && (
-                    <Badge variant="secondary" className="flex items-center gap-1">
-                      Status: {filters.status}
-                      <button 
-                        onClick={() => handleStatusFilter('all')}
-                        className="ml-1 hover:text-red-600"
-                      >
-                        ×
-                      </button>
-                    </Badge>
-                  )}
-                  {filters.customerId && filters.customerId !== 'all' && (
-                    <Badge variant="secondary" className="flex items-center gap-1">
-                      Customer: {customers.find(c => c._id === filters.customerId)?.name || 'Selected'}
-                      <button 
-                        onClick={() => handleCustomerFilter('all')}
-                        className="ml-1 hover:text-red-600"
-                      >
-                        ×
-                      </button>
-                    </Badge>
-                  )}
-                  {filters.salesPersonId && filters.salesPersonId !== 'all' && (
-                    <Badge variant="secondary" className="flex items-center gap-1">
-                      Salesperson: {salespersons.find(s => s._id === filters.salesPersonId)?.fullName || 'Selected'}
-                      <button 
-                        onClick={() => handleSalespersonFilter('all')}
-                        className="ml-1 hover:text-red-600"
-                      >
-                        ×
-                      </button>
-                    </Badge>
-                  )}
-                  {(filters.dateFrom || filters.dateTo) && (
-                    <Badge variant="secondary" className="flex items-center gap-1">
-                      Date Range: {filters.dateFrom || '...'} to {filters.dateTo || '...'}
-                      <button 
-                        onClick={() => {
-                          setDateFrom(null);
-                          setDateTo(null);
-                          setFilters(prev => ({ ...prev, dateFrom: '', dateTo: '', page: 1 }));
-                        }}
-                        className="ml-1 hover:text-red-600"
-                      >
-                        ×
-                      </button>
-                    </Badge>
-                  )}
-                </div>
+            {/* Date To */}
+            <div className="lg:col-span-2">
+              <Label className="text-xs text-gray-600 mb-1 flex items-center gap-1">
+                <CalendarIcon className="h-3 w-3" />
+                To Date
+              </Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full h-9 justify-start text-left font-normal text-sm"
+                  >
+                    <CalendarIcon className="mr-2 h-3 w-3" />
+                    {dateTo ? format(dateTo, "MMM dd") : "To"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <CalendarComponent
+                    mode="single"
+                    selected={dateTo}
+                    onSelect={setDateTo}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="lg:col-span-2 flex gap-1">
+              <Button onClick={handleDateFilter} size="sm" className="h-9 text-sm px-4 flex-1">
+                Apply
+              </Button>
+              {(filters.dateFrom || filters.dateTo) && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => {
+                    setDateFrom(null);
+                    setDateTo(null);
+                    setFilters(prev => ({ ...prev, dateFrom: '', dateTo: '', page: 1 }));
+                  }}
+                  className="h-9 px-2"
+                  title="Clear dates"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
               )}
             </div>
-          )}
+          </div>
         </CardContent>
       </Card>
 

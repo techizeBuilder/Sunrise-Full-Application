@@ -51,8 +51,11 @@ router.get('/salespersons', async (req, res) => {
   try {
     const User = (await import('../models/User.js')).default;
     
-    // Get all sales persons for dropdown
-    const salesPersons = await User.find({ role: 'Sales Person' }, 'fullName email username').sort({ fullName: 1 }).lean();
+    // Get all sales persons for dropdown - using multiple role variations
+    const salesPersons = await User.find({ 
+      role: { $in: ['Sales', 'sales', 'SALES', 'Sales Person', 'SalesPerson'] }
+    }, 'fullName email username').sort({ fullName: 1 }).lean();
+    
     res.json({ success: true, data: salesPersons });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Failed to fetch salespersons', error: error.message });

@@ -447,17 +447,96 @@ export const getUnitHeadCustomerById = async (req, res) => {
 export const getUnitHeadDashboard = async (req, res) => {
   try {
     let query = {};
+    const { period = 'current-month' } = req.query;
 
     // Unit Head can see data based on their permissions
     if (req.user.role !== USER_ROLES.SUPER_USER && !req.user.permissions?.canAccessAllUnits) {
       query.unit = req.user.unit;
     }
 
-    const today = new Date();
-    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    const startOfPrevMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-    const endOfPrevMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+    // Helper function to get date ranges based on period
+    const getDateRange = (period) => {
+      const today = new Date();
+      let startDate, endDate, compareStartDate, compareEndDate;
+
+      switch (period) {
+        case 'current-week':
+          const startOfWeek = new Date(today);
+          startOfWeek.setDate(today.getDate() - today.getDay());
+          startOfWeek.setHours(0, 0, 0, 0);
+          const endOfWeek = new Date(startOfWeek);
+          endOfWeek.setDate(startOfWeek.getDate() + 6);
+          endOfWeek.setHours(23, 59, 59, 999);
+          
+          startDate = startOfWeek;
+          endDate = endOfWeek;
+          compareStartDate = new Date(startOfWeek);
+          compareStartDate.setDate(compareStartDate.getDate() - 7);
+          compareEndDate = new Date(compareStartDate);
+          compareEndDate.setDate(compareEndDate.getDate() + 6);
+          break;
+
+        case 'current-quarter':
+          const quarterStart = new Date(today.getFullYear(), Math.floor(today.getMonth() / 3) * 3, 1);
+          const quarterEnd = new Date(today.getFullYear(), Math.floor(today.getMonth() / 3) * 3 + 3, 0);
+          startDate = quarterStart;
+          endDate = quarterEnd;
+          compareStartDate = new Date(quarterStart);
+          compareStartDate.setMonth(compareStartDate.getMonth() - 3);
+          compareEndDate = new Date(compareStartDate);
+          compareEndDate.setMonth(compareEndDate.getMonth() + 3);
+          compareEndDate.setDate(0);
+          break;
+
+        case 'current-year':
+          startDate = new Date(today.getFullYear(), 0, 1);
+          endDate = new Date(today.getFullYear(), 11, 31);
+          compareStartDate = new Date(today.getFullYear() - 1, 0, 1);
+          compareEndDate = new Date(today.getFullYear() - 1, 11, 31);
+          break;
+
+        case 'last-30-days':
+          startDate = new Date(today);
+          startDate.setDate(today.getDate() - 30);
+          startDate.setHours(0, 0, 0, 0);
+          endDate = new Date(today);
+          endDate.setHours(23, 59, 59, 999);
+          compareStartDate = new Date(startDate);
+          compareStartDate.setDate(compareStartDate.getDate() - 30);
+          compareEndDate = new Date(startDate);
+          break;
+
+        case 'last-90-days':
+          startDate = new Date(today);
+          startDate.setDate(today.getDate() - 90);
+          startDate.setHours(0, 0, 0, 0);
+          endDate = new Date(today);
+          endDate.setHours(23, 59, 59, 999);
+          compareStartDate = new Date(startDate);
+          compareStartDate.setDate(compareStartDate.getDate() - 90);
+          compareEndDate = new Date(startDate);
+          break;
+
+        case 'last-year':
+          startDate = new Date(today.getFullYear() - 1, 0, 1);
+          endDate = new Date(today.getFullYear() - 1, 11, 31);
+          compareStartDate = new Date(today.getFullYear() - 2, 0, 1);
+          compareEndDate = new Date(today.getFullYear() - 2, 11, 31);
+          break;
+
+        case 'current-month':
+        default:
+          startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+          endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+          compareStartDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+          compareEndDate = new Date(today.getFullYear(), today.getMonth(), 0);
+          break;
+      }
+
+      return { startDate, endDate, compareStartDate, compareEndDate };
+    };
+
+    const { startDate, endDate, compareStartDate, compareEndDate } = getDateRange(period);
 
     // Get order statistics
     const orderStats = await Order.aggregate([
@@ -466,17 +545,19 @@ export const getUnitHeadDashboard = async (req, res) => {
         $facet: {
           total: [{ $count: "count" }],
           thisMonth: [
-            { $match: { orderDate: { $gte: startOfMonth, $lte: endOfMonth } } },
+            { $match: { orderDate: { $gte: startDate, $lte: endDate } } },
             { $count: "count" }
           ],
           lastMonth: [
-            { $match: { orderDate: { $gte: startOfPrevMonth, $lte: endOfPrevMonth } } },
+            { $match: { orderDate: { $gte: compareStartDate, $lte: compareEndDate } } },
             { $count: "count" }
           ],
           byStatus: [
+            { $match: { orderDate: { $gte: startDate, $lte: endDate } } },
             { $group: { _id: "$status", count: { $sum: 1 }, totalAmount: { $sum: "$totalAmount" } } }
           ],
           recentOrders: [
+            { $match: { orderDate: { $gte: startDate, $lte: endDate } } },
             { $sort: { createdAt: -1 } },
             { $limit: 5 },
             { $lookup: { from: 'customers', localField: 'customer', foreignField: '_id', as: 'customer' } },
@@ -502,7 +583,7 @@ export const getUnitHeadDashboard = async (req, res) => {
             }
           ],
           thisMonth: [
-            { $match: { createdAt: { $gte: startOfMonth, $lte: endOfMonth } } },
+            { $match: { createdAt: { $gte: startDate, $lte: endDate } } },
             {
               $group: {
                 _id: null,
@@ -512,7 +593,7 @@ export const getUnitHeadDashboard = async (req, res) => {
             }
           ],
           lastMonth: [
-            { $match: { createdAt: { $gte: startOfPrevMonth, $lte: endOfPrevMonth } } },
+            { $match: { createdAt: { $gte: compareStartDate, $lte: compareEndDate } } },
             {
               $group: {
                 _id: null,
@@ -544,11 +625,11 @@ export const getUnitHeadDashboard = async (req, res) => {
             }
           ],
           thisMonth: [
-            { $match: { createdAt: { $gte: startOfMonth, $lte: endOfMonth } } },
+            { $match: { createdAt: { $gte: startDate, $lte: endDate } } },
             { $count: "count" }
           ],
           lastMonth: [
-            { $match: { createdAt: { $gte: startOfPrevMonth, $lte: endOfPrevMonth } } },
+            { $match: { createdAt: { $gte: compareStartDate, $lte: compareEndDate } } },
             { $count: "count" }
           ],
           byCity: [
@@ -585,8 +666,8 @@ export const getUnitHeadDashboard = async (req, res) => {
                 input: '$orders',
                 cond: {
                   $and: [
-                    { $gte: ['$$this.orderDate', startOfMonth] },
-                    { $lte: ['$$this.orderDate', endOfMonth] }
+                    { $gte: ['$$this.orderDate', startDate] },
+                    { $lte: ['$$this.orderDate', endDate] }
                   ]
                 }
               }
@@ -649,8 +730,8 @@ export const getUnitHeadDashboard = async (req, res) => {
         },
         salesPersons: salesPersonsStats,
         period: {
-          current: { start: startOfMonth, end: endOfMonth },
-          previous: { start: startOfPrevMonth, end: endOfPrevMonth }
+          current: { start: startDate, end: endDate },
+          previous: { start: compareStartDate, end: compareEndDate }
         }
       }
     });

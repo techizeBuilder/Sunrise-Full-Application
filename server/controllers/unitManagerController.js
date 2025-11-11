@@ -1,6 +1,7 @@
 import Order from '../models/Order.js';
 import { Item } from '../models/Inventory.js';
 import User from '../models/User.js';
+import mongoose from 'mongoose';
 
 // Get items for Unit Manager (inventory access)
 export const getItems = async (req, res) => {
@@ -769,244 +770,166 @@ export const getAllOrders = async (req, res) => {
       search 
     } = req.query;
 
-    // Build filter object
-    const filter = {};
-    
-    // Filter by status if provided
-    if (status && status !== 'all') {
-      filter.status = status;
-    }
-
-    // Filter by customer if provided
-    if (customerId) {
-      filter.customer = customerId;
-    }
-
-    // Filter by salesperson if provided
-    if (salesPersonId) {
-      filter.salesPerson = salesPersonId;
-    }
-
-    // Filter by date range if provided
-    if (dateFrom || dateTo) {
-      filter.createdAt = {};
-      if (dateFrom) {
-        filter.createdAt.$gte = new Date(dateFrom);
-      }
-      if (dateTo) {
-        filter.createdAt.$lte = new Date(dateTo + 'T23:59:59.999Z');
-      }
-    }
-
-    // Search functionality
-    if (search) {
-      filter.$or = [
-        { orderCode: { $regex: search, $options: 'i' } },
-        // Also search in populated fields - this will be handled in aggregation
-      ];
-      
-      // If search looks like a customer name or email, include customer search
-      if (search.length > 2) {
-        // We'll use aggregation for better search capabilities
-        const searchRegex = { $regex: search, $options: 'i' };
-        
-        // Get orders with populated data for search
-        const ordersWithPopulatedSearch = await Order.aggregate([
-          {
-            $lookup: {
-              from: 'customers',
-              localField: 'customer',
-              foreignField: '_id',
-              as: 'customerInfo'
-            }
-          },
-          {
-            $lookup: {
-              from: 'users',
-              localField: 'salesPerson',
-              foreignField: '_id',
-              as: 'salesPersonInfo'
-            }
-          },
-          {
-            $match: {
-              $and: [
-                // Apply other filters
-                ...(status && status !== 'all' ? [{ status }] : []),
-                ...(customerId ? [{ customer: customerId }] : []),
-                ...(salesPersonId ? [{ salesPerson: salesPersonId }] : []),
-                ...(filter.createdAt ? [{ createdAt: filter.createdAt }] : []),
-                // Search conditions
-                {
-                  $or: [
-                    { orderCode: searchRegex },
-                    { 'customerInfo.name': searchRegex },
-                    { 'customerInfo.email': searchRegex },
-                    { 'salesPersonInfo.fullName': searchRegex },
-                    { 'salesPersonInfo.username': searchRegex }
-                  ]
-                }
-              ]
-            }
-          },
-          { $sort: { createdAt: -1 } },
-          { $skip: skip },
-          { $limit: parseInt(limit) }
-        ]);
-
-        // Get total count for search results
-        const totalSearchCount = await Order.aggregate([
-          {
-            $lookup: {
-              from: 'customers',
-              localField: 'customer',
-              foreignField: '_id',
-              as: 'customerInfo'
-            }
-          },
-          {
-            $lookup: {
-              from: 'users',
-              localField: 'salesPerson',
-              foreignField: '_id',
-              as: 'salesPersonInfo'
-            }
-          },
-          {
-            $match: {
-              $and: [
-                ...(status && status !== 'all' ? [{ status }] : []),
-                ...(customerId ? [{ customer: customerId }] : []),
-                ...(salesPersonId ? [{ salesPerson: salesPersonId }] : []),
-                ...(filter.createdAt ? [{ createdAt: filter.createdAt }] : []),
-                {
-                  $or: [
-                    { orderCode: searchRegex },
-                    { 'customerInfo.name': searchRegex },
-                    { 'customerInfo.email': searchRegex },
-                    { 'salesPersonInfo.fullName': searchRegex },
-                    { 'salesPersonInfo.username': searchRegex }
-                  ]
-                }
-              ]
-            }
-          },
-          { $count: "total" }
-        ]);
-
-        // If we have search results, use them and populate the references
-        if (ordersWithPopulatedSearch.length > 0) {
-          const orderIds = ordersWithPopulatedSearch.map(order => order._id);
-          const orders = await Order.find({ _id: { $in: orderIds } })
-            .populate('customer', 'name email phone address')
-            .populate('salesPerson', 'fullName email')
-            .populate('products.product', 'name code category')
-            .sort({ createdAt: -1 })
-            .lean();
-
-          const totalCount = totalSearchCount[0]?.total || 0;
-          const totalPages = Math.ceil(totalCount / parseInt(limit));
-
-          // Get summary for search results
-          const statusCounts = await Order.aggregate([
-            {
-              $lookup: {
-                from: 'customers',
-                localField: 'customer',
-                foreignField: '_id',
-                as: 'customerInfo'
-              }
-            },
-            {
-              $lookup: {
-                from: 'users',
-                localField: 'salesPerson',
-                foreignField: '_id',
-                as: 'salesPersonInfo'
-              }
-            },
-            {
-              $match: {
-                $and: [
-                  ...(status && status !== 'all' ? [{ status }] : []),
-                  ...(customerId ? [{ customer: customerId }] : []),
-                  ...(salesPersonId ? [{ salesPerson: salesPersonId }] : []),
-                  ...(filter.createdAt ? [{ createdAt: filter.createdAt }] : []),
-                  {
-                    $or: [
-                      { orderCode: searchRegex },
-                      { 'customerInfo.name': searchRegex },
-                      { 'customerInfo.email': searchRegex },
-                      { 'salesPersonInfo.fullName': searchRegex },
-                      { 'salesPersonInfo.username': searchRegex }
-                    ]
-                  }
-                ]
-              }
-            },
-            { $group: { _id: '$status', count: { $sum: 1 } } }
-          ]);
-
-          const summary = {
-            total: totalCount,
-            pending: statusCounts.find(s => s._id === 'Pending')?.count || 0,
-            approved: statusCounts.find(s => s._id === 'Approved')?.count || 0,
-            disapproved: statusCounts.find(s => s._id === 'Disapproved')?.count || 0,
-            in_production: statusCounts.find(s => s._id === 'In_Production')?.count || 0,
-            completed: statusCounts.find(s => s._id === 'Completed')?.count || 0,
-            cancelled: statusCounts.find(s => s._id === 'Cancelled')?.count || 0
-          };
-
-          return res.status(200).json({
-            success: true,
-            data: {
-              orders,
-              pagination: {
-                currentPage: parseInt(page),
-                totalPages,
-                totalItems: totalCount,
-                itemsPerPage: parseInt(limit),
-                hasNext: parseInt(page) < totalPages,
-                hasPrev: parseInt(page) > 1
-              },
-              summary
-            }
-          });
-        }
-      }
-    }
-
     // Calculate skip for pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    // Get orders with populated customer and salesperson data
-    const orders = await Order.find(filter)
-      .populate('customer', 'name email phone address')
-      .populate('salesPerson', 'fullName email')
-      .populate('products.product', 'name code category')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit))
-      .lean();
+    // Build aggregation pipeline
+    const pipeline = [];
+
+    // Lookup customer data
+    pipeline.push({
+      $lookup: {
+        from: 'customers',
+        localField: 'customer',
+        foreignField: '_id',
+        as: 'customer'
+      }
+    });
+
+    // Lookup salesperson data
+    pipeline.push({
+      $lookup: {
+        from: 'users',
+        localField: 'salesPerson',
+        foreignField: '_id',
+        as: 'salesPerson'
+      }
+    });
+
+    // Unwind the arrays (since they should have only one element each)
+    pipeline.push({ $unwind: { path: '$customer', preserveNullAndEmptyArrays: true } });
+    pipeline.push({ $unwind: { path: '$salesPerson', preserveNullAndEmptyArrays: true } });
+
+    // Build match conditions
+    const matchConditions = [];
+
+    // Filter by status
+    if (status && status !== 'all') {
+      matchConditions.push({ status: status });
+    }
+
+    // Filter by customer
+    if (customerId && customerId !== 'all') {
+      try {
+        const customerObjectId = new mongoose.Types.ObjectId(customerId);
+        matchConditions.push({ 'customer._id': customerObjectId });
+      } catch (error) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid customer ID format'
+        });
+      }
+    }
+
+    // Filter by salesperson
+    if (salesPersonId && salesPersonId !== 'all') {
+      try {
+        const salespersonObjectId = new mongoose.Types.ObjectId(salesPersonId);
+        matchConditions.push({ 'salesPerson._id': salespersonObjectId });
+      } catch (error) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid salesperson ID format'
+        });
+      }
+    }
+
+    // Filter by date range
+    if (dateFrom || dateTo) {
+      const dateFilter = {};
+      if (dateFrom) {
+        dateFilter.$gte = new Date(dateFrom);
+      }
+      if (dateTo) {
+        dateFilter.$lte = new Date(dateTo + 'T23:59:59.999Z');
+      }
+      matchConditions.push({ createdAt: dateFilter });
+    }
+
+    // Filter by search
+    if (search && search.trim()) {
+      const searchRegex = { $regex: search.trim(), $options: 'i' };
+      matchConditions.push({
+        $or: [
+          { orderCode: searchRegex },
+          { 'customer.name': searchRegex },
+          { 'customer.email': searchRegex },
+          { 'salesPerson.fullName': searchRegex },
+          { 'salesPerson.username': searchRegex }
+        ]
+      });
+    }
+
+    // Add match stage if there are conditions
+    if (matchConditions.length > 0) {
+      pipeline.push({ $match: { $and: matchConditions } });
+    }
 
     // Get total count for pagination
-    const totalCount = await Order.countDocuments(filter);
+    const countPipeline = [...pipeline, { $count: "total" }];
+    const countResult = await Order.aggregate(countPipeline);
+    const totalCount = countResult.length > 0 ? countResult[0].total : 0;
+
+    // Add sorting, skip and limit for main query
+    pipeline.push({ $sort: { createdAt: -1 } });
+    pipeline.push({ $skip: skip });
+    pipeline.push({ $limit: parseInt(limit) });
+
+    // Execute main query
+    const orders = await Order.aggregate(pipeline);
+
+    // Calculate pagination
     const totalPages = Math.ceil(totalCount / parseInt(limit));
 
-    // Calculate summary statistics
-    const statusCounts = await Order.aggregate([
-      { $match: filter },
-      { $group: { _id: '$status', count: { $sum: 1 } } }
-    ]);
+    // Calculate summary statistics using the same base conditions
+    const summaryPipeline = [];
+    
+    // Add lookups for summary as well
+    summaryPipeline.push({
+      $lookup: {
+        from: 'customers',
+        localField: 'customer',
+        foreignField: '_id',
+        as: 'customer'
+      }
+    });
+    
+    summaryPipeline.push({
+      $lookup: {
+        from: 'users',
+        localField: 'salesPerson',
+        foreignField: '_id',
+        as: 'salesPerson'
+      }
+    });
+
+    summaryPipeline.push({ $unwind: { path: '$customer', preserveNullAndEmptyArrays: true } });
+    summaryPipeline.push({ $unwind: { path: '$salesPerson', preserveNullAndEmptyArrays: true } });
+
+    // Apply same filters for summary
+    if (matchConditions.length > 0) {
+      summaryPipeline.push({ $match: { $and: matchConditions } });
+    }
+
+    // Group by status for summary
+    summaryPipeline.push({
+      $group: {
+        _id: '$status',
+        count: { $sum: 1 }
+      }
+    });
+
+    const statusCounts = await Order.aggregate(summaryPipeline);
 
     const summary = {
       total: totalCount,
-      pending: statusCounts.find(s => s._id === 'Pending')?.count || 0,
-      approved: statusCounts.find(s => s._id === 'Approved')?.count || 0,
-      disapproved: statusCounts.find(s => s._id === 'Disapproved')?.count || 0,
-      in_production: statusCounts.find(s => s._id === 'In_Production')?.count || 0,
-      completed: statusCounts.find(s => s._id === 'Completed')?.count || 0,
-      cancelled: statusCounts.find(s => s._id === 'Cancelled')?.count || 0
+      pending: statusCounts.find(s => s._id === 'pending')?.count || 0,
+      approved: statusCounts.find(s => s._id === 'approved')?.count || 0,
+      rejected: statusCounts.find(s => s._id === 'rejected')?.count || 0,
+      disapproved: statusCounts.find(s => s._id === 'disapproved')?.count || 0,
+      in_production: statusCounts.find(s => s._id === 'in_production')?.count || 0,
+      completed: statusCounts.find(s => s._id === 'completed')?.count || 0,
+      cancelled: statusCounts.find(s => s._id === 'cancelled')?.count || 0
     };
 
     res.status(200).json({
@@ -1024,6 +947,7 @@ export const getAllOrders = async (req, res) => {
         summary
       }
     });
+
   } catch (error) {
     console.error('Error fetching orders for unit manager:', error);
     res.status(500).json({

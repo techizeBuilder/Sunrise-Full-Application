@@ -6,10 +6,26 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { FileSpreadsheet, Upload, Download, AlertCircle, CheckCircle, FileText } from 'lucide-react';
 import { api } from '@/services/api';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 import { queryClient } from '@/lib/queryClient';
 import { ClientExcelExporter } from '@/utils/excelExport';
 
+// Helper function to get role-based API path
+function getInventoryApiPath(user) {
+  if (!user) return '/api';
+  
+  switch (user.role) {
+    case 'Super Admin':
+      return '/api/super-admin/inventory';
+    case 'Unit Head':
+      return '/api/unit-head/inventory';
+    default:
+      return '/api';
+  }
+}
+
 export default function ExcelImportExport({ type = 'items' }) {
+  const { user } = useAuth();
   const [importOpen, setImportOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -17,19 +33,22 @@ export default function ExcelImportExport({ type = 'items' }) {
   const fileInputRef = useRef(null);
   const { toast } = useToast();
 
+  // Get role-based API path
+  const apiBasePath = getInventoryApiPath(user);
+
   const getTypeConfig = () => {
     switch (type) {
       case 'categories':
         return {
           title: 'Categories',
           importFn: null, // Categories import not implemented yet
-          queryKey: '/api/categories'
+          queryKey: `${apiBasePath}/categories`
         };
       case 'customer-categories':
         return {
           title: 'Customer Categories',
           importFn: null, // Customer categories import not implemented yet
-          queryKey: '/api/customer-categories'
+          queryKey: `${apiBasePath}/customer-categories`
         };
       case 'customers':
         return {
@@ -47,7 +66,7 @@ export default function ExcelImportExport({ type = 'items' }) {
         return {
           title: 'Inventory Items',
           importFn: api.importItemsFromExcel.bind(api),
-          queryKey: '/api/items'
+          queryKey: `${apiBasePath}/items`
         };
     }
   };
@@ -153,7 +172,7 @@ export default function ExcelImportExport({ type = 'items' }) {
       // Refresh the data if successful
       if (result.success) {
         queryClient.invalidateQueries([config.queryKey]);
-        queryClient.invalidateQueries(['/api/inventory/stats']);
+        queryClient.invalidateQueries([`${apiBasePath}/stats`]);
 
         toast({
           title: "Import Successful",

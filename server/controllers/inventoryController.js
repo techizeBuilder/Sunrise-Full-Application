@@ -6,8 +6,8 @@ import notificationService from '../services/notificationService.js';
 
 // Helper function to check inventory permissions
 const checkInventoryPermission = (user, action) => {
-  // Super User has all permissions
-  if (user.role === 'Super User') {
+  // Super Admin and Unit Head have all permissions
+  if (user.role === 'Super Admin' || user.role === 'Super User' || user.role === 'Unit Head') {
     return true;
   }
   

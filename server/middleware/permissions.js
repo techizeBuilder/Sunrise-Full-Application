@@ -16,6 +16,11 @@ export const checkPermission = (module, feature, action) => {
         return next();
       }
 
+      // Unit Head has access to userManagement for managing Unit Managers
+      if (user.role === 'Unit Head' && module === 'unitHead' && feature === 'userManagement') {
+        return next();
+      }
+
       // Check if user has permissions structure
       if (!user.permissions || !user.permissions.modules) {
         return res.status(403).json({ 
@@ -68,7 +73,7 @@ export const checkPermission = (module, feature, action) => {
 export const getUserModules = (role) => {
   const moduleMap = {
     'Super Admin': ['Dashboard', 'Manufacturing', 'Dispatches', 'Sales', 'Accounts', 'Inventory', 'Customers', 'Suppliers', 'Purchases', 'Settings'],
-    'Unit Head': ['Dashboard', 'Manufacturing', 'Dispatches', 'Sales', 'Accounts', 'Inventory', 'Customers'],
+    'Unit Head': ['Dashboard', 'Manufacturing', 'Dispatches', 'Sales', 'Accounts', 'Inventory', 'Customers', 'userManagement'],
     'Unit Manager': ['Dashboard', 'Sales Approval', 'Manufacturing', 'Dispatches', 'Inventory'],
     'Production': ['Dashboard', 'Manufacturing'],
     'Packing': ['Dashboard', 'Manufacturing', 'Dispatches'],

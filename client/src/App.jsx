@@ -14,11 +14,13 @@ import Dispatches from "@/pages/Dispatches";
 import Sales from "@/pages/Sales";
 import Accounts from "@/pages/Accounts";
 import ModernInventoryUI from "@/components/inventory/ModernInventoryUI";
+import UnitHeadInventoryView from "@/components/inventory/UnitHeadInventoryView";
 import Customers from "@/pages/Customers";
 import Suppliers from "@/pages/Suppliers";
 import Purchases from "@/pages/Purchases";
 import Settings from "@/pages/Settings";
 import RolePermissionManagement from "@/pages/RolePermissionManagement";
+import UnitHeadRolePermissionManagement from "@/pages/UnitHeadRolePermissionManagement";
 import { useAuth } from "@/hooks/useAuth";
 import MainLayout from "@/components/layout/MainLayout";
 import Profile from "@/pages/Profile";
@@ -279,6 +281,11 @@ function Router() {
           <SuperAdminCustomers />
         </ProtectedRoute>
       </Route>
+      <Route path="/super-admin/inventory">
+        <ProtectedRoute requiredRole="Super Admin">
+          <ModernInventoryUI />
+        </ProtectedRoute>
+      </Route>
       <Route path="/super-admin/settings">
         <ProtectedRoute requiredRole="Super Admin">
           <SuperAdminSettings />
@@ -316,6 +323,16 @@ function Router() {
       <Route path="/unit-head/customers">
         <ProtectedRoute requiredRole="Unit Head">
           <UnitHeadCustomers />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/unit-head/inventory">
+        <ProtectedRoute requiredRole="Unit Head">
+          <UnitHeadInventoryView />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/unit-head/role-permission-management">
+        <ProtectedRoute requiredRole="Unit Head">
+          <UnitHeadRolePermissionManagement />
         </ProtectedRoute>
       </Route>
       

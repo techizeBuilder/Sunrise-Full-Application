@@ -106,6 +106,7 @@ const MODULES = [
       { key: 'purchases', label: 'Purchases' },
       { key: 'manufacturing', label: 'Manufacturing' },
       { key: 'production', label: 'Production' },
+      { key: 'userManagement', label: 'Unit Manager Management' },
     ]
   },
   {

@@ -1,0 +1,769 @@
+// THIS IS A CLEAN VERSION - replacing the problematic section
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiRequest } from '@/api/apiRequest';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  UserPlus,
+  Search,
+  Filter,
+  Edit,
+  Key,
+  Trash2,
+  Eye,
+  Plus,
+  X,
+  Users,
+  Building2,
+  Shield,
+  CheckCircle2,
+  XCircle,
+  Settings,
+  Lock,
+  EyeOff,
+  Building2 as Building2Icon,
+  UserCheck
+} from 'lucide-react';
+import { showSuccessToast, showSmartToast } from '@/lib/toast-utils';
+
+// Unit Manager specific modules and permissions - Only the essential ones
+const UNIT_MANAGER_MODULES = [
+  {
+    name: 'unitManager',
+    label: 'Unit Manager',
+    features: [
+      { key: 'salesApproval', label: 'Sales Approval' },
+      { key: 'salesOrderList', label: 'Sales Order List' }
+    ]
+  }
+];
+
+const PERMISSION_ACTIONS = ['view', 'add', 'edit', 'delete'];
+
+// Convert database permission format to UI format
+const convertDBPermissionsToUI = (dbPermissions) => {
+  const uiPermissions = {};
+  
+  // Initialize the UI permission structure
+  UNIT_MANAGER_MODULES.forEach(module => {
+    uiPermissions[module.name] = {};
+    module.features.forEach(feature => {
+      uiPermissions[module.name][feature.key] = {
+        view: false,
+        add: false,
+        edit: false,
+        delete: false
+      };
+    });
+  });
+  
+  // If the database has module permissions, map them to UI structure
+  if (dbPermissions?.modules && Array.isArray(dbPermissions.modules)) {
+    dbPermissions.modules.forEach(modulePermission => {
+      if (modulePermission.name && uiPermissions[modulePermission.name]) {
+        if (modulePermission.features && Array.isArray(modulePermission.features)) {
+          modulePermission.features.forEach(feature => {
+            if (uiPermissions[modulePermission.name][feature.key]) {
+              uiPermissions[modulePermission.name][feature.key] = {
+                view: feature.view || false,
+                add: feature.add || false,
+                edit: feature.edit || false,
+                delete: feature.delete || false
+              };
+            }
+          });
+        }
+      }
+    });
+  }
+  
+  return uiPermissions;
+};
+
+// Convert UI permission format back to database format
+const convertUIPermissionsToDB = (uiPermissions) => {
+  const modules = [];
+  
+  Object.keys(uiPermissions).forEach(moduleName => {
+    const moduleFeatures = [];
+    const modulePermissions = uiPermissions[moduleName];
+    
+    Object.keys(modulePermissions).forEach(featureKey => {
+      moduleFeatures.push({
+        key: featureKey,
+        view: modulePermissions[featureKey].view || false,
+        add: modulePermissions[featureKey].add || false,
+        edit: modulePermissions[featureKey].edit || false,
+        delete: modulePermissions[featureKey].delete || false
+      });
+    });
+    
+    modules.push({
+      name: moduleName,
+      features: moduleFeatures
+    });
+  });
+  
+  return {
+    role: 'unit_manager',
+    canAccessAllUnits: false,
+    modules
+  };
+};
+
+const UnitHeadRolePermissionManagement = () => {
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [isAddingUser, setIsAddingUser] = useState(false);
+  const [isEditingUser, setIsEditingUser] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  
+  const [formData, setFormData] = useState({
+    username: '',
+    email: '',
+    fullName: '',
+    password: '',
+    confirmPassword: '',
+    permissions: convertDBPermissionsToUI({}),
+    isActive: true
+  });
+
+  const queryClient = useQueryClient();
+
+  // Get Unit Managers under this Unit Head
+  const { data: unitManagersData, isLoading, error } = useQuery({
+    queryKey: ['unit-managers', searchTerm, statusFilter],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        search: searchTerm,
+        status: statusFilter,
+        limit: 100
+      });
+      
+      const response = await apiRequest('GET', `/api/unit-head/unit-managers?${params}`);
+      return response;
+    }
+  });
+
+  // Create Unit Manager mutation
+  const createUserMutation = useMutation({
+    mutationFn: (userData) => apiRequest('POST', '/api/unit-head/unit-managers', userData),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['unit-managers']);
+      showSuccessToast('Unit Manager created successfully!');
+      setIsAddingUser(false);
+      resetForm();
+    },
+    onError: (error) => {
+      showSmartToast(error.message || 'Failed to create Unit Manager', 'error');
+    }
+  });
+
+  // Update Unit Manager mutation
+  const updateUserMutation = useMutation({
+    mutationFn: ({ userId, userData }) => apiRequest('PUT', `/api/unit-head/unit-managers/${userId}`, userData),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['unit-managers']);
+      showSuccessToast('Unit Manager updated successfully!');
+      setIsEditingUser(false);
+      setSelectedUser(null);
+      resetForm();
+    },
+    onError: (error) => {
+      showSmartToast(error.message || 'Failed to update Unit Manager', 'error');
+    }
+  });
+
+  // Update password mutation
+  const updatePasswordMutation = useMutation({
+    mutationFn: ({ userId, newPassword }) => apiRequest('PUT', `/api/unit-head/unit-managers/${userId}/password`, { newPassword }),
+    onSuccess: () => {
+      showSuccessToast('Password updated successfully!');
+      setIsChangingPassword(false);
+      setSelectedUser(null);
+      resetForm();
+    },
+    onError: (error) => {
+      showSmartToast(error.message || 'Failed to update password', 'error');
+    }
+  });
+
+  const resetForm = () => {
+    setFormData({
+      username: '',
+      email: '',
+      fullName: '',
+      password: '',
+      confirmPassword: '',
+      permissions: convertDBPermissionsToUI({}),
+      isActive: true
+    });
+  };
+
+  const handleEditUser = (user) => {
+    setSelectedUser(user);
+    setFormData({
+      username: user.username,
+      email: user.email,
+      fullName: user.fullName,
+      permissions: convertDBPermissionsToUI(user.permissions || {}),
+      isActive: user.isActive,
+      password: '',
+      confirmPassword: ''
+    });
+    setIsEditingUser(true);
+  };
+
+  const handlePermissionChange = (module, feature, action, checked) => {
+    setFormData(prev => ({
+      ...prev,
+      permissions: {
+        ...prev.permissions,
+        [module]: {
+          ...prev.permissions[module],
+          [feature]: {
+            ...prev.permissions[module]?.[feature],
+            [action]: checked
+          }
+        }
+      }
+    }));
+  };
+
+  const hasPermission = (module, feature, action) => {
+    return formData.permissions[module]?.[feature]?.[action] || false;
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    
+    if (formData.password && formData.password !== formData.confirmPassword) {
+      showSmartToast('Passwords do not match', 'error');
+      return;
+    }
+
+    if (isAddingUser) {
+      const userData = {
+        ...formData,
+        permissions: convertUIPermissionsToDB(formData.permissions)
+      };
+      createUserMutation.mutate(userData);
+    } else if (isEditingUser) {
+      const updateData = { ...formData };
+      delete updateData.password;
+      delete updateData.confirmPassword;
+      
+      if (updateData.permissions) {
+        updateData.permissions = convertUIPermissionsToDB(updateData.permissions);
+      }
+      
+      updateUserMutation.mutate({ userId: selectedUser._id, userData: updateData });
+    }
+  };
+
+  const handlePasswordChange = (e) => {
+    e.preventDefault();
+    
+    if (!formData.password || formData.password.length < 6) {
+      showSmartToast('Password must be at least 6 characters long', 'error');
+      return;
+    }
+    
+    updatePasswordMutation.mutate({ 
+      userId: selectedUser._id, 
+      newPassword: formData.password 
+    });
+  };
+
+  const unitManagers = unitManagersData?.data?.users || [];
+  const summary = unitManagersData?.data?.summary || {};
+  const currentUnit = unitManagersData?.data?.unit || '';
+
+  if (error) {
+    return (
+      <Card className="w-full">
+        <CardContent className="pt-6">
+          <div className="text-center text-red-600">
+            Error loading data: {error.message}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Unit Manager Management</h1>
+          <p className="text-gray-600">Manage Unit Managers and their permissions for {currentUnit}</p>
+        </div>
+        <Button
+          onClick={() => {
+            resetForm();
+            setIsAddingUser(true);
+          }}
+          className="flex items-center gap-2"
+        >
+          <UserPlus className="w-4 h-4" />
+          Add Unit Manager
+        </Button>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Unit Managers</p>
+                <p className="text-2xl font-bold">{summary.total || 0}</p>
+              </div>
+              <Users className="w-8 h-8 text-blue-600" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Active Managers</p>
+                <p className="text-2xl font-bold text-green-600">{summary.active || 0}</p>
+              </div>
+              <CheckCircle2 className="w-8 h-8 text-green-600" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Inactive Managers</p>
+                <p className="text-2xl font-bold text-red-600">{summary.inactive || 0}</p>
+              </div>
+              <XCircle className="w-8 h-8 text-red-600" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Search and Filter */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Input
+                  placeholder="Search by name, email, or username..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            
+            <div className="flex gap-2">
+              <div className="relative">
+                <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-md bg-white text-sm"
+                >
+                  <option value="all">All Status</option>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Unit Managers Table */}
+      <Card>
+        <CardContent className="pt-6">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>User Details</TableHead>
+                <TableHead>Contact</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Permissions</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-8">
+                    Loading unit managers...
+                  </TableCell>
+                </TableRow>
+              ) : unitManagers.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                    No unit managers found. Add your first unit manager to get started.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                unitManagers.map((user) => (
+                  <TableRow key={user._id}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                          <UserCheck className="w-4 h-4 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="font-medium">{user.fullName}</p>
+                          <p className="text-sm text-gray-500">@{user.username}</p>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <p className="text-sm">{user.email}</p>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={user.isActive ? "default" : "secondary"}>
+                        {user.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {user.permissions?.modules?.map((module) => 
+                          module.features?.map((feature) => (
+                            feature.view && (
+                              <Badge key={`${module.name}-${feature.key}`} variant="outline" className="text-xs">
+                                {UNIT_MANAGER_MODULES.find(m => m.name === module.name)?.features
+                                  .find(f => f.key === feature.key)?.label || feature.key}
+                              </Badge>
+                            )
+                          ))
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEditUser(user)}
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedUser(user);
+                            setFormData({ ...formData, password: '', confirmPassword: '' });
+                            setIsChangingPassword(true);
+                          }}
+                        >
+                          <Key className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Add/Edit Unit Manager Dialog */}
+      <Dialog open={isAddingUser || isEditingUser} onOpenChange={(open) => {
+        if (!open) {
+          setIsAddingUser(false);
+          setIsEditingUser(false);
+          setSelectedUser(null);
+          resetForm();
+        }
+      }}>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {isAddingUser ? 'Add Unit Manager' : 'Edit Unit Manager'}
+            </DialogTitle>
+            <DialogDescription>
+              {isAddingUser 
+                ? 'Create a new Unit Manager and set their permissions'
+                : 'Update Unit Manager details and permissions'
+              }
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* User Details */}
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="fullName">Full Name *</Label>
+                  <Input
+                    id="fullName"
+                    type="text"
+                    value={formData.fullName}
+                    onChange={(e) => setFormData({...formData, fullName: e.target.value})}
+                    placeholder="Enter full name"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="username">Username *</Label>
+                  <Input
+                    id="username"
+                    type="text"
+                    value={formData.username}
+                    onChange={(e) => setFormData({...formData, username: e.target.value})}
+                    placeholder="Enter username"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="email">Email *</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({...formData, email: e.target.value})}
+                  placeholder="Enter email address"
+                  required
+                />
+              </div>
+
+              {isAddingUser && (
+                <>
+                  <div>
+                    <Label htmlFor="password">Password *</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      value={formData.password}
+                      onChange={(e) => setFormData({...formData, password: e.target.value})}
+                      placeholder="Enter password"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="confirmPassword">Confirm Password *</Label>
+                    <Input
+                      id="confirmPassword"
+                      type="password"
+                      value={formData.confirmPassword}
+                      onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
+                      placeholder="Confirm password"
+                      required
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Module Permissions */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium flex items-center gap-2">
+                <Shield className="w-5 h-5" />
+                Module Permissions
+              </h3>
+              
+              <div className="bg-white border rounded-lg">
+                <div className="p-4">
+                  <div className="grid grid-cols-5 gap-4 mb-4 pb-2 border-b">
+                    <div className="font-medium text-sm text-gray-600">Feature</div>
+                    <div className="text-center font-medium text-sm text-gray-600 flex items-center justify-center gap-1">
+                      <Eye className="w-4 h-4" />
+                      <span>View</span>
+                    </div>
+                    <div className="text-center font-medium text-sm text-gray-600 flex items-center justify-center gap-1">
+                      <Plus className="w-4 h-4" />
+                      <span>Add</span>
+                    </div>
+                    <div className="text-center font-medium text-sm text-gray-600 flex items-center justify-center gap-1">
+                      <Edit className="w-4 h-4" />
+                      <span>Edit</span>
+                    </div>
+                    <div className="text-center font-medium text-sm text-gray-600 flex items-center justify-center gap-1">
+                      <Trash2 className="w-4 h-4" />
+                      <span>Delete</span>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-3 max-h-64 overflow-y-auto">
+                    {UNIT_MANAGER_MODULES.flatMap(module => 
+                      module.features.map(feature => (
+                        <div key={`${module.name}-${feature.key}`} className="grid grid-cols-5 gap-4 items-center py-2 hover:bg-gray-50 rounded">
+                          <div className="font-medium text-sm">{feature.label}</div>
+                          <div className="flex justify-center">
+                            <Switch
+                              checked={hasPermission(module.name, feature.key, 'view')}
+                              onCheckedChange={(checked) => 
+                                handlePermissionChange(module.name, feature.key, 'view', checked)
+                              }
+                              className="data-[state=checked]:bg-blue-600"
+                            />
+                          </div>
+                          <div className="flex justify-center">
+                            <Switch
+                              checked={hasPermission(module.name, feature.key, 'add')}
+                              onCheckedChange={(checked) => 
+                                handlePermissionChange(module.name, feature.key, 'add', checked)
+                              }
+                              className="data-[state=checked]:bg-blue-600"
+                            />
+                          </div>
+                          <div className="flex justify-center">
+                            <Switch
+                              checked={hasPermission(module.name, feature.key, 'edit')}
+                              onCheckedChange={(checked) => 
+                                handlePermissionChange(module.name, feature.key, 'edit', checked)
+                              }
+                              className="data-[state=checked]:bg-blue-600"
+                            />
+                          </div>
+                          <div className="flex justify-center">
+                            <Switch
+                              checked={hasPermission(module.name, feature.key, 'delete')}
+                              onCheckedChange={(checked) => 
+                                handlePermissionChange(module.name, feature.key, 'delete', checked)
+                              }
+                              className="data-[state=checked]:bg-blue-600"
+                            />
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Active Status */}
+            <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
+              <Switch
+                id="isActive"
+                checked={formData.isActive}
+                onCheckedChange={(checked) => setFormData({...formData, isActive: checked})}
+                className="data-[state=checked]:bg-green-600"
+              />
+              <div className="flex-1">
+                <Label htmlFor="isActive" className="text-sm font-medium">Active User</Label>
+                <p className="text-xs text-gray-500">
+                  {formData.isActive 
+                    ? "User can login and access assigned modules" 
+                    : "User account is disabled and cannot login"
+                  }
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsAddingUser(false);
+                  setIsEditingUser(false);
+                  setSelectedUser(null);
+                  resetForm();
+                }}
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={createUserMutation.isPending || updateUserMutation.isPending}
+              >
+                {createUserMutation.isPending || updateUserMutation.isPending 
+                  ? 'Processing...' 
+                  : (isAddingUser ? 'Create Unit Manager' : 'Update Unit Manager')
+                }
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Change Password Dialog */}
+      <Dialog open={isChangingPassword} onOpenChange={(open) => {
+        if (!open) {
+          setIsChangingPassword(false);
+          setSelectedUser(null);
+          resetForm();
+        }
+      }}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Change Password</DialogTitle>
+            <DialogDescription>
+              Update password for {selectedUser?.fullName}
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handlePasswordChange} className="space-y-4">
+            <div>
+              <Label htmlFor="newPassword">New Password</Label>
+              <Input
+                id="newPassword"
+                type="password"
+                value={formData.password}
+                onChange={(e) => setFormData({...formData, password: e.target.value})}
+                placeholder="Enter new password"
+                required
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsChangingPassword(false);
+                  setSelectedUser(null);
+                  resetForm();
+                }}
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={updatePasswordMutation.isPending}
+              >
+                {updatePasswordMutation.isPending ? 'Updating...' : 'Update Password'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+export default UnitHeadRolePermissionManagement;

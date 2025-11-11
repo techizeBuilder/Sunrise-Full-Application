@@ -186,6 +186,12 @@ const unitHeadMenuItems = [
     module: 'production'
   },
   {
+    label: 'Unit Managers',
+    path: '/unit-head/role-permission-management',
+    icon: Shield,
+    module: 'userManagement'
+  },
+  {
     label: 'Settings',
     path: '/unit-head/settings',
     icon: Settings,

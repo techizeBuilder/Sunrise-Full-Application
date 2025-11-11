@@ -5,6 +5,26 @@ class APIService {
     this.baseURL = API_BASE_URL;
   }
 
+  // Helper method to get role-based inventory API path
+  getInventoryApiPath() {
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return '';
+    
+    try {
+      const user = JSON.parse(userStr);
+      switch (user.role) {
+        case 'Super Admin':
+          return '/super-admin/inventory';
+        case 'Unit Head':
+          return '/unit-head/inventory';
+        default:
+          return '';
+      }
+    } catch (e) {
+      return '';
+    }
+  }
+
   getAuthHeaders() {
     const token = localStorage.getItem('token');
     return token ? { Authorization: `Bearer ${token}` } : {};
@@ -125,11 +145,13 @@ class APIService {
 
   // Excel export methods - handle file downloads
   async exportCategoriesToExcel() {
-    return this.downloadFile('/inventory/categories/export');
+    const inventoryPath = this.getInventoryApiPath();
+    return this.downloadFile(`${inventoryPath}/categories/export`);
   }
 
   async exportCustomerCategoriesToExcel() {
-    return this.downloadFile('/inventory/customer-categories/export');
+    const inventoryPath = this.getInventoryApiPath();
+    return this.downloadFile(`${inventoryPath}/customer-categories/export`);
   }
 
   async exportCustomersToExcel() {
@@ -161,7 +183,8 @@ class APIService {
   }
 
   async exportItemsToExcel() {
-    return this.downloadFile('/inventory/items/export');
+    const inventoryPath = this.getInventoryApiPath();
+    return this.downloadFile(`${inventoryPath}/items/export`);
   }
 
   // File download method for Excel exports
@@ -234,12 +257,12 @@ class APIService {
   async importItemsFromExcel(file) {
     const formData = new FormData();
     formData.append('file', file);
-    
     // Don't set Content-Type manually, let browser set it with boundary
     const headers = { ...this.getAuthHeaders() };
     delete headers['Content-Type'];
     
-    return this.request('/inventory/items/import', {
+    const inventoryPath = this.getInventoryApiPath();
+    return this.request(`${inventoryPath}/items/import`, {
       method: 'POST',
       body: formData,
       headers
@@ -272,6 +295,87 @@ class APIService {
       body: formData,
       headers
     });
+  }
+
+  // Inventory CRUD methods using role-based paths
+  async getItems() {
+    const inventoryPath = this.getInventoryApiPath();
+    return this.get(`${inventoryPath}/items`);
+  }
+
+  async getItemById(id) {
+    const inventoryPath = this.getInventoryApiPath();
+    return this.get(`${inventoryPath}/items/${id}`);
+  }
+
+  async createItem(data) {
+    const inventoryPath = this.getInventoryApiPath();
+    return this.post(`${inventoryPath}/items`, data);
+  }
+
+  async updateItem(id, data) {
+    const inventoryPath = this.getInventoryApiPath();
+    return this.put(`${inventoryPath}/items/${id}`, data);
+  }
+
+  async deleteItem(id) {
+    const inventoryPath = this.getInventoryApiPath();
+    return this.delete(`${inventoryPath}/items/${id}`);
+  }
+
+  async getCategories() {
+    const inventoryPath = this.getInventoryApiPath();
+    return this.get(`${inventoryPath}/categories`);
+  }
+
+  async createCategory(data) {
+    const inventoryPath = this.getInventoryApiPath();
+    return this.post(`${inventoryPath}/categories`, data);
+  }
+
+  async updateCategory(id, data) {
+    const inventoryPath = this.getInventoryApiPath();
+    return this.put(`${inventoryPath}/categories/${id}`, data);
+  }
+
+  async deleteCategory(id) {
+    const inventoryPath = this.getInventoryApiPath();
+    return this.delete(`${inventoryPath}/categories/${id}`);
+  }
+
+  async getCustomerCategories() {
+    const inventoryPath = this.getInventoryApiPath();
+    return this.get(`${inventoryPath}/customer-categories`);
+  }
+
+  async createCustomerCategory(data) {
+    const inventoryPath = this.getInventoryApiPath();
+    return this.post(`${inventoryPath}/customer-categories`, data);
+  }
+
+  async updateCustomerCategory(id, data) {
+    const inventoryPath = this.getInventoryApiPath();
+    return this.put(`${inventoryPath}/customer-categories/${id}`, data);
+  }
+
+  async deleteCustomerCategory(id) {
+    const inventoryPath = this.getInventoryApiPath();
+    return this.delete(`${inventoryPath}/customer-categories/${id}`);
+  }
+
+  async getInventoryStats() {
+    const inventoryPath = this.getInventoryApiPath();
+    return this.get(`${inventoryPath}/stats`);
+  }
+
+  async getLowStockItems() {
+    const inventoryPath = this.getInventoryApiPath();
+    return this.get(`${inventoryPath}/low-stock`);
+  }
+
+  async adjustStock(id, data) {
+    const inventoryPath = this.getInventoryApiPath();
+    return this.post(`${inventoryPath}/items/${id}/adjust-stock`, data);
   }
 }
 

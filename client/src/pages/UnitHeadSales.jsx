@@ -355,7 +355,6 @@ export default function UnitHeadSales() {
                       <TableHead>Email</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-center">Total Orders</TableHead>
-                      <TableHead className="text-right">Total Revenue</TableHead>
                       <TableHead className="text-center">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -379,9 +378,7 @@ export default function UnitHeadSales() {
                         <TableCell className="text-center">
                           {salesPerson.totalOrders || 0}
                         </TableCell>
-                        <TableCell className="text-right font-semibold">
-                          {formatCurrency(salesPerson.totalRevenue || 0)}
-                        </TableCell>
+                        
                         <TableCell className="text-center">
                           <Button
                             size="sm"

@@ -6,6 +6,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Users,
   ShoppingCart,
   Package,
@@ -20,7 +27,9 @@ import {
   Star,
   Eye,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  Clock,
+  RefreshCw
 } from 'lucide-react';
 import {
   Table,
@@ -35,10 +44,21 @@ import { showSmartToast } from '@/lib/toast-utils';
 export default function UnitHeadDashboard() {
   const [selectedPeriod, setSelectedPeriod] = useState('current-month');
 
-  // Query for dashboard data
+  // Period options for the dashboard
+  const periodOptions = [
+    { value: 'current-week', label: 'This Week', icon: Calendar },
+    { value: 'current-month', label: 'This Month', icon: Calendar },
+    { value: 'current-quarter', label: 'This Quarter', icon: BarChart3 },
+    { value: 'current-year', label: 'This Year', icon: Calendar },
+    { value: 'last-30-days', label: 'Last 30 Days', icon: Clock },
+    { value: 'last-90-days', label: 'Last 90 Days', icon: Clock },
+    { value: 'last-year', label: 'Last Year', icon: BarChart3 }
+  ];
+
+  // Query for dashboard data with period parameter
   const { data: dashboardData, isLoading, error, refetch } = useQuery({
-    queryKey: ['/api/unit-head/dashboard'],
-    queryFn: () => apiRequest('GET', '/api/unit-head/dashboard'),
+    queryKey: ['/api/unit-head/dashboard', selectedPeriod],
+    queryFn: () => apiRequest('GET', `/api/unit-head/dashboard?period=${selectedPeriod}`),
     retry: 1,
     refetchInterval: 300000, // Refetch every 5 minutes
     onError: (error) => {
@@ -55,10 +75,13 @@ export default function UnitHeadDashboard() {
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
       maximumFractionDigits: 0
     }).format(amount || 0);
+  };
+
+  const formatPeriodLabel = (period) => {
+    const option = periodOptions.find(opt => opt.value === period);
+    return option ? option.label : 'This Month';
   };
 
   const formatDate = (date) => {
@@ -127,23 +150,35 @@ export default function UnitHeadDashboard() {
               Unit Head Dashboard
             </h1>
             <p className="text-purple-100 mt-2">
-              Real-time overview of unit operations and performance metrics
+              Real-time overview of unit operations and performance metrics - {formatPeriodLabel(selectedPeriod)}
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              className="bg-white/10 border-white/20 text-white hover:bg-white/20"
-              onClick={refetch}
-              disabled={isLoading}
-            >
-              <Calendar className="h-4 w-4 mr-2" />
-              {isLoading ? 'Loading...' : 'Refresh'}
-            </Button>
-            <Button variant="outline" className="bg-white/10 border-white/20 text-white hover:bg-white/20">
-              <BarChart3 className="h-4 w-4 mr-2" />
-              Reports
-            </Button>
+          
+          {/* Period Selector */}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 text-purple-100">
+              <Calendar className="h-4 w-4" />
+              <span className="text-sm font-medium">Period:</span>
+            </div>
+            <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+              <SelectTrigger className="w-[180px] bg-white/10 border-white/20 text-white">
+                <SelectValue placeholder="Select period" />
+              </SelectTrigger>
+              <SelectContent>
+                {periodOptions.map((option) => {
+                  const IconComponent = option.icon;
+                  return (
+                    <SelectItem key={option.value} value={option.value}>
+                      <div className="flex items-center gap-2">
+                        <IconComponent className="h-4 w-4" />
+                        {option.label}
+                      </div>
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+          
           </div>
         </div>
       </div>
@@ -165,7 +200,11 @@ export default function UnitHeadDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Card className="border-l-4 border-l-blue-500">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Total Orders</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600">
+                {selectedPeriod.includes('year') ? 'Yearly Orders' : 
+                 selectedPeriod.includes('month') ? 'Monthly Orders' :
+                 selectedPeriod.includes('week') ? 'Weekly Orders' : 'Period Orders'}
+              </CardTitle>
               <ShoppingCart className="h-4 w-4 text-blue-500" />
             </CardHeader>
             <CardContent>
@@ -173,7 +212,7 @@ export default function UnitHeadDashboard() {
               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                 {getGrowthIcon(overview.orderGrowth)}
                 <span className={getGrowthColor(overview.orderGrowth)}>
-                  {Math.abs(parseFloat(overview.orderGrowth || 0)).toFixed(1)}% from last month
+                  {Math.abs(parseFloat(overview.orderGrowth || 0)).toFixed(1)}% from last period
                 </span>
               </div>
             </CardContent>
@@ -181,15 +220,19 @@ export default function UnitHeadDashboard() {
 
           <Card className="border-l-4 border-l-green-500">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Monthly Revenue</CardTitle>
-              <DollarSign className="h-4 w-4 text-green-500" />
+              <CardTitle className="text-sm font-medium text-gray-600">
+                {selectedPeriod.includes('year') ? 'Total Revenue' : 
+                 selectedPeriod.includes('month') ? 'Monthly Revenue' :
+                 selectedPeriod.includes('week') ? 'Weekly Revenue' : 'Period Revenue'}
+              </CardTitle>
+              <TrendingUp className="h-4 w-4 text-green-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(overview.monthlyRevenue)}</div>
+              <div className="text-2xl font-bold">₹{formatCurrency(overview.monthlyRevenue)}</div>
               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                 {getGrowthIcon(overview.revenueGrowth)}
                 <span className={getGrowthColor(overview.revenueGrowth)}>
-                  {Math.abs(parseFloat(overview.revenueGrowth || 0)).toFixed(1)}% from last month
+                  {Math.abs(parseFloat(overview.revenueGrowth || 0)).toFixed(1)}% from last period
                 </span>
               </div>
             </CardContent>
@@ -205,7 +248,7 @@ export default function UnitHeadDashboard() {
               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                 {getGrowthIcon(overview.customerGrowth)}
                 <span className={getGrowthColor(overview.customerGrowth)}>
-                  {Math.abs(parseFloat(overview.customerGrowth || 0)).toFixed(1)}% from last month
+                  {Math.abs(parseFloat(overview.customerGrowth || 0)).toFixed(1)}% from last period
                 </span>
               </div>
             </CardContent>
@@ -261,7 +304,7 @@ export default function UnitHeadDashboard() {
                         <span className="text-sm font-medium">{status.count} orders</span>
                       </div>
                       <span className="text-sm text-gray-600">
-                        {formatCurrency(status.totalAmount)}
+                        ₹{formatCurrency(status.totalAmount)}
                       </span>
                     </div>
                     <Progress 
@@ -278,7 +321,54 @@ export default function UnitHeadDashboard() {
         </Card>
 
         {/* Top Sales Persons */}
-        <Card>
+         <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ShoppingCart className="h-5 w-5" />
+              Recent Orders
+            </CardTitle>
+            <CardDescription>
+              Latest orders in your unit
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="space-y-3">
+                {[1,2,3].map(i => (
+                  <div key={i} className="animate-pulse flex space-x-3">
+                    <div className="h-4 bg-gray-200 rounded flex-1"></div>
+                    <div className="h-4 bg-gray-200 rounded w-20"></div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {orders.recent?.length > 0 ? orders.recent.map((order) => (
+                  <div key={order._id} className="flex items-center justify-between p-3 rounded-lg border">
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">
+                        {order.orderCode || order.orderNumber}
+                      </p>
+                      <div className="flex items-center gap-2 text-xs text-gray-500">
+                        <span>{order.customer}</span>
+                        <Badge className={getStatusColor(order.status)} size="sm">
+                          {order.status}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold text-sm">₹{formatCurrency(order.totalAmount)}</p>
+                      <p className="text-xs text-gray-500">{formatDate(order.createdAt)}</p>
+                    </div>
+                  </div>
+                )) : (
+                  <p className="text-muted-foreground text-center py-4">No recent orders</p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        {/* <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Star className="h-5 w-5" />
@@ -316,7 +406,7 @@ export default function UnitHeadDashboard() {
                       </p>
                       <div className="flex items-center gap-4 text-xs text-gray-500">
                         <span>{person.totalOrders} orders</span>
-                        <span>{formatCurrency(person.totalRevenue)}</span>
+                        <span>₹{formatCurrency(person.totalRevenue)}</span>
                       </div>
                     </div>
                     <Badge variant="outline">
@@ -329,62 +419,16 @@ export default function UnitHeadDashboard() {
               </div>
             )}
           </CardContent>
-        </Card>
+        </Card> */}
       </div>
 
       {/* Recent Orders & Customer Distribution */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Orders */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ShoppingCart className="h-5 w-5" />
-              Recent Orders
-            </CardTitle>
-            <CardDescription>
-              Latest orders in your unit
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="space-y-3">
-                {[1,2,3].map(i => (
-                  <div key={i} className="animate-pulse flex space-x-3">
-                    <div className="h-4 bg-gray-200 rounded flex-1"></div>
-                    <div className="h-4 bg-gray-200 rounded w-20"></div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {orders.recent?.length > 0 ? orders.recent.map((order) => (
-                  <div key={order._id} className="flex items-center justify-between p-3 rounded-lg border">
-                    <div className="flex-1">
-                      <p className="font-medium text-sm">
-                        {order.orderCode || order.orderNumber}
-                      </p>
-                      <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <span>{order.customer}</span>
-                        <Badge className={getStatusColor(order.status)} size="sm">
-                          {order.status}
-                        </Badge>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold text-sm">{formatCurrency(order.totalAmount)}</p>
-                      <p className="text-xs text-gray-500">{formatDate(order.createdAt)}</p>
-                    </div>
-                  </div>
-                )) : (
-                  <p className="text-muted-foreground text-center py-4">No recent orders</p>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+       
 
         {/* Customer Distribution by City */}
-        <Card>
+        {/* <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <MapPin className="h-5 w-5" />
@@ -426,7 +470,7 @@ export default function UnitHeadDashboard() {
               </div>
             )}
           </CardContent>
-        </Card>
+        </Card> */}
       </div>
     </div>
   );

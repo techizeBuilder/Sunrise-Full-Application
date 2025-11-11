@@ -21,6 +21,14 @@ export const usePermissions = () => {
       }
     }
     
+    // Special handling for Unit Manager role
+    if (user.role === 'Unit Manager') {
+      // Unit Manager has permissions stored in modules array
+      if (Array.isArray(user.permissions.modules)) {
+        return user.permissions.modules.some(module => module.name === moduleName);
+      }
+    }
+    
     // For other roles, check direct module access
     if (Array.isArray(user.permissions)) {
       // Simple array of module names
@@ -60,6 +68,20 @@ export const usePermissions = () => {
       }
     }
     
+    // Special handling for Unit Manager role
+    if (user.role === 'Unit Manager') {
+      const userModule = user.permissions.modules?.find(module => 
+        module.name === moduleName
+      );
+      
+      if (!userModule) return false;
+      
+      const feature = userModule.features?.find(f => f.key === featureKey);
+      if (!feature) return false;
+      
+      return feature[action] || false;
+    }
+    
     // For other roles, check direct module access
     const userModule = user.permissions.modules?.find(module => 
       module.name === moduleName
@@ -95,6 +117,13 @@ export const usePermissions = () => {
           ?.filter(feature => feature.view)
           ?.map(feature => feature.key) || [];
       }
+    }
+    
+    // Special handling for Unit Manager role
+    if (user.role === 'Unit Manager') {
+      // Unit Manager modules are defined differently
+      return user.permissions.modules
+        ?.map(module => module.name) || [];
     }
     
     // For other roles, return modules they have access to
