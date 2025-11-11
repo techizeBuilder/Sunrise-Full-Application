@@ -384,6 +384,56 @@ const SalesApproval = () => {
                       <span className="text-xs lg:text-sm">Products</span>
                     </div>
                   </th>
+                  {/* Packing Column */}
+                  <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[70px] lg:min-w-[90px]">
+                    <div className="flex flex-col items-center gap-1">
+                      <Package className="h-3 w-3 lg:h-4 lg:w-4 text-blue-600" />
+                      <div className="text-xs font-semibold text-gray-900">Packing</div>
+                    </div>
+                  </th>
+                  {/* Expiry/Shortage Column */}
+                  <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[80px] lg:min-w-[100px]">
+                    <div className="flex flex-col items-center gap-1">
+                      <Package className="h-3 w-3 lg:h-4 lg:w-4 text-red-600" />
+                      <div className="text-xs font-semibold text-gray-900">Expiry/</div>
+                      <div className="text-xs font-semibold text-gray-900">Shortage</div>
+                    </div>
+                  </th>
+                  {/* Production with final batches Column */}
+                  <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[90px] lg:min-w-[110px]">
+                    <div className="flex flex-col items-center gap-1">
+                      <Package className="h-3 w-3 lg:h-4 lg:w-4 text-green-600" />
+                      <div className="text-xs font-semibold text-gray-900">Production</div>
+                      <div className="text-xs font-semibold text-gray-900">with final</div>
+                      <div className="text-xs font-semibold text-gray-900">batches</div>
+                    </div>
+                  </th>
+                  {/* Balance with final batches Column */}
+                  <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[90px] lg:min-w-[110px]">
+                    <div className="flex flex-col items-center gap-1">
+                      <Package className="h-3 w-3 lg:h-4 lg:w-4 text-purple-600" />
+                      <div className="text-xs font-semibold text-gray-900">Balance</div>
+                      <div className="text-xs font-semibold text-gray-900">with final</div>
+                      <div className="text-xs font-semibold text-gray-900">batches</div>
+                    </div>
+                  </th>
+                  {/* To be produced/Batches Column */}
+                  <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[90px] lg:min-w-[110px]">
+                    <div className="flex flex-col items-center gap-1">
+                      <Package className="h-3 w-3 lg:h-4 lg:w-4 text-orange-600" />
+                      <div className="text-xs font-semibold text-gray-900">To be</div>
+                      <div className="text-xs font-semibold text-gray-900">produced/</div>
+                      <div className="text-xs font-semibold text-gray-900">Batches</div>
+                    </div>
+                  </th>
+                  {/* Physical Stock Column */}
+                  <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[80px] lg:min-w-[100px]">
+                    <div className="flex flex-col items-center gap-1">
+                      <Package className="h-3 w-3 lg:h-4 lg:w-4 text-indigo-600" />
+                      <div className="text-xs font-semibold text-gray-900">Physical</div>
+                      <div className="text-xs font-semibold text-gray-900">Stock</div>
+                    </div>
+                  </th>
                   {salesPersons.slice(0, 8).map((salesPerson) => {
                     const personOrderCount = orders.filter(order => {
                       const orderSalesPersonName = getSalesPersonName(order);
@@ -445,6 +495,60 @@ const SalesApproval = () => {
                           <span className="text-xs text-gray-500">
                             Total Qty: {totalQuantity} ({totalOrderCount} orders)
                           </span>
+                        </div>
+                      </td>
+
+                      {/* Packing Column */}
+                      <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
+                        <div className="text-center">
+                          <div className="text-base lg:text-lg font-bold text-blue-600">
+                            0
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Expiry/Shortage Column */}
+                      <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
+                        <div className="text-center">
+                          <div className="text-base lg:text-lg font-bold text-red-600">
+                            0
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Production with final batches Column */}
+                      <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
+                        <div className="text-center">
+                          <div className="text-base lg:text-lg font-bold text-green-600">
+                            0
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Balance with final batches Column */}
+                      <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
+                        <div className="text-center">
+                          <div className="text-base lg:text-lg font-bold text-purple-600">
+                            0
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* To be produced/Batches Column */}
+                      <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
+                        <div className="text-center">
+                          <div className="text-base lg:text-lg font-bold text-orange-600">
+                            0
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Physical Stock Column */}
+                      <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
+                        <div className="text-center">
+                          <div className="text-base lg:text-lg font-bold text-indigo-600">
+                            0
+                          </div>
                         </div>
                       </td>
 

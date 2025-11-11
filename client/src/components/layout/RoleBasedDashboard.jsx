@@ -5,6 +5,7 @@ import Dashboard from "@/pages/Dashboard";
 import SalesDashboard from "@/pages/SalesDashboard";
 import UnitHeadDashboard from "@/pages/UnitHeadDashboard";
 import UnitManagerDashboard from "@/pages/UnitManagerDashboard";
+import SuperAdminDashboard from "@/pages/SuperAdminDashboard";
 import ProductionDashboard from "@/pages/ProductionDashboard";
 import PackingDashboard from "@/pages/PackingDashboard";
 import DispatchDashboard from "@/pages/DispatchDashboard";
@@ -18,6 +19,9 @@ export default function RoleBasedDashboard() {
     // If user has specific role, redirect to their dashboard
     if (user && location === '/') {
       switch (user.role) {
+        case 'Super Admin':
+          setLocation('/super-admin-dashboard');
+          return;
         case 'Unit Head':
           setLocation('/unit-head-dashboard');
           return;
@@ -48,6 +52,8 @@ export default function RoleBasedDashboard() {
 
   // For direct dashboard access, show appropriate dashboard based on role
   switch (user?.role) {
+    case 'Super Admin':
+      return <SuperAdminDashboard />;
     case 'Unit Head':
       return <UnitHeadDashboard />;
     case 'Unit Manager':

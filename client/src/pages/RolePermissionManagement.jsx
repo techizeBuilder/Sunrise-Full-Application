@@ -45,7 +45,7 @@ import { showSuccessToast, showSmartToast } from '@/lib/toast-utils';
 
 // Role and Module Configuration
 const ROLES = [
-  { value: 'Super User', label: 'Super User' },
+  { value: 'Super Admin', label: 'Super Admin' },
   { value: 'Unit Head', label: 'Unit Head' },
   { value: 'Unit Manager', label: 'Unit Manager' },
   { value: 'Production', label: 'Production' },
@@ -63,6 +63,26 @@ const UNITS = [
 ];
 
 const MODULES = [
+  {
+    name: 'superAdmin',
+    label: 'Super Admin',
+    features: [
+      { key: 'dashboard', label: 'Dashboard' },
+      { key: 'orders', label: 'Orders' },
+      { key: 'purchases', label: 'Purchases' },
+      { key: 'manufacturing', label: 'Manufacturing' },
+      { key: 'production', label: 'Production' },
+      { key: 'dispatches', label: 'Dispatches' },
+      { key: 'sales', label: 'Sales' },
+      { key: 'accounts', label: 'Accounts' },
+      { key: 'inventory', label: 'Inventory' },
+      { key: 'customers', label: 'Customers' },
+      { key: 'suppliers', label: 'Suppliers' },
+      { key: 'companies', label: 'Companies' },
+      { key: 'rolePermissions', label: 'Role Permissions' },
+      { key: 'userManagement', label: 'User Management' }
+    ]
+  },
   {
     name: 'unitManager',
     label: 'Unit Manager',
@@ -422,7 +442,7 @@ export default function RolePermissionManagement() {
     const rolePermissions = {
       role: role.toLowerCase().replace(' ', '_'),
       unit: formData.unit,
-      canAccessAllUnits: role === 'Super User',
+      canAccessAllUnits: role === 'Super Admin',
       modules: getDefaultModulesForRole(role)
     };
     
@@ -436,7 +456,30 @@ export default function RolePermissionManagement() {
   const getDefaultModulesForRole = (role) => {
     // Return default modules based on role
     switch (role) {
-      case 'Super User':
+      case 'Super Admin':
+        return [
+          {
+            name: 'superAdmin',
+            dashboard: true,
+            features: [
+              { key: 'dashboard', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'orders', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'purchases', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'manufacturing', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'production', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'dispatches', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'sales', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'accounts', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'inventory', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'customers', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'suppliers', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'companies', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'rolePermissions', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'userManagement', view: true, add: true, edit: true, delete: true, alter: true }
+            ]
+          }
+        ];
+      case 'Super Admin':
         return MODULES.map(module => ({
           name: module.name,
           dashboard: true,
@@ -634,7 +677,7 @@ export default function RolePermissionManagement() {
 
   const getRoleBadgeVariant = (role) => {
     switch (role) {
-      case 'Super User': return 'default';
+      case 'Super Admin': return 'default';
       case 'Unit Head': return 'secondary';
       case 'Production': return 'outline';
       case 'Sales': return 'destructive';

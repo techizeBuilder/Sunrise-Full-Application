@@ -5,24 +5,46 @@ import bcrypt from 'bcryptjs';
 
 export const getUsers = async (req, res) => {
   try {
-    const { page = 1, limit = 10, role, unit, search } = req.query;
+    console.log('=== getUsers API called ===');
+    console.log('Query parameters:', req.query);
+    console.log('User role:', req.user?.role);
+    
+    const { 
+      page = 1, 
+      limit = 100, // Increased default limit to show more users
+      role, 
+      unit, 
+      search,
+      sortBy = 'createdAt',
+      sortOrder = 'desc',
+      status = 'all'
+    } = req.query;
+    
     const skip = (page - 1) * limit;
 
     let query = {};
 
     // Non-super users can only see users from their unit
-    if (req.user.role !== USER_ROLES.SUPER_USER) {
+    if (req.user.role !== USER_ROLES.SUPER_USER && req.user.role !== 'Super Admin') {
       query.unit = req.user.unit;
     }
 
-    if (role) {
+    // Filter by role
+    if (role && role !== 'all') {
       query.role = role;
     }
 
-    if (unit) {
+    // Filter by unit
+    if (unit && unit !== 'all') {
       query.unit = unit;
     }
 
+    // Filter by status
+    if (status !== 'all') {
+      query.isActive = status === 'active';
+    }
+
+    // Search functionality
     if (search) {
       query.$or = [
         { fullName: { $regex: search, $options: 'i' } },
@@ -31,26 +53,91 @@ export const getUsers = async (req, res) => {
       ];
     }
 
+    // Sorting
+    const sort = {};
+    sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
+
+    // Fetch users with pagination
     const users = await User.find(query)
       .select('-password')
-      .sort({ createdAt: -1 })
+      .sort(sort)
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(parseInt(limit))
+      .lean();
 
+    // Get total count for pagination
     const total = await User.countDocuments(query);
 
+    // Get summary statistics
+    const stats = await User.aggregate([
+      { $match: {} }, // Get all users for stats
+      {
+        $group: {
+          _id: null,
+          totalUsers: { $sum: 1 },
+          activeUsers: {
+            $sum: { $cond: [{ $eq: ['$isActive', true] }, 1, 0] }
+          },
+          roleBreakdown: { $push: '$role' }
+        }
+      }
+    ]);
+
+    const summary = stats[0] || { totalUsers: 0, activeUsers: 0, roleBreakdown: [] };
+
+    // Process role breakdown
+    const roleStats = {};
+    if (summary.roleBreakdown) {
+      summary.roleBreakdown.forEach(role => {
+        roleStats[role] = (roleStats[role] || 0) + 1;
+      });
+    }
+
+    console.log('=== getUsers response ===');
+    console.log('Total users found:', total);
+    console.log('Users count:', users.length);
+    console.log('Sample user:', users[0] ? { id: users[0]._id, username: users[0].username, role: users[0].role } : 'No users');
+
+    // Format response to maintain frontend compatibility
     res.json({
-      users,
+      success: true,
+      users, // Keep this for backward compatibility
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
         total,
         pages: Math.ceil(total / limit)
+      },
+      summary: {
+        totalUsers: summary.totalUsers,
+        activeUsers: summary.activeUsers,
+        inactiveUsers: summary.totalUsers - summary.activeUsers,
+        roleStats
+      },
+      data: {
+        users,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          pages: Math.ceil(total / limit)
+        },
+        summary: {
+          totalUsers: summary.totalUsers,
+          activeUsers: summary.activeUsers,
+          inactiveUsers: summary.totalUsers - summary.activeUsers,
+          roleStats
+        }
       }
     });
+
   } catch (error) {
-    console.error('Get users error:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    console.error('❌ Get users error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
   }
 };
 

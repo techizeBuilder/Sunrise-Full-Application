@@ -39,6 +39,11 @@ import UnitHeadOrders from "@/pages/UnitHeadOrders";
 import UnitHeadSales from "@/pages/UnitHeadSales";
 import UnitHeadCustomers from "@/pages/UnitHeadCustomers";
 import UnitManagerDashboard from "@/pages/UnitManagerDashboard";
+import SuperAdminDashboard from "@/pages/SuperAdminDashboard";
+import SuperAdminOrders from "@/pages/super-admin/SuperAdminOrders";
+import SuperAdminSales from "@/pages/super-admin/SuperAdminSales";
+import SuperAdminCustomers from "@/pages/super-admin/SuperAdminCustomers";
+import SuperAdminSettings from "@/pages/super-admin/SuperAdminSettings";
 import ProductionDashboard from "@/pages/ProductionDashboard";
 import PackingDashboard from "@/pages/PackingDashboard";
 import DispatchDashboard from "@/pages/DispatchDashboard";
@@ -63,8 +68,8 @@ function ProtectedRoute({ children, requiredRole = null }) {
   }
 
   // Check role restriction if specified - STRICT role checking
-  // Exception: Super User can access all pages regardless of role restriction
-  if (requiredRole && user.role !== requiredRole && user.role !== 'Super User') {
+  // Exception: Super Admin can access all pages regardless of role restriction
+  if (requiredRole && user.role !== requiredRole && user.role !== 'Super Admin') {
     return (
       <MainLayout>
         <div className="flex items-center justify-center h-64">
@@ -99,8 +104,8 @@ function UnitManagerProtectedRoute({ children, requiredRole = null }) {
   }
 
   // Check role restriction if specified - STRICT role checking
-  // Exception: Super User can access all pages regardless of role restriction
-  if (requiredRole && user.role !== requiredRole && user.role !== 'Super User') {
+  // Exception: Super Admin can access all pages regardless of role restriction
+  if (requiredRole && user.role !== requiredRole && user.role !== 'Super Admin') {
     return (
       <UnitManagerLayout>
         <div className="flex items-center justify-center h-64">
@@ -252,6 +257,31 @@ function Router() {
       <Route path="/role-permission-management">
         <ProtectedRoute>
           <RolePermissionManagement />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/super-admin-dashboard">
+        <ProtectedRoute requiredRole="Super Admin">
+          <SuperAdminDashboard />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/super-admin/orders">
+        <ProtectedRoute requiredRole="Super Admin">
+          <SuperAdminOrders />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/super-admin/sales">
+        <ProtectedRoute requiredRole="Super Admin">
+          <SuperAdminSales />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/super-admin/customers">
+        <ProtectedRoute requiredRole="Super Admin">
+          <SuperAdminCustomers />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/super-admin/settings">
+        <ProtectedRoute requiredRole="Super Admin">
+          <SuperAdminSettings />
         </ProtectedRoute>
       </Route>
       <Route path="/profile">

@@ -1,6 +1,6 @@
 // User roles and permissions
 const USER_ROLES = {
-  SUPER_USER: 'Super User',
+  SUPER_ADMIN: 'Super Admin',
   UNIT_HEAD: 'Unit Head',
   UNIT_MANAGER: 'Unit Manager',
   PRODUCTION: 'Production',

@@ -7,8 +7,8 @@ export const usePermissions = () => {
   const hasModuleAccess = (moduleName) => {
     if (!user || !user.permissions) return false;
     
-    // Super User has access to everything
-    if (user.role === 'Super User') return true;
+    // Super Admin has access to everything
+    if (user.role === 'Super Admin') return true;
     
     // Special handling for Unit Head role
     if (user.role === 'Unit Head') {
@@ -45,8 +45,8 @@ export const usePermissions = () => {
   const hasFeatureAccess = (moduleName, featureKey, action = 'view') => {
     if (!user || !user.permissions) return false;
     
-    // Super User has access to everything
-    if (user.role === 'Super User') return true;
+    // Super Admin has access to everything
+    if (user.role === 'Super Admin') return true;
     
     // Special handling for Unit Head role
     if (user.role === 'Unit Head') {
@@ -77,8 +77,8 @@ export const usePermissions = () => {
   const getAccessibleModules = () => {
     if (!user || !user.permissions) return [];
     
-    // Super User gets all modules
-    if (user.role === 'Super User') {
+    // Super Admin gets all modules
+    if (user.role === 'Super Admin') {
       return [
         'dashboard', 'orders', 'manufacturing', 'production', 'dispatches', 
         'sales', 'accounts', 'inventory', 'customers', 
@@ -122,18 +122,18 @@ export const usePermissions = () => {
 
   // Check if user can manage users (for backwards compatibility)
   const canManageUsers = () => {
-    return user && ['Super User', 'Unit Head'].includes(user.role);
+    return user && ['Super Admin', 'Unit Head'].includes(user.role);
   };
 
   // Check if user can access settings (for backwards compatibility)
   const canAccessSettings = () => {
-    return user && user.role === 'Super User';
+    return user && user.role === 'Super Admin';
   };
 
   // Check if user can access all units
   const canAccessAllUnits = () => {
     if (!user || !user.permissions) return false;
-    return user.role === 'Super User' || user.permissions.canAccessAllUnits;
+    return user.role === 'Super Admin' || user.permissions.canAccessAllUnits;
   };
 
   // Get user's permission role

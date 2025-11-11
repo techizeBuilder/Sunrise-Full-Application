@@ -185,6 +185,10 @@ app.use('/uploads', express.static('uploads'));
       app.use('/api/unit-head', unitHeadRoutes);
       console.log('Unit Head routes registered at /api/unit-head');
 
+      const superAdminRoutes = (await import('./routes/superAdminRoutes.js')).default;
+      app.use('/api/super-admin', superAdminRoutes);
+      console.log('Super Admin routes registered at /api/super-admin');
+
       // Customer seeding available via endpoint only
 
       // Seed routes without authentication (development only)

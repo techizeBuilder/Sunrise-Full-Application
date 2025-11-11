@@ -66,8 +66,8 @@ const checkUnitAccess = (req, res, next) => {
     return res.status(401).json({ message: 'User not authenticated.' });
   }
 
-  // Super users have access to all units
-  if (req.user.role === 'Super User') {
+  // Super Admins have access to all units
+  if (req.user.role === 'Super Admin') {
     return next();
   }
 

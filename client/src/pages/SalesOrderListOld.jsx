@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import {
@@ -67,7 +67,6 @@ const statusColors = {
   pending: 'bg-yellow-100 text-yellow-800',
   approved: 'bg-green-100 text-green-800',
   rejected: 'bg-red-100 text-red-800',
-  disapproved: 'bg-red-100 text-red-800',
   in_production: 'bg-blue-100 text-blue-800',
   completed: 'bg-purple-100 text-purple-800',
   cancelled: 'bg-gray-100 text-gray-800'
@@ -77,7 +76,6 @@ const statusIcons = {
   pending: Clock,
   approved: CheckCircle,
   rejected: XCircle,
-  disapproved: XCircle,
   in_production: Package,
   completed: Truck,
   cancelled: XCircle
@@ -87,8 +85,7 @@ const statusOptions = [
   { value: 'pending', label: 'Pending', icon: Clock, color: 'bg-yellow-100 text-yellow-800' },
   { value: 'approved', label: 'Approved', icon: CheckCircle, color: 'bg-green-100 text-green-800' },
   { value: 'rejected', label: 'Rejected', icon: XCircle, color: 'bg-red-100 text-red-800' },
-  { value: 'in_production', label: 'In Production', icon: Package, color: 'bg-blue-100 text-blue-800' },
-  { value: 'completed', label: 'Completed', icon: Truck, color: 'bg-purple-100 text-purple-800' }
+  { value: 'in_production', label: 'Move to Production', icon: Package, color: 'bg-blue-100 text-blue-800' }
 ];
 
 export default function SalesOrderList() {
@@ -97,8 +94,8 @@ export default function SalesOrderList() {
     limit: 10,
     status: 'all',
     search: '',
-    customerId: 'all',
-    salesPersonId: 'all',
+    customerId: '',
+    salesPersonId: '',
     dateFrom: '',
     dateTo: ''
   });
@@ -197,6 +194,16 @@ export default function SalesOrderList() {
     }
   };
 
+  const handleStatusUpdate = (newStatus, notes = '') => {
+    if (selectedOrder) {
+      updateStatusMutation.mutate({
+        orderId: selectedOrder,
+        status: newStatus,
+        notes
+      });
+    }
+  };
+
   const handleSearch = (value) => {
     setFilters(prev => ({ ...prev, search: value, page: 1 }));
   };
@@ -228,8 +235,8 @@ export default function SalesOrderList() {
       limit: 10,
       status: 'all',
       search: '',
-      customerId: 'all',
-      salesPersonId: 'all',
+      customerId: '',
+      salesPersonId: '',
       dateFrom: '',
       dateTo: ''
     });
@@ -240,8 +247,8 @@ export default function SalesOrderList() {
   const activeFiltersCount = Object.values({
     status: filters.status !== 'all',
     search: filters.search !== '',
-    customerId: filters.customerId !== 'all',
-    salesPersonId: filters.salesPersonId !== 'all',
+    customerId: filters.customerId !== '',
+    salesPersonId: filters.salesPersonId !== '',
     dateRange: filters.dateFrom !== '' || filters.dateTo !== ''
   }).filter(Boolean).length;
 
@@ -290,7 +297,7 @@ export default function SalesOrderList() {
             Sales Order List
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Manage and track all sales orders with advanced filtering
+            Manage and track all sales orders
           </p>
         </div>
         <Button onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/unit-manager/all-orders'] })}>
@@ -366,7 +373,7 @@ export default function SalesOrderList() {
             <div className="flex items-center">
               <XCircle className="h-8 w-8 text-red-600" />
               <div className="ml-3">
-                <p className="text-sm font-medium text-gray-600">Rejected</p>
+                <p className="text-sm font-medium text-gray-600">Disapproved</p>
                 <p className="text-2xl font-bold">{summary.disapproved || 0}</p>
               </div>
             </div>
@@ -397,7 +404,7 @@ export default function SalesOrderList() {
                 className="flex items-center gap-2"
               >
                 <Filter className="h-4 w-4" />
-                {showFilters ? 'Hide' : 'Show'} Advanced
+                {showFilters ? 'Hide' : 'Show'} Filters
               </Button>
               {activeFiltersCount > 0 && (
                 <Button
@@ -461,7 +468,7 @@ export default function SalesOrderList() {
                       <SelectValue placeholder="All Customers" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All Customers</SelectItem>
+                      <SelectItem value="">All Customers</SelectItem>
                       {customers.map((customer) => (
                         <SelectItem key={customer._id} value={customer._id}>
                           {customer.name}
@@ -482,12 +489,31 @@ export default function SalesOrderList() {
                       <SelectValue placeholder="All Salespersons" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All Salespersons</SelectItem>
+                      <SelectItem value="">All Salespersons</SelectItem>
                       {salespersons.map((person) => (
                         <SelectItem key={person._id} value={person._id}>
                           {person.fullName || person.username}
                         </SelectItem>
                       ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Page Size */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Items per page</Label>
+                  <Select 
+                    value={filters.limit.toString()} 
+                    onValueChange={(value) => setFilters(prev => ({ ...prev, limit: parseInt(value), page: 1 }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="5">5 per page</SelectItem>
+                      <SelectItem value="10">10 per page</SelectItem>
+                      <SelectItem value="25">25 per page</SelectItem>
+                      <SelectItem value="50">50 per page</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -563,22 +589,22 @@ export default function SalesOrderList() {
                       </button>
                     </Badge>
                   )}
-                  {filters.customerId && filters.customerId !== 'all' && (
+                  {filters.customerId && (
                     <Badge variant="secondary" className="flex items-center gap-1">
                       Customer: {customers.find(c => c._id === filters.customerId)?.name || 'Selected'}
                       <button 
-                        onClick={() => handleCustomerFilter('all')}
+                        onClick={() => handleCustomerFilter('')}
                         className="ml-1 hover:text-red-600"
                       >
                         ×
                       </button>
                     </Badge>
                   )}
-                  {filters.salesPersonId && filters.salesPersonId !== 'all' && (
+                  {filters.salesPersonId && (
                     <Badge variant="secondary" className="flex items-center gap-1">
                       Salesperson: {salespersons.find(s => s._id === filters.salesPersonId)?.fullName || 'Selected'}
                       <button 
-                        onClick={() => handleSalespersonFilter('all')}
+                        onClick={() => handleSalespersonFilter('')}
                         className="ml-1 hover:text-red-600"
                       >
                         ×
@@ -842,9 +868,6 @@ export default function SalesOrderList() {
               </div>
             </>
           )}
-        </CardContent>
-      </Card>
-
       {/* Order Details Dialog */}
       <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">

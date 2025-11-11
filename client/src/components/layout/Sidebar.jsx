@@ -30,146 +30,190 @@ import {
   PieChart
 } from 'lucide-react';
 
-const menuItems = [
-  // Role-specific dashboards
+// Separate menu items for each role
+const superAdminMenuItems = [
+  {
+    label: 'Super Admin Dashboard',
+    path: '/super-admin-dashboard',
+    icon: Shield,
+    module: 'dashboard'
+  },
+  {
+    label: 'Orders',
+    path: '/super-admin/orders',
+    icon: Receipt,
+    module: 'orders'
+  },
+  {
+    label: 'Sales',
+    path: '/super-admin/sales',
+    icon: TrendingUp,
+    module: 'sales'
+  },
+  {
+    label: 'Purchases',
+    path: '/super-admin/purchases',
+    icon: Building,
+    module: 'purchases'
+  },
+  {
+    label: 'Manufacturing',
+    path: '/super-admin/manufacturing',
+    icon: Cog,
+    module: 'manufacturing'
+  },
+  {
+    label: 'Production',
+    path: '/super-admin/production',
+    icon: Factory,
+    module: 'production'
+  },
+  {
+    label: 'Dispatches',
+    path: '/super-admin/dispatches',
+    icon: Truck,
+    module: 'dispatches'
+  },
+  {
+    label: 'Accounts',
+    path: '/super-admin/accounts',
+    icon: Calculator,
+    module: 'accounts'
+  },
+  {
+    label: 'Inventory',
+    path: '/super-admin/inventory',
+    icon: Package,
+    module: 'inventory'
+  },
+  {
+    label: 'Customers',
+    path: '/super-admin/customers',
+    icon: Users,
+    module: 'customers'
+  },
+  {
+    label: 'Suppliers',
+    path: '/super-admin/suppliers',
+    icon: Handshake,
+    module: 'suppliers'
+  },
+  {
+    label: 'Companies',
+    path: '/super-admin/companies',
+    icon: Building2,
+    module: 'companies'
+  },
+  {
+    label: 'Role & Permissions',
+    path: '/role-permission-management',
+    icon: Shield,
+    module: 'permissions'
+  },
+  {
+    label: 'Settings',
+    path: '/super-admin/settings',
+    icon: Settings,
+    module: 'settings'
+  }
+];
+
+const unitHeadMenuItems = [
   {
     label: 'Dashboard',
     path: '/unit-head-dashboard',
     icon: LayoutDashboard,
-    module: 'dashboard',
-    roleRestriction: 'Unit Head'
+    module: 'dashboard'
   },
-  {
-    label: 'Dashboard',
-    path: '/unit-manager-dashboard',
-    icon: LayoutDashboard,
-    module: 'dashboard',
-    roleRestriction: 'Unit Manager'
-  },
-  {
-    label: 'Dashboard',
-    path: '/production-dashboard',
-    icon: LayoutDashboard,
-    module: 'dashboard',
-    roleRestriction: 'Production'
-  },
-  {
-    label: 'Dashboard',
-    path: '/packing-dashboard',
-    icon: LayoutDashboard,
-    module: 'dashboard',
-    roleRestriction: 'Packing'
-  },
-  {
-    label: 'Dashboard',
-    path: '/dispatch-dashboard',
-    icon: LayoutDashboard,
-    module: 'dashboard',
-    roleRestriction: 'Dispatch'
-  },
-  {
-    label: 'Dashboard',
-    path: '/sales-dashboard',
-    icon: LayoutDashboard,
-    module: 'dashboard',
-    roleRestriction: 'Sales'
-  },
-  {
-    label: 'Dashboard',
-    path: '/accounts-dashboard',
-    icon: LayoutDashboard,
-    module: 'dashboard',
-    roleRestriction: 'Accounts'
-  },
-  // Super User gets the main dashboard
-  {
-    label: 'Dashboard',
-    path: '/dashboard',
-    icon: LayoutDashboard,
-    module: 'dashboard',
-    roleRestriction: 'Super User'
-  },
-
-  // Unit Head specific navigation items
   {
     label: 'Orders',
     path: '/unit-head/orders',
     icon: Receipt,
-    module: 'orders',
-    roleRestriction: 'Unit Head'
+    module: 'orders'
   },
   {
     label: 'Sales',
     path: '/unit-head/sales',
     icon: TrendingUp,
-    module: 'sales',
-    roleRestriction: 'Unit Head'
+    module: 'sales'
   },
   {
     label: 'Dispatches',
     path: '/unit-head/dispatches',
     icon: Truck,
-    module: 'dispatches',
-    roleRestriction: 'Unit Head'
+    module: 'dispatches'
   },
   {
     label: 'Accounts',
     path: '/unit-head/accounts',
     icon: Calculator,
-    module: 'accounts',
-    roleRestriction: 'Unit Head'
+    module: 'accounts'
   },
   {
     label: 'Inventory',
     path: '/unit-head/inventory',
     icon: Package,
-    module: 'inventory',
-    roleRestriction: 'Unit Head'
+    module: 'inventory'
   },
   {
     label: 'Customers',
     path: '/unit-head/customers',
     icon: Users,
-    module: 'customers',
-    roleRestriction: 'Unit Head'
+    module: 'customers'
   },
   {
     label: 'Suppliers',
     path: '/unit-head/suppliers',
     icon: Handshake,
-    module: 'suppliers',
-    roleRestriction: 'Unit Head'
+    module: 'suppliers'
   },
   {
     label: 'Purchases',
     path: '/unit-head/purchases',
     icon: Building,
-    module: 'purchases',
-    roleRestriction: 'Unit Head'
+    module: 'purchases'
   },
   {
     label: 'Manufacturing',
     path: '/unit-head/manufacturing',
     icon: Cog,
-    module: 'manufacturing',
-    roleRestriction: 'Unit Head'
+    module: 'manufacturing'
   },
   {
     label: 'Production',
     path: '/unit-head/production',
     icon: Factory,
-    module: 'production',
-    roleRestriction: 'Unit Head'
+    module: 'production'
   },
   {
     label: 'Settings',
     path: '/unit-head/settings',
     icon: Settings,
-    module: 'settings',
-    roleRestriction: 'Unit Head'
-  },
+    module: 'settings'
+  }
+];
 
-  // General navigation items (for other roles)
+const unitManagerMenuItems = [
+  {
+    label: 'Dashboard',
+    path: '/unit-manager-dashboard',
+    icon: LayoutDashboard,
+    module: 'dashboard'
+  },
+  {
+    label: 'Sales Approval',
+    path: '/sales-approval',
+    icon: Shield,
+    module: 'unitManager',
+    feature: 'salesApproval'
+  },
+  {
+    label: 'Sales Order List',
+    path: '/sales-order-list',
+    icon: TrendingUp,
+    module: 'unitManager',
+    feature: 'salesOrderList'
+  },
   {
     label: 'Orders',
     path: '/orders',
@@ -177,27 +221,83 @@ const menuItems = [
     module: 'orders'
   },
   {
-    label: 'Purchases',
-    path: '/purchases',
-    icon: Building,
-    module: 'purchases'
+    label: 'Accounts',
+    path: '/accounts',
+    icon: Calculator,
+    module: 'accounts'
   },
   {
-    label: 'Manufacturing',
-    path: '/manufacturing',
-    icon: Cog,
-    module: 'manufacturing'
+    label: 'Inventory',
+    path: '/inventory',
+    icon: Package,
+    module: 'inventory'
+  },
+  {
+    label: 'Customers',
+    path: '/customers',
+    icon: Users,
+    module: 'customers'
+  }
+];
+
+const productionMenuItems = [
+  {
+    label: 'Dashboard',
+    path: '/production-dashboard',
+    icon: LayoutDashboard,
+    module: 'dashboard'
   },
   {
     label: 'Production',
     path: '/production',
     icon: Factory,
     module: 'production',
-    roleRestriction: 'Production',
     submodules: [
       { label: 'My Production', path: '/production', feature: 'todaysIndents' },
       { label: 'Submission History', path: '/production/history', feature: 'submissionHistory' }
     ]
+  },
+  {
+    label: 'Orders',
+    path: '/orders',
+    icon: Receipt,
+    module: 'orders'
+  },
+  {
+    label: 'Inventory',
+    path: '/inventory',
+    icon: Package,
+    module: 'inventory'
+  }
+];
+
+const packingMenuItems = [
+  {
+    label: 'Dashboard',
+    path: '/packing-dashboard',
+    icon: LayoutDashboard,
+    module: 'dashboard'
+  },
+  {
+    label: 'Orders',
+    path: '/orders',
+    icon: Receipt,
+    module: 'orders'
+  },
+  {
+    label: 'Inventory',
+    path: '/inventory',
+    icon: Package,
+    module: 'inventory'
+  }
+];
+
+const dispatchMenuItems = [
+  {
+    label: 'Dashboard',
+    path: '/dispatch-dashboard',
+    icon: LayoutDashboard,
+    module: 'dashboard'
   },
   {
     label: 'Dispatches',
@@ -208,6 +308,21 @@ const menuItems = [
       { label: 'Dispatch Notes', path: '/dispatches/notes', feature: 'dispatchNotes' },
       { label: 'Proof of Delivery', path: '/dispatches/delivery', feature: 'proofOfDelivery' }
     ]
+  },
+  {
+    label: 'Orders',
+    path: '/orders',
+    icon: Receipt,
+    module: 'orders'
+  }
+];
+
+const salesMenuItems = [
+  {
+    label: 'Dashboard',
+    path: '/sales-dashboard',
+    icon: LayoutDashboard,
+    module: 'dashboard'
   },
   {
     label: 'Sales',
@@ -223,20 +338,19 @@ const menuItems = [
     ]
   },
   {
-    label: 'Sales Approval',
-    path: '/sales-approval',
-    icon: Shield,
-    module: 'unitManager',
-    feature: 'salesApproval',
-    roleRestriction: 'Unit Manager'
-  },
+    label: 'Customers',
+    path: '/customers',
+    icon: Users,
+    module: 'customers'
+  }
+];
+
+const accountsMenuItems = [
   {
-    label: 'Sales Order List',
-    path: '/sales-order-list',
-    icon: TrendingUp,
-    module: 'unitManager',
-    feature: 'salesOrderList',
-    roleRestriction: 'Unit Manager'
+    label: 'Dashboard',
+    path: '/accounts-dashboard',
+    icon: LayoutDashboard,
+    module: 'dashboard'
   },
   {
     label: 'Accounts',
@@ -250,30 +364,36 @@ const menuItems = [
     ]
   },
   {
-    label: 'Inventory',
-    path: '/inventory',
-    icon: Package,
-    module: 'inventory'
-  },
-  {
     label: 'Customers',
     path: '/customers',
     icon: Users,
     module: 'customers'
-  },
-  {
-    label: 'Suppliers',
-    path: '/suppliers',
-    icon: Handshake,
-    module: 'suppliers'
-  },
-  {
-    label: 'Companies',
-    path: '/companies',
-    icon: Building2,
-    module: 'companies'
   }
 ];
+
+// Function to get menu items based on role
+const getMenuItemsByRole = (role) => {
+  switch (role) {
+    case 'Super Admin':
+      return superAdminMenuItems;
+    case 'Unit Head':
+      return unitHeadMenuItems;
+    case 'Unit Manager':
+      return unitManagerMenuItems;
+    case 'Production':
+      return productionMenuItems;
+    case 'Packing':
+      return packingMenuItems;
+    case 'Dispatch':
+      return dispatchMenuItems;
+    case 'Sales':
+      return salesMenuItems;
+    case 'Accounts':
+      return accountsMenuItems;
+    default:
+      return [];
+  }
+};
 
 // Profile menu item (always available)
 const profileMenuItem = {
@@ -302,44 +422,19 @@ export default function Sidebar({ isOpen, onClose }) {
     }));
   };
 
-    // Filter menu items based on module access AND module enabled status in settings
-  const filteredMenuItems = menuItems.filter(item => {
-    // Handle dashboard items - show only the appropriate dashboard for each role
-    if (item.module === 'dashboard') {
-      // For Super User, show only the main dashboard
-      if (user?.role === 'Super User') {
-        return item.path === '/dashboard';
-      }
-      // For other roles, show only their specific dashboard
-      if (item.roleRestriction && user?.role === item.roleRestriction) {
-        return true;
-      }
-      return false;
-    }
+  // Get menu items based on user role - much simpler and cleaner
+  const roleMenuItems = getMenuItemsByRole(user?.role);
+  
+  // Filter menu items based on module access and settings
+  const filteredMenuItems = roleMenuItems.filter(item => {
+    // Always show dashboard
+    if (item.module === 'dashboard') return true;
     
-    // Always show items without module restriction (like Profile)
+    // Always show items without module restriction
     if (!item.module) return true;
-    
-    // Role-specific filtering to prevent duplicates
-    if (user?.role === 'Unit Head') {
-      // For Unit Head, only show Unit Head specific items (with roleRestriction: 'Unit Head')
-      if (!item.roleRestriction || item.roleRestriction !== 'Unit Head') {
-        return false;
-      }
-    } else {
-      // For other roles, don't show Unit Head specific items
-      if (item.roleRestriction === 'Unit Head') {
-        return false;
-      }
-      // Check other role restrictions
-      if (item.roleRestriction && user?.role !== item.roleRestriction && user?.role !== 'Super User') {
-        return false;
-      }
-    }
     
     // Check if user has access to the module
     const hasAccess = hasModuleAccess(item.module);
-    
     if (!hasAccess) return false;
     
     // If item has a specific feature requirement, check feature access
@@ -430,15 +525,7 @@ export default function Sidebar({ isOpen, onClose }) {
                 const Icon = item.icon;
                 const isActive = location === item.path || 
                   (item.module === 'dashboard' && location === '/') ||
-                  (item.module === 'dashboard' && (
-                    location === '/unit-head-dashboard' ||
-                    location === '/production-dashboard' ||
-                    location === '/packing-dashboard' ||
-                    location === '/dispatch-dashboard' ||
-                    location === '/accounts-dashboard' ||
-                    location === '/sales-dashboard' ||
-                    location === '/dashboard'
-                  ));
+                  (item.module === 'dashboard' && location === '/super-admin-dashboard');
                 const hasSubmodules = item.submodules && item.submodules.length > 0;
                 const isExpanded = expandedModules[item.module];
                 const hasAccessibleSubmodules = hasSubmodules && 
@@ -575,51 +662,6 @@ export default function Sidebar({ isOpen, onClose }) {
                   )}
                 </Button>
               </Link>
-
-              {/* Super User Only Items */}
-              {user?.role === 'Super User' && (
-                <>
-                  <Link href="/role-permission-management">
-                    <Button
-                      variant={location === '/role-permission-management' ? "default" : "ghost"}
-                      className={cn(
-                        "w-full justify-start h-12 px-4 transition-all duration-200 group relative overflow-hidden",
-                        location === '/role-permission-management'
-                          ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
-                          : "text-slate-700 dark:text-slate-300 hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 dark:hover:from-blue-900/20 dark:hover:to-purple-900/20 hover:text-slate-900 dark:hover:text-slate-100"
-                      )}
-                      onClick={onClose}
-                    >
-                      <Shield className={cn(
-                        "w-5 h-5 mr-3 transition-all duration-200",
-                        location === '/role-permission-management' ? "drop-shadow-sm" : "group-hover:scale-110"
-                      )} />
-                      <span className="font-medium">Role & Permission Management</span>
-                      {location === '/role-permission-management' && (
-                        <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent opacity-50" />
-                      )}
-                    </Button>
-                  </Link>
-                  
-                  {user?.role === 'Super User' && (
-                    <Link href="/settings">
-                      <Button
-                        variant={location === '/settings' ? "default" : "ghost"}
-                        className={cn(
-                          "w-full justify-start h-10 px-4",
-                          location === '/settings'
-                            ? "bg-primary text-primary-foreground shadow-sm"
-                            : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                        )}
-                        onClick={onClose}
-                      >
-                        <Settings className="w-5 h-5 mr-3" />
-                        <span>Settings</span>
-                      </Button>
-                    </Link>
-                  )}
-                </>
-              )}
             </nav>
           </ScrollArea>
 

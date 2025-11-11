@@ -763,6 +763,7 @@ export const getAllOrders = async (req, res) => {
       limit = 10, 
       status, 
       customerId, 
+      salesPersonId,
       dateFrom, 
       dateTo,
       search 
@@ -781,6 +782,11 @@ export const getAllOrders = async (req, res) => {
       filter.customer = customerId;
     }
 
+    // Filter by salesperson if provided
+    if (salesPersonId) {
+      filter.salesPerson = salesPersonId;
+    }
+
     // Filter by date range if provided
     if (dateFrom || dateTo) {
       filter.createdAt = {};
@@ -795,8 +801,179 @@ export const getAllOrders = async (req, res) => {
     // Search functionality
     if (search) {
       filter.$or = [
-        { orderCode: { $regex: search, $options: 'i' } }
+        { orderCode: { $regex: search, $options: 'i' } },
+        // Also search in populated fields - this will be handled in aggregation
       ];
+      
+      // If search looks like a customer name or email, include customer search
+      if (search.length > 2) {
+        // We'll use aggregation for better search capabilities
+        const searchRegex = { $regex: search, $options: 'i' };
+        
+        // Get orders with populated data for search
+        const ordersWithPopulatedSearch = await Order.aggregate([
+          {
+            $lookup: {
+              from: 'customers',
+              localField: 'customer',
+              foreignField: '_id',
+              as: 'customerInfo'
+            }
+          },
+          {
+            $lookup: {
+              from: 'users',
+              localField: 'salesPerson',
+              foreignField: '_id',
+              as: 'salesPersonInfo'
+            }
+          },
+          {
+            $match: {
+              $and: [
+                // Apply other filters
+                ...(status && status !== 'all' ? [{ status }] : []),
+                ...(customerId ? [{ customer: customerId }] : []),
+                ...(salesPersonId ? [{ salesPerson: salesPersonId }] : []),
+                ...(filter.createdAt ? [{ createdAt: filter.createdAt }] : []),
+                // Search conditions
+                {
+                  $or: [
+                    { orderCode: searchRegex },
+                    { 'customerInfo.name': searchRegex },
+                    { 'customerInfo.email': searchRegex },
+                    { 'salesPersonInfo.fullName': searchRegex },
+                    { 'salesPersonInfo.username': searchRegex }
+                  ]
+                }
+              ]
+            }
+          },
+          { $sort: { createdAt: -1 } },
+          { $skip: skip },
+          { $limit: parseInt(limit) }
+        ]);
+
+        // Get total count for search results
+        const totalSearchCount = await Order.aggregate([
+          {
+            $lookup: {
+              from: 'customers',
+              localField: 'customer',
+              foreignField: '_id',
+              as: 'customerInfo'
+            }
+          },
+          {
+            $lookup: {
+              from: 'users',
+              localField: 'salesPerson',
+              foreignField: '_id',
+              as: 'salesPersonInfo'
+            }
+          },
+          {
+            $match: {
+              $and: [
+                ...(status && status !== 'all' ? [{ status }] : []),
+                ...(customerId ? [{ customer: customerId }] : []),
+                ...(salesPersonId ? [{ salesPerson: salesPersonId }] : []),
+                ...(filter.createdAt ? [{ createdAt: filter.createdAt }] : []),
+                {
+                  $or: [
+                    { orderCode: searchRegex },
+                    { 'customerInfo.name': searchRegex },
+                    { 'customerInfo.email': searchRegex },
+                    { 'salesPersonInfo.fullName': searchRegex },
+                    { 'salesPersonInfo.username': searchRegex }
+                  ]
+                }
+              ]
+            }
+          },
+          { $count: "total" }
+        ]);
+
+        // If we have search results, use them and populate the references
+        if (ordersWithPopulatedSearch.length > 0) {
+          const orderIds = ordersWithPopulatedSearch.map(order => order._id);
+          const orders = await Order.find({ _id: { $in: orderIds } })
+            .populate('customer', 'name email phone address')
+            .populate('salesPerson', 'fullName email')
+            .populate('products.product', 'name code category')
+            .sort({ createdAt: -1 })
+            .lean();
+
+          const totalCount = totalSearchCount[0]?.total || 0;
+          const totalPages = Math.ceil(totalCount / parseInt(limit));
+
+          // Get summary for search results
+          const statusCounts = await Order.aggregate([
+            {
+              $lookup: {
+                from: 'customers',
+                localField: 'customer',
+                foreignField: '_id',
+                as: 'customerInfo'
+              }
+            },
+            {
+              $lookup: {
+                from: 'users',
+                localField: 'salesPerson',
+                foreignField: '_id',
+                as: 'salesPersonInfo'
+              }
+            },
+            {
+              $match: {
+                $and: [
+                  ...(status && status !== 'all' ? [{ status }] : []),
+                  ...(customerId ? [{ customer: customerId }] : []),
+                  ...(salesPersonId ? [{ salesPerson: salesPersonId }] : []),
+                  ...(filter.createdAt ? [{ createdAt: filter.createdAt }] : []),
+                  {
+                    $or: [
+                      { orderCode: searchRegex },
+                      { 'customerInfo.name': searchRegex },
+                      { 'customerInfo.email': searchRegex },
+                      { 'salesPersonInfo.fullName': searchRegex },
+                      { 'salesPersonInfo.username': searchRegex }
+                    ]
+                  }
+                ]
+              }
+            },
+            { $group: { _id: '$status', count: { $sum: 1 } } }
+          ]);
+
+          const summary = {
+            total: totalCount,
+            pending: statusCounts.find(s => s._id === 'Pending')?.count || 0,
+            approved: statusCounts.find(s => s._id === 'Approved')?.count || 0,
+            disapproved: statusCounts.find(s => s._id === 'Disapproved')?.count || 0,
+            in_production: statusCounts.find(s => s._id === 'In_Production')?.count || 0,
+            completed: statusCounts.find(s => s._id === 'Completed')?.count || 0,
+            cancelled: statusCounts.find(s => s._id === 'Cancelled')?.count || 0
+          };
+
+          return res.status(200).json({
+            success: true,
+            data: {
+              orders,
+              pagination: {
+                currentPage: parseInt(page),
+                totalPages,
+                totalItems: totalCount,
+                itemsPerPage: parseInt(limit),
+                hasNext: parseInt(page) < totalPages,
+                hasPrev: parseInt(page) > 1
+              },
+              summary
+            }
+          });
+        }
+      }
     }
 
     // Calculate skip for pagination
