@@ -213,11 +213,13 @@ export default function SalesOrderList() {
   };
 
   const handleCustomerFilter = (customerId) => {
-    setFilters(prev => ({ ...prev, customerId, page: 1 }));
+    const apiValue = customerId === 'all' ? '' : customerId;
+    setFilters(prev => ({ ...prev, customerId: apiValue, page: 1 }));
   };
 
   const handleSalespersonFilter = (salesPersonId) => {
-    setFilters(prev => ({ ...prev, salesPersonId, page: 1 }));
+    const apiValue = salesPersonId === 'all' ? '' : salesPersonId;
+    setFilters(prev => ({ ...prev, salesPersonId: apiValue, page: 1 }));
   };
 
   const handleDateFilter = () => {
@@ -463,12 +465,12 @@ export default function SalesOrderList() {
                     <Users className="h-4 w-4" />
                     Customer
                   </Label>
-                  <Select value={filters.customerId} onValueChange={handleCustomerFilter}>
+                  <Select value={filters.customerId || 'all'} onValueChange={handleCustomerFilter}>
                     <SelectTrigger>
                       <SelectValue placeholder="All Customers" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All Customers</SelectItem>
+                      <SelectItem value="all">All Customers</SelectItem>
                       {customers.map((customer) => (
                         <SelectItem key={customer._id} value={customer._id}>
                           {customer.name}
@@ -484,12 +486,12 @@ export default function SalesOrderList() {
                     <UserCheck className="h-4 w-4" />
                     Salesperson
                   </Label>
-                  <Select value={filters.salesPersonId} onValueChange={handleSalespersonFilter}>
+                  <Select value={filters.salesPersonId || 'all'} onValueChange={handleSalespersonFilter}>
                     <SelectTrigger>
                       <SelectValue placeholder="All Salespersons" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All Salespersons</SelectItem>
+                      <SelectItem value="all">All Salespersons</SelectItem>
                       {salespersons.map((person) => (
                         <SelectItem key={person._id} value={person._id}>
                           {person.fullName || person.username}
@@ -593,7 +595,7 @@ export default function SalesOrderList() {
                     <Badge variant="secondary" className="flex items-center gap-1">
                       Customer: {customers.find(c => c._id === filters.customerId)?.name || 'Selected'}
                       <button 
-                        onClick={() => handleCustomerFilter('')}
+                        onClick={() => handleCustomerFilter('all')}
                         className="ml-1 hover:text-red-600"
                       >
                         ×
@@ -604,7 +606,7 @@ export default function SalesOrderList() {
                     <Badge variant="secondary" className="flex items-center gap-1">
                       Salesperson: {salespersons.find(s => s._id === filters.salesPersonId)?.fullName || 'Selected'}
                       <button 
-                        onClick={() => handleSalespersonFilter('')}
+                        onClick={() => handleSalespersonFilter('all')}
                         className="ml-1 hover:text-red-600"
                       >
                         ×

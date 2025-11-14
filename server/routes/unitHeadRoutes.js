@@ -20,7 +20,8 @@ import {
   updateUnitManagerPassword,
   deleteUnitManager,
   getUnitManagerById,
-  getUnitManagerModules
+  getUnitManagerModules,
+  getUnitHeadCompanyInfo
 } from '../controllers/unitHeadUserController.js';
 
 // Import inventory functions
@@ -146,6 +147,9 @@ router.get('/inventory/customer-categories/export',
   checkPermission('unitHead', 'inventory', 'view'), 
   exportCustomerCategoriesToExcel
 );
+
+// Get Unit Head company information for form pre-population
+router.get('/company-info', getUnitHeadCompanyInfo);
 
 // Unit Manager Management Routes (Role & Permission Management for Unit Head)
 router.get('/unit-managers', 

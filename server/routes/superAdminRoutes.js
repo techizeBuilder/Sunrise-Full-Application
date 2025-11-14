@@ -14,6 +14,17 @@ import {
   getSuperAdminCustomerById
 } from '../controllers/superAdminController.js';
 
+// Import company management functions
+import {
+  getCompanies,
+  getCompanyById,
+  createCompany,
+  updateCompany,
+  deleteCompany,
+  getCompanyStats,
+  getCompaniesDropdown
+} from '../controllers/companyController.js';
+
 // Import inventory functions
 import {
   getItems,
@@ -101,6 +112,15 @@ router.get('/sales-person/:salesPersonId', getSalesPersonById);
 // Customers Management
 router.get('/customers', getSuperAdminCustomers);
 router.get('/customers/:id', getSuperAdminCustomerById);
+
+// Company Management Routes
+router.get('/companies/dropdown', getCompaniesDropdown);
+router.get('/companies/stats', getCompanyStats);
+router.get('/companies', getCompanies);
+router.get('/companies/:id', getCompanyById);
+router.post('/companies', createCompany);
+router.put('/companies/:id', updateCompany);
+router.delete('/companies/:id', deleteCompany);
 
 // Inventory Management Routes
 router.get('/inventory/items', getItems);

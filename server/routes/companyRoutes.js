@@ -5,18 +5,24 @@ import {
   createCompany,
   updateCompany,
   deleteCompany,
-  getCompanyStats
+  getCompanyStats,
+  getCompaniesDropdown,
+  getCompaniesSimple
 } from '../controllers/companyController.js';
 import { authenticateToken as authenticateUser } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Apply authentication middleware to all routes
+// Public routes (no authentication required)
+router.get('/simple', getCompaniesSimple);
+
+// Apply authentication middleware to protected routes
 router.use(authenticateUser);
 
 // Company routes
-router.get('/', getCompanies);
+router.get('/dropdown', getCompaniesDropdown);
 router.get('/stats', getCompanyStats);
+router.get('/', getCompanies);
 router.get('/:id', getCompanyById);
 router.post('/', createCompany);
 router.put('/:id', updateCompany);

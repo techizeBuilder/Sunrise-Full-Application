@@ -1,4 +1,5 @@
 import { Item, Category, CustomerCategory } from '../models/Inventory.js';
+import { Company } from '../models/Company.js';
 import * as XLSX from 'xlsx';
 import multer from 'multer';
 import { USER_ROLES } from '../../shared/schema.js';
@@ -7,7 +8,7 @@ import notificationService from '../services/notificationService.js';
 // Helper function to check inventory permissions
 const checkInventoryPermission = (user, action) => {
   // Super Admin and Unit Head have all permissions
-  if (user.role === 'Super Admin' || user.role === 'Super User' || user.role === 'Unit Head') {
+  if (user.role === 'Super Admin' || user.role === 'Unit Head') {
     return true;
   }
   
@@ -107,6 +108,34 @@ export const getItems = async (req, res) => {
       .skip(skip)
       .limit(parseInt(limit));
 
+    // Resolve company names for store locations
+    const itemsWithCompanyNames = await Promise.all(
+      items.map(async (item) => {
+        const itemObj = item.toObject();
+        
+        // If store field contains an ObjectId, resolve the company name
+        if (itemObj.store && itemObj.store.match(/^[0-9a-fA-F]{24}$/)) {
+          try {
+            const company = await Company.findById(itemObj.store).select('name city state');
+            if (company) {
+              itemObj.storeLocation = `${company.name} - ${company.city}, ${company.state}`;
+              itemObj.companyId = itemObj.store;
+            } else {
+              itemObj.storeLocation = 'Unknown Location';
+            }
+          } catch (error) {
+            console.error('Error resolving company for item:', item._id, error);
+            itemObj.storeLocation = itemObj.store;
+          }
+        } else {
+          // For backward compatibility with string store names
+          itemObj.storeLocation = itemObj.store || 'No Location';
+        }
+        
+        return itemObj;
+      })
+    );
+
     const total = await Item.countDocuments(query);
 
     // Calculate inventory statistics
@@ -137,7 +166,7 @@ export const getItems = async (req, res) => {
     ]);
 
     res.json({
-      items,
+      items: itemsWithCompanyNames,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -172,7 +201,29 @@ export const getItemById = async (req, res) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
-    res.json({ item });
+    // Resolve company name for store location
+    const itemObj = item.toObject();
+    
+    // If store field contains an ObjectId, resolve the company name
+    if (itemObj.store && itemObj.store.match(/^[0-9a-fA-F]{24}$/)) {
+      try {
+        const company = await Company.findById(itemObj.store).select('name city state');
+        if (company) {
+          itemObj.storeLocation = `${company.name} - ${company.city}, ${company.state}`;
+          itemObj.companyId = itemObj.store;
+        } else {
+          itemObj.storeLocation = 'Unknown Location';
+        }
+      } catch (error) {
+        console.error('Error resolving company for item:', item._id, error);
+        itemObj.storeLocation = itemObj.store;
+      }
+    } else {
+      // For backward compatibility with string store names
+      itemObj.storeLocation = itemObj.store || 'No Location';
+    }
+
+    res.json({ item: itemObj });
   } catch (error) {
     console.error('Get item by ID error:', error);
     res.status(500).json({ message: 'Internal server error' });

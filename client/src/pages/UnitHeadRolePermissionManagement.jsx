@@ -1,7 +1,7 @@
 // THIS IS A CLEAN VERSION - replacing the problematic section
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiRequest } from '@/api/apiRequest';
+import { apiRequest } from '@/lib/queryClient';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -149,6 +149,9 @@ const UnitHeadRolePermissionManagement = () => {
     isActive: true
   });
 
+  // State for Unit Head company info
+  const [unitHeadCompanyInfo, setUnitHeadCompanyInfo] = useState(null);
+
   const queryClient = useQueryClient();
 
   // Get Unit Managers under this Unit Head
@@ -165,6 +168,20 @@ const UnitHeadRolePermissionManagement = () => {
       return response;
     }
   });
+
+  // Fetch Unit Head company info
+  const { data: unitHeadCompanyResponse } = useQuery({
+    queryKey: ['/api/unit-head/company-info'],
+    queryFn: () => apiRequest('GET', '/api/unit-head/company-info'),
+    retry: false
+  });
+
+  // Update unitHeadCompanyInfo when data is fetched
+  useEffect(() => {
+    if (unitHeadCompanyResponse?.data) {
+      setUnitHeadCompanyInfo(unitHeadCompanyResponse.data);
+    }
+  }, [unitHeadCompanyResponse]);
 
   // Create Unit Manager mutation
   const createUserMutation = useMutation({
@@ -209,6 +226,18 @@ const UnitHeadRolePermissionManagement = () => {
     }
   });
 
+  // Delete Unit Manager mutation
+  const deleteUserMutation = useMutation({
+    mutationFn: (userId) => apiRequest('DELETE', `/api/unit-head/unit-managers/${userId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['unit-managers']);
+      showSuccessToast('Unit Manager deleted successfully!');
+    },
+    onError: (error) => {
+      showSmartToast(error.message || 'Failed to delete Unit Manager', 'error');
+    }
+  });
+
   const resetForm = () => {
     setFormData({
       username: '',
@@ -235,6 +264,16 @@ const UnitHeadRolePermissionManagement = () => {
     setIsEditingUser(true);
   };
 
+  const handleDeleteUser = (user) => {
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete Unit Manager "${user.fullName}"? This action cannot be undone.`
+    );
+    
+    if (confirmDelete) {
+      deleteUserMutation.mutate(user._id);
+    }
+  };
+
   const handlePermissionChange = (module, feature, action, checked) => {
     setFormData(prev => ({
       ...prev,
@@ -257,6 +296,12 @@ const UnitHeadRolePermissionManagement = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    
+    // Validate Unit Head company assignment for Unit Manager creation
+    if (isAddingUser && !unitHeadCompanyInfo) {
+      showSmartToast('Unit Head must have a company assigned to create Unit Managers', 'error');
+      return;
+    }
     
     if (formData.password && formData.password !== formData.confirmPassword) {
       showSmartToast('Passwords do not match', 'error');
@@ -455,15 +500,33 @@ const UnitHeadRolePermissionManagement = () => {
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
-                        {user.permissions?.modules?.map((module) => 
-                          module.features?.map((feature) => (
-                            feature.view && (
-                              <Badge key={`${module.name}-${feature.key}`} variant="outline" className="text-xs">
-                                {UNIT_MANAGER_MODULES.find(m => m.name === module.name)?.features
-                                  .find(f => f.key === feature.key)?.label || feature.key}
-                              </Badge>
-                            )
-                          ))
+                        {user.permissions?.modules?.length > 0 ? (
+                          user.permissions.modules.map((module) => {
+                            const moduleInfo = UNIT_MANAGER_MODULES.find(m => m.name === module.name);
+                            const enabledFeatures = module.features?.filter(f => f.view || f.add || f.edit || f.delete);
+                            
+                            return enabledFeatures?.map((feature) => {
+                              const featureInfo = moduleInfo?.features.find(f => f.key === feature.key);
+                              const permissions = [];
+                              if (feature.view) permissions.push('View');
+                              if (feature.add) permissions.push('Add');
+                              if (feature.edit) permissions.push('Edit');
+                              if (feature.delete) permissions.push('Delete');
+                              
+                              return permissions.length > 0 ? (
+                                <Badge 
+                                  key={`${module.name}-${feature.key}`} 
+                                  variant="outline" 
+                                  className="text-xs"
+                                  title={`${featureInfo?.label || feature.key}: ${permissions.join(', ')}`}
+                                >
+                                  {featureInfo?.label || feature.key}
+                                </Badge>
+                              ) : null;
+                            });
+                          })
+                        ) : (
+                          <Badge variant="secondary" className="text-xs">No permissions assigned</Badge>
                         )}
                       </div>
                     </TableCell>
@@ -486,6 +549,13 @@ const UnitHeadRolePermissionManagement = () => {
                           }}
                         >
                           <Key className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleDeleteUser(user)}
+                        >
+                          <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
                     </TableCell>
@@ -557,6 +627,29 @@ const UnitHeadRolePermissionManagement = () => {
                   placeholder="Enter email address"
                   required
                 />
+              </div>
+
+              {/* Company/Location field - read-only for Unit Head */}
+              <div>
+                <Label htmlFor="companyLocation">Company/Location</Label>
+                <Input
+                  id="companyLocation"
+                  value={
+                    unitHeadCompanyInfo 
+                      ? `${unitHeadCompanyInfo.name} - ${unitHeadCompanyInfo.location}` 
+                      : 'No company assigned'
+                  }
+                  readOnly
+                  className={`cursor-not-allowed ${
+                    unitHeadCompanyInfo ? 'bg-gray-50' : 'bg-red-50 text-red-600'
+                  }`}
+                  placeholder="Company/Location (Auto-assigned)"
+                />
+                {!unitHeadCompanyInfo && (
+                  <p className="text-sm text-red-600 mt-1">
+                    Unit Head must have a company assigned to create Unit Managers
+                  </p>
+                )}
               </div>
 
               {isAddingUser && (

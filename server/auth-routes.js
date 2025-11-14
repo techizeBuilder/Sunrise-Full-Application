@@ -48,6 +48,54 @@ router.get('/test', (req, res) => {
   res.json({ message: 'API working', success: true, timestamp: new Date().toISOString() });
 });
 
+// Public companies endpoint (no authentication required)
+router.get('/companies/public', async (req, res) => {
+  try {
+    const { Company } = await import('./models/Company.js');
+    const { search, limit = 100 } = req.query;
+    
+    // Build filter object - only active companies
+    const filter = { isActive: true };
+    
+    // Global search
+    if (search) {
+      filter.$or = [
+        { name: new RegExp(search, 'i') },
+        { city: new RegExp(search, 'i') },
+        { unitName: new RegExp(search, 'i') }
+      ];
+    }
+
+    const companies = await Company.find(filter)
+      .select('_id name city state unitName companyType')
+      .sort({ name: 1, city: 1 })
+      .limit(parseInt(limit));
+
+    // Format for dropdown with consistent structure
+    const simpleList = companies.map(company => ({
+      value: company._id.toString(),
+      label: `${company.name} - ${company.city}, ${company.state}`,
+      name: company.name,
+      city: company.city,
+      state: company.state,
+      unitName: company.unitName,
+      companyType: company.companyType
+    }));
+
+    res.json({
+      success: true,
+      companies: simpleList,
+      count: simpleList.length
+    });
+  } catch (error) {
+    console.error('Get companies public error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Internal server error' 
+    });
+  }
+});
+
 // Login route
 router.post('/auth/login', async (req, res) => {
   try {
@@ -71,7 +119,7 @@ router.post('/auth/login', async (req, res) => {
         { username: username },
         { email: username }
       ]
-    });
+    }).populate('companyId', 'name unitName city state country locationPin address');
 
     console.log('Found user:', user ? 'Yes' : 'No');
     if (user) {
@@ -81,8 +129,36 @@ router.post('/auth/login', async (req, res) => {
         email: user.email,
         role: user.role,
         isActive: user.isActive,
+        companyId: user.companyId?._id,
+        companyLocation: user.companyId ? `${user.companyId.city}, ${user.companyId.state}` : 'No company assigned',
         passwordHash: user.password.substring(0, 20) + '...'
       });
+      
+      // Auto-assign company if user doesn't have one (for development/testing)
+      if (!user.companyId && (user.role === 'Unit Manager' || user.role === 'Unit Head' || user.role === 'Sales')) {
+        console.log('⚠️ User has no company assigned, attempting auto-assignment...');
+        
+        try {
+          const { Company } = await import('./models/Company.js');
+          const defaultCompany = await Company.findOne({}).select('name unitName city state country locationPin address');
+          
+          if (defaultCompany) {
+            user.companyId = defaultCompany._id;
+            await user.save();
+            
+            // Reload user with populated company
+            const updatedUser = await User.findById(user._id).populate('companyId', 'name unitName city state country locationPin address');
+            Object.assign(user, updatedUser._doc);
+            
+            console.log('✅ Auto-assigned company:', {
+              companyName: defaultCompany.name,
+              location: `${defaultCompany.city}, ${defaultCompany.state}`
+            });
+          }
+        } catch (error) {
+          console.error('Failed to auto-assign company:', error.message);
+        }
+      }
     }
 
     if (!user) {
@@ -113,6 +189,18 @@ router.post('/auth/login', async (req, res) => {
       role: user.role,
       permissions: user.permissions,
       unit: user.unit,
+      companyId: user.companyId?._id,
+      company: user.companyId ? {
+        id: user.companyId._id,
+        name: user.companyId.name,
+        unitName: user.companyId.unitName,
+        city: user.companyId.city,
+        state: user.companyId.state,
+        country: user.companyId.country,
+        locationPin: user.companyId.locationPin,
+        address: user.companyId.address,
+        location: `${user.companyId.city}, ${user.companyId.state}` // Combined location string
+      } : null,
       profile: {
         firstName: user.firstName,
         lastName: user.lastName,
@@ -129,6 +217,7 @@ router.post('/auth/login', async (req, res) => {
     
     console.log('=== LOGIN SUCCESS ===');
     console.log('User:', userResponse.username, 'Role:', userResponse.role);
+    console.log('Company:', userResponse.company ? userResponse.company.location : 'No company assigned');
     
     res.status(200).json(response);
   } catch (error) {

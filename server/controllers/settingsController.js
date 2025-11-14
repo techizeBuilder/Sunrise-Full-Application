@@ -38,7 +38,7 @@ export const upload = multer({
 export const getSettings = async (req, res) => {
   try {
     // Only super users can access settings
-    if (req.user.role !== USER_ROLES.SUPER_USER) {
+    if (req.user.role !== USER_ROLES.SUPER_ADMIN) {
       return res.status(403).json({ message: 'Access denied. Only super users can access settings.' });
     }
 
@@ -53,7 +53,7 @@ export const getSettings = async (req, res) => {
 export const updateSettings = async (req, res) => {
   try {
     // Only super users can update settings
-    if (req.user.role !== USER_ROLES.SUPER_USER) {
+    if (req.user.role !== USER_ROLES.SUPER_ADMIN) {
       return res.status(403).json({ message: 'Access denied. Only super users can update settings.' });
     }
 

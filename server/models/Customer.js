@@ -2,6 +2,11 @@ import mongoose from 'mongoose';
 
 const customerSchema = new mongoose.Schema({
   // Basic Information
+  customerCode: {
+    type: String,
+    unique: true,
+    sparse: true // Allows null values but enforces uniqueness for non-null values
+  },
   name: {
     type: String,
     required: [true, 'Name is required'],

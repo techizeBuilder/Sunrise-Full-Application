@@ -377,6 +377,49 @@ class APIService {
     const inventoryPath = this.getInventoryApiPath();
     return this.post(`${inventoryPath}/items/${id}/adjust-stock`, data);
   }
+
+  // Company Management APIs
+  async getCompanies(params = {}) {
+    const queryParams = new URLSearchParams();
+    Object.keys(params).forEach(key => {
+      if (params[key] !== undefined && params[key] !== '') {
+        queryParams.append(key, params[key]);
+      }
+    });
+    const queryString = queryParams.toString();
+    return this.get(`/super-admin/companies${queryString ? `?${queryString}` : ''}`);
+  }
+
+  async getCompanyById(id) {
+    return this.get(`/super-admin/companies/${id}`);
+  }
+
+  async createCompany(data) {
+    return this.post('/super-admin/companies', data);
+  }
+
+  async updateCompany(id, data) {
+    return this.put(`/super-admin/companies/${id}`, data);
+  }
+
+  async deleteCompany(id) {
+    return this.delete(`/super-admin/companies/${id}`);
+  }
+
+  async getCompaniesDropdown(params = {}) {
+    const queryParams = new URLSearchParams();
+    Object.keys(params).forEach(key => {
+      if (params[key] !== undefined && params[key] !== '') {
+        queryParams.append(key, params[key]);
+      }
+    });
+    const queryString = queryParams.toString();
+    return this.get(`/super-admin/companies/dropdown${queryString ? `?${queryString}` : ''}`);
+  }
+
+  async getCompanyStats() {
+    return this.get('/super-admin/companies/stats');
+  }
 }
 
 export const api = new APIService();

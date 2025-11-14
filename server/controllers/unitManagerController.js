@@ -143,11 +143,11 @@ export const fixOrdersSalesPersonAssignment = async (req, res) => {
   try {
     const user = req.user;
     
-    // Only allow Unit Manager or Super User role for this operation
-    if (user.role !== 'Unit Manager' && user.role !== 'Super User') {
+    // Only allow Unit Manager or Super Admin role for this operation
+    if (user.role !== 'Unit Manager' && user.role !== 'Super Admin') {
       return res.status(403).json({
         success: false,
-        message: 'Access denied - Unit Manager or Super User role required'
+        message: 'Access denied - Unit Manager or Super Admin role required'
       });
     }
 
@@ -202,21 +202,48 @@ export const getOrders = async (req, res) => {
       });
     }
 
+    console.log('=== COMPANY FILTERING ===');
+    console.log('User details:', {
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      companyId: user.companyId
+    });
+
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 1000; // Increased to get all orders for proper grouping
     const status = req.query.status;
 
-    // Build filter query
+    // Build filter query - company filtering handled through salesPerson
     const filterQuery = {};
+    
     if (status && status !== 'all') {
       filterQuery.status = status;
     }
 
-    // Get all orders with populated references for complete analysis
+    // Get sales persons from the same company for filtering
+    if (user.companyId) {
+      const companySalesPersons = await User.find({ 
+        companyId: user.companyId,
+        role: { $in: ['Sales', 'Unit Manager', 'Unit Head'] }
+      }).select('_id').lean();
+      
+      const salesPersonIds = companySalesPersons.map(sp => sp._id);
+      console.log('Company sales person IDs:', salesPersonIds);
+      
+      // Filter orders by sales persons from the same company
+      filterQuery.salesPerson = { $in: salesPersonIds };
+      console.log('Filtering orders by sales persons from companyId:', user.companyId);
+    } else {
+      console.log('⚠️ WARNING: User has no company assignment - showing all orders');
+    }
+
+    console.log('Filter query:', filterQuery);
+    
     const [orders, totalOrders] = await Promise.all([
       Order.find(filterQuery)
         .populate('customer', 'name email phone')
-        .populate('salesPerson', 'fullName username email role')
+        .populate('salesPerson', 'fullName username email role companyId')
         .populate('products.product', 'name code price')
         .sort({ createdAt: -1 })
         .lean(),
@@ -759,6 +786,14 @@ export const getAllOrders = async (req, res) => {
       });
     }
 
+    console.log('🚀 getAllOrders with company filtering');
+    console.log('User details:', {
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      companyId: user.companyId
+    });
+
     const { 
       page = 1, 
       limit = 10, 
@@ -802,6 +837,23 @@ export const getAllOrders = async (req, res) => {
 
     // Build match conditions
     const matchConditions = [];
+
+    // COMPANY FILTERING: Only show orders from sales persons in the same company
+    if (user.companyId) {
+      const companySalesPersons = await User.find({ 
+        companyId: user.companyId,
+        role: { $in: ['Sales', 'Unit Manager', 'Unit Head'] }
+      }).select('_id').lean();
+      
+      const salesPersonIds = companySalesPersons.map(sp => sp._id);
+      console.log('Company sales person IDs for filtering:', salesPersonIds.length);
+      
+      // Filter orders by sales persons from the same company
+      matchConditions.push({ 'salesPerson._id': { $in: salesPersonIds } });
+      console.log('Applied company-based filtering for companyId:', user.companyId);
+    } else {
+      console.log('⚠️ WARNING: User has no company assignment - showing all orders');
+    }
 
     // Filter by status
     if (status && status !== 'all') {

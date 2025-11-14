@@ -159,8 +159,74 @@ const getOrders = async (req, res) => {
       sortOrder = 'desc'
     } = req.query;
 
-    // Build filter query
+    const salespersonId = req.user._id || req.user.id;
+    const userRole = req.user.role;
+    const userCompanyId = req.user.companyId;
+
+    console.log('=== ORDER FILTERING ===');
+    console.log('User details:', {
+      id: salespersonId,
+      role: userRole,
+      companyId: userCompanyId,
+      username: req.user.username
+    });
+
+    // Build filter query with role-based filtering
     const filter = {};
+
+    // Company-based filtering for Unit Managers
+    if (userRole === 'Unit Manager' && userCompanyId) {
+      // Get sales persons from the same company
+      const User = (await import('../models/User.js')).default;
+      const companySalesPersons = await User.find({ 
+        companyId: userCompanyId,
+        role: { $in: ['Sales', 'Unit Manager', 'Unit Head'] }
+      }).select('_id username fullName role').lean();
+      
+      const salesPersonIds = companySalesPersons.map(sp => sp._id);
+      filter.salesPerson = { $in: salesPersonIds };
+      
+      console.log('🏢 UNIT MANAGER COMPANY FILTERING');
+      console.log('Company ID:', userCompanyId);
+      console.log('Company Sales Persons Found:', companySalesPersons.length);
+      companySalesPersons.forEach(sp => {
+        console.log(`  - ${sp.username} (${sp.fullName || 'No name'}) - ${sp.role}`);
+      });
+      console.log('Sales Person IDs for filtering:', salesPersonIds);
+    }
+    // Role-based filtering: Sales users only see their orders
+    else if (userRole === 'Sales') {
+      filter.salesPerson = salespersonId;
+      console.log('👤 SALES PERSON FILTERING - Own orders only');
+    }
+    // Super Admin can see all orders
+    else if (userRole === 'Super Admin') {
+      console.log('👑 SUPER ADMIN - No filtering applied (all orders)');
+    }
+    // For other roles, also filter by company if available  
+    else {
+      if (userCompanyId) {
+        const User = (await import('../models/User.js')).default;
+        const companySalesPersons = await User.find({ 
+          companyId: userCompanyId,
+          role: { $in: ['Sales', 'Unit Manager', 'Unit Head'] }
+        }).select('_id username fullName role').lean();
+        
+        const salesPersonIds = companySalesPersons.map(sp => sp._id);
+        filter.salesPerson = { $in: salesPersonIds };
+        
+        console.log(`🏢 ${userRole.toUpperCase()} COMPANY FILTERING`);
+        console.log('Company ID:', userCompanyId);
+        console.log('Company Sales Persons Found:', companySalesPersons.length);
+        companySalesPersons.forEach(sp => {
+          console.log(`  - ${sp.username} (${sp.fullName || 'No name'}) - ${sp.role}`);
+        });
+        console.log('Sales Person IDs for filtering:', salesPersonIds);
+      } else {
+        filter.salesPerson = salespersonId;
+        console.log(`👤 ${userRole.toUpperCase()} - No company, filtering own orders only`);
+      }
+    }
 
     if (search) {
       filter.$or = [
@@ -196,10 +262,15 @@ const getOrders = async (req, res) => {
     // Calculate pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
+    console.log('=== FINAL FILTER APPLIED ===');
+    console.log('Filter object:', JSON.stringify(filter, null, 2));
+    console.log('Pagination:', { page, limit, skip });
+
     // Get orders with population
     const orders = await Order.find(filter)
       .populate('customer', 'name email mobile')
       .populate('products.product', 'name salePrice purchaseCost mrp brand category subCategory image')
+      .populate('salesPerson', 'username fullName email role companyId')
       .sort(sort)
       .skip(skip)
       .limit(parseInt(limit));
@@ -207,6 +278,17 @@ const getOrders = async (req, res) => {
     // Get total count for pagination
     const totalOrders = await Order.countDocuments(filter);
     const totalPages = Math.ceil(totalOrders / parseInt(limit));
+
+    console.log('=== QUERY RESULTS ===');
+    console.log('Orders found:', orders.length);
+    console.log('Total orders matching filter:', totalOrders);
+    
+    if (orders.length > 0) {
+      console.log('Sample orders:');
+      orders.slice(0, 3).forEach(order => {
+        console.log(`  Order ${order.orderCode}: Sales Person: ${order.salesPerson?.username || 'Unknown'} (ID: ${order.salesPerson?._id})`);
+      });
+    }
 
     res.json({
       success: true,
@@ -385,7 +467,7 @@ const updateOrderStatus = async (req, res) => {
     const userRole = req.user.role;
     
     // Unit Manager can update any status
-    if (userRole === 'Unit Manager' || userRole === 'Super User') {
+    if (userRole === 'Unit Manager' || userRole === 'Super Admin') {
       // Allow all status updates
     }
     // Sales can only update to Cancelled if pending
@@ -467,7 +549,7 @@ const getSalesSummary = async (req, res) => {
     let query = {};
 
     // Apply unit filter for non-super users  
-    if (req.user.role !== 'Super User') {
+    if (req.user.role !== 'Super Admin') {
       query.unit = req.user.unit;
     } else if (unit) {
       query.unit = unit;
@@ -501,7 +583,7 @@ const getSalesRecentOrders = async (req, res) => {
     let query = {};
 
     // Apply unit filter for non-super users
-    if (req.user.role !== 'Super User') {
+    if (req.user.role !== 'Super Admin') {
       query.unit = req.user.unit;
     } else if (unit) {
       query.unit = unit;
@@ -537,6 +619,98 @@ const getSalesRecentOrders = async (req, res) => {
   }
 };
 
+// Get orders for the authenticated salesperson
+const getSalespersonOrders = async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 10,
+      search = '',
+      status = '',
+      startDate = '',
+      endDate = '',
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query;
+
+    const salespersonId = req.user._id || req.user.id;
+    const userRole = req.user.role;
+
+    // Build filter query based on user role
+    const filter = {};
+
+    // If user is Sales role, only show their orders
+    if (userRole === 'Sales') {
+      filter.salesPerson = salespersonId;
+    }
+    // Unit Manager and Super Admin can see all orders
+    // For other roles, also restrict to their own orders
+    else if (userRole !== 'Unit Manager' && userRole !== 'Super Admin') {
+      filter.salesPerson = salespersonId;
+    }
+
+    if (search) {
+      filter.$or = [
+        { orderCode: { $regex: search, $options: 'i' } },
+        { notes: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    if (status) {
+      filter.status = status;
+    }
+
+    if (startDate || endDate) {
+      filter.orderDate = {};
+      if (startDate) {
+        filter.orderDate.$gte = new Date(startDate);
+      }
+      if (endDate) {
+        filter.orderDate.$lte = new Date(endDate);
+      }
+    }
+
+    // Build sort query
+    const sort = {};
+    sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
+
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Get orders with population
+    const orders = await Order.find(filter)
+      .populate('customer', 'name email mobile')
+      .populate('products.product', 'name salePrice purchaseCost mrp brand category subCategory image')
+      .sort(sort)
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    // Get total count for pagination
+    const totalOrders = await Order.countDocuments(filter);
+    const totalPages = Math.ceil(totalOrders / parseInt(limit));
+
+    res.json({
+      success: true,
+      orders,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages,
+        totalOrders,
+        hasNextPage: parseInt(page) < totalPages,
+        hasPrevPage: parseInt(page) > 1
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching salesperson orders:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
 export {
   createOrder,
   getOrders,
@@ -545,5 +719,6 @@ export {
   updateOrderStatus,
   deleteOrder,
   getSalesSummary,
-  getSalesRecentOrders
+  getSalesRecentOrders,
+  getSalespersonOrders
 };

@@ -83,7 +83,7 @@ export default function ViewItemModal({ isOpen, onClose, item }) {
               <InfoRow icon={Tag} label="Item Type" value={item.type} variant="badge" />
               <InfoRow icon={AlertTriangle} label="Importance" value={item.importance} variant="badge" />
               <InfoRow icon={BarChart3} label="Unit" value={item.unit} />
-              <InfoRow icon={MapPin} label="Store Location" value={item.store} />
+              <InfoRow icon={MapPin} label="Store Location" value={item.storeLocation || item.store || 'No location'} />
               <InfoRow icon={Tag} label="Batch Number" value={item.batch} />
             </CardContent>
           </Card>

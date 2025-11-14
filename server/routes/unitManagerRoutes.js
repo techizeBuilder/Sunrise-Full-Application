@@ -34,6 +34,7 @@ router.get('/test', (req, res) => {
 router.get('/items', getItems); // Comment out but keep for reference
 router.get('/orders', getOrders); // Main API with all data
 router.get('/all-orders', getAllOrders); // New endpoint for sales order list
+router.get('/sales-order-list', getAllOrders); // Alternative endpoint for sales order list
 router.get('/orders/:id', getOrderById); // Get single order details
 router.get('/customers', async (req, res) => {
   try {

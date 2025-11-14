@@ -4,8 +4,8 @@ import { Company } from '../models/Company.js';
 const checkCompanyPermission = (user, action) => {
   console.log('Checking company permission for user:', user?.role, 'action:', action);
   
-  // Super User has all permissions
-  if (user?.role === 'Super User') {
+  // Super Admin has all permissions
+  if (user?.role === 'Super Admin') {
     return true;
   }
   // Unit Head has all company permissions
@@ -24,39 +24,88 @@ export const getCompanies = async (req, res) => {
       return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
     }
 
-    const { city, unitName, name, page = 1, limit = 10 } = req.query;
+    const { 
+      city, 
+      unitName, 
+      name, 
+      state,
+      companyType,
+      isActive,
+      search,
+      page = 1, 
+      limit = 10,
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query;
     
     // Build filter object
     const filter = {};
+    
+    // Individual field filters
     if (city) filter.city = new RegExp(city, 'i');
     if (unitName) filter.unitName = new RegExp(unitName, 'i');
     if (name) filter.name = new RegExp(name, 'i');
+    if (state) filter.state = new RegExp(state, 'i');
+    if (companyType) filter.companyType = companyType;
+    if (isActive !== undefined) filter.isActive = isActive === 'true';
+
+    // Global search across multiple fields
+    if (search) {
+      filter.$or = [
+        { name: new RegExp(search, 'i') },
+        { unitName: new RegExp(search, 'i') },
+        { city: new RegExp(search, 'i') },
+        { state: new RegExp(search, 'i') },
+        { email: new RegExp(search, 'i') },
+        { mobile: new RegExp(search, 'i') }
+      ];
+    }
 
     // Calculate pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
+    // Build sort object
+    const sort = {};
+    sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
+
     // Get companies with pagination
     const companies = await Company.find(filter)
-      .sort({ createdAt: -1 })
+      .sort(sort)
       .skip(skip)
       .limit(parseInt(limit));
 
     // Get total count for pagination
     const total = await Company.countDocuments(filter);
 
+    // Get unique cities for filter options
+    const cities = await Company.distinct('city', { isActive: true });
+    const states = await Company.distinct('state', { isActive: true });
+    const companyTypes = await Company.distinct('companyType');
+
     console.log(`Found ${companies.length} companies, total: ${total}`);
 
     res.json({
+      success: true,
       companies,
       pagination: {
         current: parseInt(page),
         total: Math.ceil(total / parseInt(limit)),
-        count: total
+        count: total,
+        hasNext: skip + companies.length < total,
+        hasPrev: parseInt(page) > 1
+      },
+      filters: {
+        cities: cities.sort(),
+        states: states.sort(),
+        companyTypes
       }
     });
   } catch (error) {
     console.error('Get companies error:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(500).json({ 
+      success: false,
+      message: 'Internal server error' 
+    });
   }
 };
 
@@ -90,8 +139,13 @@ export const createCompany = async (req, res) => {
 
     const companyData = req.body;
 
-    // Validate required fields
-    const requiredFields = ['unitName', 'name', 'mobile', 'email', 'address', 'locationPin', 'city', 'state', 'gst', 'orderCutoffTime'];
+    // Auto-generate name from unitName if not provided
+    if (!companyData.name && companyData.unitName) {
+      companyData.name = companyData.unitName;
+    }
+
+    // Validate required fields (name is now optional as it can be auto-generated)
+    const requiredFields = ['unitName', 'locationPin', 'city', 'state'];
     const missingFields = requiredFields.filter(field => !companyData[field]);
     
     if (missingFields.length > 0) {
@@ -106,7 +160,7 @@ export const createCompany = async (req, res) => {
       });
     }
 
-    // Additional validation
+    // Additional validation (only validate if fields are provided)
     if (companyData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(companyData.email)) {
       return res.status(400).json({
         success: false,
@@ -123,28 +177,11 @@ export const createCompany = async (req, res) => {
       });
     }
 
-    if (companyData.gst && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(companyData.gst)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid GST number format',
-        errors: { gst: 'Please provide a valid GST number (e.g., 07AABCT1234H1Z5)' }
-      });
-    }
-
     if (companyData.locationPin && !/^[1-9][0-9]{5}$/.test(companyData.locationPin)) {
       return res.status(400).json({
         success: false,
         message: 'Invalid PIN code format',
         errors: { locationPin: 'Please provide a valid 6-digit PIN code' }
-      });
-    }
-
-    // Check if company with same GST already exists
-    const existingCompany = await Company.findOne({ gst: companyData.gst.toUpperCase() });
-    if (existingCompany) {
-      return res.status(400).json({ 
-        success: false,
-        message: 'Company with this GST number already exists' 
       });
     }
 
@@ -182,18 +219,9 @@ export const updateCompany = async (req, res) => {
     const { id } = req.params;
     const updateData = req.body;
 
-    // Check if updating GST and it conflicts with another company
-    if (updateData.gst) {
-      const existingCompany = await Company.findOne({ 
-        gst: updateData.gst.toUpperCase(),
-        _id: { $ne: id }
-      });
-      if (existingCompany) {
-        return res.status(400).json({ 
-          success: false,
-          message: 'Another company with this GST number already exists' 
-        });
-      }
+    // Auto-generate name from unitName if name is not provided but unitName is
+    if (!updateData.name && updateData.unitName) {
+      updateData.name = updateData.unitName;
     }
 
     const company = await Company.findByIdAndUpdate(
@@ -258,8 +286,9 @@ export const getCompanyStats = async (req, res) => {
       return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
     }
 
-    const totalCompanies = await Company.countDocuments();
+    const totalCompanies = await Company.countDocuments({ isActive: true });
     const companiesByCity = await Company.aggregate([
+      { $match: { isActive: true } },
       {
         $group: {
           _id: '$city',
@@ -267,10 +296,11 @@ export const getCompanyStats = async (req, res) => {
         }
       },
       { $sort: { count: -1 } },
-      { $limit: 5 }
+      { $limit: 10 }
     ]);
 
     const companiesByUnit = await Company.aggregate([
+      { $match: { isActive: true } },
       {
         $group: {
           _id: '$unitName',
@@ -280,13 +310,128 @@ export const getCompanyStats = async (req, res) => {
       { $sort: { count: -1 } }
     ]);
 
+    const companiesByType = await Company.aggregate([
+      { $match: { isActive: true } },
+      {
+        $group: {
+          _id: '$companyType',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
     res.json({
+      success: true,
       total: totalCompanies,
       byCity: companiesByCity,
-      byUnit: companiesByUnit
+      byUnit: companiesByUnit,
+      byType: companiesByType
     });
   } catch (error) {
     console.error('Get company stats error:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(500).json({ 
+      success: false,
+      message: 'Internal server error' 
+    });
+  }
+};
+
+// Get companies for dropdown/select options
+export const getCompaniesDropdown = async (req, res) => {
+  try {
+    if (!checkCompanyPermission(req.user, 'view')) {
+      return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
+    }
+
+    const { city, unitName, search } = req.query;
+    
+    // Build filter object
+    const filter = { isActive: true };
+    if (city) filter.city = new RegExp(city, 'i');
+    if (unitName) filter.unitName = new RegExp(unitName, 'i');
+    
+    // Global search
+    if (search) {
+      filter.$or = [
+        { name: new RegExp(search, 'i') },
+        { city: new RegExp(search, 'i') },
+        { unitName: new RegExp(search, 'i') }
+      ];
+    }
+
+    const companies = await Company.find(filter)
+      .select('_id name city state unitName companyType')
+      .sort({ name: 1, city: 1 })
+      .limit(100); // Limit for dropdown performance
+
+    // Format for dropdown
+    const dropdownOptions = companies.map(company => ({
+      value: company._id,
+      label: `${company.name} - ${company.city}, ${company.state}`,
+      name: company.name,
+      city: company.city,
+      state: company.state,
+      unitName: company.unitName,
+      companyType: company.companyType
+    }));
+
+    res.json({
+      success: true,
+      companies: dropdownOptions,
+      count: dropdownOptions.length
+    });
+  } catch (error) {
+    console.error('Get companies dropdown error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Internal server error' 
+    });
+  }
+};
+
+// Simple companies list for public/reusable access (no authentication required)
+export const getCompaniesSimple = async (req, res) => {
+  try {
+    const { search, limit = 100 } = req.query;
+    
+    // Build filter object - only active companies
+    const filter = { isActive: true };
+    
+    // Global search
+    if (search) {
+      filter.$or = [
+        { name: new RegExp(search, 'i') },
+        { city: new RegExp(search, 'i') },
+        { unitName: new RegExp(search, 'i') }
+      ];
+    }
+
+    const companies = await Company.find(filter)
+      .select('_id name city state unitName companyType')
+      .sort({ name: 1, city: 1 })
+      .limit(parseInt(limit));
+
+    // Format for dropdown with consistent structure
+    const simpleList = companies.map(company => ({
+      value: company._id.toString(),
+      label: `${company.name} - ${company.city}, ${company.state}`,
+      name: company.name,
+      city: company.city,
+      state: company.state,
+      unitName: company.unitName,
+      companyType: company.companyType
+    }));
+
+    res.json({
+      success: true,
+      companies: simpleList,
+      count: simpleList.length
+    });
+  } catch (error) {
+    console.error('Get companies simple error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Internal server error' 
+    });
   }
 };

@@ -29,7 +29,6 @@ import { useToast } from '@/hooks/use-toast';
 const ITEM_TYPES = ['Product', 'Material', 'Spares', 'Assemblies'];
 const IMPORTANCE_LEVELS = ['Low', 'Normal', 'High', 'Critical'];
 const UNITS = ['pieces', 'kg', 'liters', 'meters', 'sheets', 'boxes', 'units', 'tons', 'cartons'];
-const STORE_LOCATIONS = ['Hyderabad', 'Bengaluru', 'Tirupati'];
 
 export default function SimpleInventoryForm({ 
   isOpen, 
@@ -37,6 +36,7 @@ export default function SimpleInventoryForm({
   item = null, 
   categories = [], 
   customerCategories = [],
+  companies = [],
   onSubmit, 
   isLoading = false 
 }) {
@@ -640,11 +640,15 @@ export default function SimpleInventoryForm({
                     <SelectValue placeholder="Select store location" />
                   </SelectTrigger>
                   <SelectContent>
-                    {STORE_LOCATIONS.map((location) => (
-                      <SelectItem key={location} value={location}>
-                        {location}
+                    {companies.length > 0 ? companies.map((company) => (
+                      <SelectItem key={company.value} value={company.value}>
+                        {company.label}
                       </SelectItem>
-                    ))}
+                    )) : (
+                      <SelectItem value="no-companies" disabled>
+                        No companies available
+                      </SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>

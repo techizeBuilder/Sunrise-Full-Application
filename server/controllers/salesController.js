@@ -1,6 +1,7 @@
 import Sale from '../models/Sale.js';
 import Order from '../models/Order.js';
 import Customer from '../models/Customer.js';
+import Return from '../models/Return.js';
 import { USER_ROLES } from '../../shared/schema.js';
 
 export const getSales = async (req, res) => {
@@ -294,8 +295,277 @@ export const getSalesStats = async (req, res) => {
       pendingSales: pendingSales[0] || { total: 0, count: 0 },
       overdueSales: overdueSales[0] || { total: 0, count: 0 }
     });
+
   } catch (error) {
     console.error('Get sales stats error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+// Salesperson-specific controller functions
+export const getSalespersonCustomers = async (req, res) => {
+  try {
+    const { page = 1, limit = 10, search = '', category = '' } = req.query;
+    const salespersonId = req.user._id || req.user.id;
+    const salespersonUsername = req.user.username;
+    const userRole = req.user.role;
+
+    // Build filter query based on user role
+    let query = {};
+
+    // If user is Sales role, only show customers assigned to them
+    if (userRole === 'Sales') {
+      query = {
+        $or: [
+          { salesContact: salespersonUsername },
+          { salesContact: salespersonId.toString() }
+        ]
+      };
+    }
+    // Unit Manager and Super Admin can see all customers
+    // For other roles, also restrict to their assigned customers
+    else if (userRole !== 'Unit Manager' && userRole !== 'Super Admin') {
+      query = {
+        $or: [
+          { salesContact: salespersonUsername },
+          { salesContact: salespersonId.toString() }
+        ]
+      };
+    }
+
+    if (search) {
+      query.$and = [
+        query.$and || {},
+        {
+          $or: [
+            { name: { $regex: search, $options: 'i' } },
+            { contactPerson: { $regex: search, $options: 'i' } },
+            { email: { $regex: search, $options: 'i' } },
+            { mobile: { $regex: search, $options: 'i' } }
+          ]
+        }
+      ];
+    }
+
+    if (category) {
+      query.category = category;
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const customers = await Customer.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await Customer.countDocuments(query);
+
+    res.json({
+      success: true,
+      customers,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Get salesperson customers error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+export const getSalespersonDeliveries = async (req, res) => {
+  try {
+    const { page = 1, limit = 10, status = '', search = '' } = req.query;
+    const salespersonId = req.user._id || req.user.id;
+    const userRole = req.user.role;
+
+    // Build filter query based on user role
+    let query = {
+      status: { $in: ['Shipped', 'Out for Delivery', 'Delivered'] }
+    };
+
+    // If user is Sales role, only show their deliveries
+    if (userRole === 'Sales') {
+      query.salesPerson = salespersonId;
+    }
+    // Unit Manager and Super Admin can see all deliveries
+    // For other roles, also restrict to their own deliveries
+    else if (userRole !== 'Unit Manager' && userRole !== 'Super Admin') {
+      query.salesPerson = salespersonId;
+    }
+
+    if (status) {
+      query.status = status;
+    }
+
+    if (search) {
+      query.$or = [
+        { orderCode: { $regex: search, $options: 'i' } },
+        { notes: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const deliveries = await Order.find(query)
+      .populate('customer', 'name email mobile city')
+      .populate('products.product', 'name')
+      .sort({ updatedAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await Order.countDocuments(query);
+
+    res.json({
+      success: true,
+      deliveries,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Get salesperson deliveries error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+export const getSalespersonInvoices = async (req, res) => {
+  try {
+    const { page = 1, limit = 10, paymentStatus = '', search = '' } = req.query;
+    const salespersonId = req.user._id || req.user.id;
+    const userRole = req.user.role;
+
+    // Find orders by role-based filtering
+    let orderQuery = {};
+
+    // If user is Sales role, only show their invoices
+    if (userRole === 'Sales') {
+      orderQuery.salesPerson = salespersonId;
+    }
+    // Unit Manager and Super Admin can see all invoices
+    // For other roles, also restrict to their own invoices
+    else if (userRole !== 'Unit Manager' && userRole !== 'Super Admin') {
+      orderQuery.salesPerson = salespersonId;
+    }
+    
+    const salespersonOrders = await Order.find(orderQuery).select('_id');
+    const orderIds = salespersonOrders.map(order => order._id);
+
+    // Build filter query for sales/invoices related to orders
+    let query = { order: { $in: orderIds } };
+
+    if (paymentStatus) {
+      query.paymentStatus = paymentStatus;
+    }
+
+    if (search) {
+      query.$or = [
+        { invoiceNumber: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const invoices = await Sale.find(query)
+      .populate('order', 'orderCode')
+      .populate('customer', 'name email phone')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await Sale.countDocuments(query);
+
+    res.json({
+      success: true,
+      invoices,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Get salesperson invoices error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+export const getSalespersonRefundReturns = async (req, res) => {
+  try {
+    const { page = 1, limit = 10, status = '', search = '' } = req.query;
+    const salespersonId = req.user._id || req.user.id;
+    const userRole = req.user.role;
+
+    // Find orders by role-based filtering
+    let orderQuery = {};
+
+    // If user is Sales role, only show their returns
+    if (userRole === 'Sales') {
+      orderQuery.salesPerson = salespersonId;
+    }
+    // Unit Manager and Super Admin can see all returns
+    // For other roles, also restrict to their own returns
+    else if (userRole !== 'Unit Manager' && userRole !== 'Super Admin') {
+      orderQuery.salesPerson = salespersonId;
+    }
+    
+    const salespersonOrders = await Order.find(orderQuery).select('_id');
+    const orderIds = salespersonOrders.map(order => order._id);
+
+    // Build filter query for returns related to orders  
+    let query = { order: { $in: orderIds } };
+
+    if (status) {
+      query.status = status;
+    }
+
+    if (search) {
+      query.$or = [
+        { returnCode: { $regex: search, $options: 'i' } },
+        { reason: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    let refundReturns = [];
+    let total = 0;
+
+    // Check if Return model exists and has documents
+    try {
+      refundReturns = await Return.find(query)
+        .populate('order', 'orderCode')
+        .populate('customer', 'name email mobile')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit));
+
+      total = await Return.countDocuments(query);
+    } catch (returnError) {
+      console.log('Return model not found or empty, returning empty results');
+      refundReturns = [];
+      total = 0;
+    }
+
+    res.json({
+      success: true,
+      refundReturns,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Get salesperson refund returns error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 };

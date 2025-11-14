@@ -251,9 +251,13 @@ export default function RolePermissionManagement() {
     fullName: '',
     role: '',
     unit: '',
+    companyId: '', // Ensure this is always a string, not array
     isActive: true,
     permissions: { ...DEFAULT_PERMISSIONS }
   });
+
+  // Add state for Unit Head company info
+  const [unitHeadCompanyInfo, setUnitHeadCompanyInfo] = useState(null);
 
   const queryClient = useQueryClient();
 
@@ -264,7 +268,35 @@ export default function RolePermissionManagement() {
     retry: 1
   });
 
+  // Fetch companies for dropdown
+  const { data: companiesResponse, isLoading: companiesLoading } = useQuery({
+    queryKey: ['/api/super-admin/companies/dropdown'],
+    queryFn: () => apiRequest('GET', '/api/super-admin/companies/dropdown'),
+    enabled: true,
+    retry: 1
+  });
+
+  // Fetch Unit Head company info (only for Unit Heads)
+  const { data: unitHeadCompanyResponse } = useQuery({
+    queryKey: ['/api/unit-head/company-info'],
+    queryFn: () => apiRequest('GET', '/api/unit-head/company-info'),
+    enabled: true, // Try to fetch regardless of role, API will handle access control
+    retry: false
+  });
+
+  // Update unitHeadCompanyInfo when data is fetched
+  useEffect(() => {
+    if (unitHeadCompanyResponse?.data) {
+      setUnitHeadCompanyInfo(unitHeadCompanyResponse.data);
+    }
+  }, [unitHeadCompanyResponse]);
+
   const users = usersResponse?.users || [];
+  const companies = companiesResponse?.companies || [];
+
+  // Debug companies data
+  console.log('Companies data from API:', companies);
+  console.log('First company structure:', companies[0]);
 
   // Create user mutation
   const createUserMutation = useMutation({
@@ -314,8 +346,9 @@ export default function RolePermissionManagement() {
       fullName: '',
       role: '',
       unit: '',
+      companyId: '', // Reset company selection
       isActive: true,
-      permissions: { 
+      permissions: {
         role: '',
         unit: '',
         canAccessAllUnits: false,
@@ -324,18 +357,25 @@ export default function RolePermissionManagement() {
     };
     setFormData(newFormData);
     setSelectedUser(null);
-  };
-
-  const handleCreateUser = () => {
+  };  const handleCreateUser = () => {
     // Validate required fields
     if (!formData.username || !formData.email || !formData.password || !formData.role) {
       showSmartToast({ message: 'Username, email, password, and role are required' }, 'Validation Error');
       return;
     }
 
+    // Validate Unit Head company assignment for Unit Manager creation
+    if (formData.role === 'Unit Manager' && !unitHeadCompanyInfo) {
+      showSmartToast({ 
+        message: 'Unit Head must have a company assigned to create Unit Managers' 
+      }, 'Company Assignment Required');
+      return;
+    }
+
     // Ensure permissions structure is properly formatted
     const userData = {
       ...formData,
+      companyId: formData.companyId || null, // Include company assignment (optional)
       permissions: {
         role: formData.role.toLowerCase().replace(' ', '_'),
         unit: formData.unit || '',
@@ -354,7 +394,10 @@ export default function RolePermissionManagement() {
       return;
     }
 
-    const updateData = { ...formData };
+    const updateData = { 
+      ...formData,
+      companyId: formData.companyId || null // Include company assignment (optional)
+    };
     if (!updateData.password) {
       delete updateData.password;
     }
@@ -371,6 +414,7 @@ export default function RolePermissionManagement() {
       fullName: user.fullName || '',
       role: user.role,
       unit: user.unit || '',
+      companyId: typeof (user.companyId?._id) === 'string' ? user.companyId._id : '', // Ensure string, include company assignment
       isActive: user.isActive,
       permissions: user.permissions || { ...DEFAULT_PERMISSIONS }
     });
@@ -749,6 +793,30 @@ export default function RolePermissionManagement() {
                     placeholder="test"
                   />
                 </div>
+                {/* Show company field for Unit Head role or if company info is available */}
+                {(formData.role === 'Unit Head' || unitHeadCompanyInfo) && (
+                  <div>
+                    <Label htmlFor="companyLocation">Company/Location</Label>
+                    <Input
+                      id="companyLocation"
+                      value={
+                        unitHeadCompanyInfo 
+                          ? `${unitHeadCompanyInfo.name} - ${unitHeadCompanyInfo.location}` 
+                          : 'No company assigned'
+                      }
+                      readOnly
+                      className={`cursor-not-allowed ${
+                        unitHeadCompanyInfo ? 'bg-gray-50' : 'bg-red-50 text-red-600'
+                      }`}
+                      placeholder="Company/Location (Auto-assigned)"
+                    />
+                    {!unitHeadCompanyInfo && formData.role === 'Unit Head' && (
+                      <p className="text-sm text-red-600 mt-1">
+                        Unit Head must have a company assigned to create Unit Managers
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -781,8 +849,32 @@ export default function RolePermissionManagement() {
                       ))}
                     </SelectContent>
                   </Select>
-
                 </div>
+              </div>
+
+              {/* Company/Location Selection - Optional */}
+              <div>
+                <Label htmlFor="company" className="text-sm font-medium">Company/Location (Optional)</Label>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Select a company/location for users who need access to specific units
+                </p>
+                <select 
+                  value={formData.companyId || 'none'} 
+                  onChange={(e) => {
+                    console.log('Select value changed:', e.target.value);
+                    const newCompanyId = e.target.value === 'none' ? '' : e.target.value;
+                    console.log('Setting companyId to:', newCompanyId);
+                    setFormData({...formData, companyId: newCompanyId});
+                  }}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="none">No specific company</option>
+                  {companies.map((company) => (
+                    <option key={company.value} value={company.value}>
+                      {company.label || `${company.name} - ${company.city}`}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Can Access All Units */}
@@ -940,6 +1032,7 @@ export default function RolePermissionManagement() {
                 <tr className="border-b">
                   <th className="text-left py-3 px-4 font-medium text-sm">User</th>
                   <th className="text-left py-3 px-4 font-medium text-sm">Role</th>
+                  <th className="text-left py-3 px-4 font-medium text-sm">Company/Location</th>
                   <th className="text-left py-3 px-4 font-medium text-sm">Status</th>
                   <th className="text-left py-3 px-4 font-medium text-sm">Module Permissions</th>
                   <th className="text-center py-3 px-4 font-medium text-sm">Actions</th>
@@ -958,6 +1051,18 @@ export default function RolePermissionManagement() {
                       <Badge variant={getRoleBadgeVariant(user.role)} className="text-xs">
                         {user.role}
                       </Badge>
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="text-xs">
+                        {user.companyId ? (
+                          <div className="flex flex-col">
+                            <span className="font-medium">{user.companyId.name || user.companyId.unitName}</span>
+                            <span className="text-muted-foreground">{user.companyId.city}, {user.companyId.state}</span>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground italic">No specific location</span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-4 px-4">
                       <Badge variant={user.isActive ? "default" : "secondary"} className="text-xs">
@@ -1176,6 +1281,31 @@ export default function RolePermissionManagement() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            {/* Company/Location Selection - Optional */}
+            <div>
+              <Label htmlFor="edit-company" className="text-sm font-medium">Company/Location (Optional)</Label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Select a company/location for users who need access to specific units
+              </p>
+              <select 
+                value={formData.companyId || 'none'} 
+                onChange={(e) => {
+                  console.log('Edit Select value changed:', e.target.value);
+                  const newCompanyId = e.target.value === 'none' ? '' : e.target.value;
+                  console.log('Setting edit companyId to:', newCompanyId);
+                  setFormData({...formData, companyId: newCompanyId});
+                }}
+                className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="none">No specific company</option>
+                {companies.map((company) => (
+                  <option key={company.value} value={company.value}>
+                    {company.label || `${company.name} - ${company.city}`}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="flex items-center space-x-4">

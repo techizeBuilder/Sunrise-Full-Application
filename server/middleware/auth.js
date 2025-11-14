@@ -35,6 +35,7 @@ const authenticateToken = async (req, res, next) => {
         username: user.username,
         role: user.role,
         unit: user.unit,
+        companyId: user.companyId,
         permissions: user.permissions || []
       };
       

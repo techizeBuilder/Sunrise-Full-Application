@@ -1,5 +1,6 @@
 import User from '../models/User.js';
 import { USER_ROLES } from '../../shared/schema.js';
+import { Company } from '../models/Company.js';
 import bcrypt from 'bcryptjs';
 
 // Get all Unit Managers under the current Unit Head
@@ -111,8 +112,26 @@ export const createUnitManager = async (req, res) => {
   try {
     console.log('=== createUnitManager API called ===');
     console.log('Request body:', req.body);
+    console.log('Unit Head user:', req.user.username, 'Company ID:', req.user.companyId);
     
     const { username, email, password, fullName, permissions, isActive = true } = req.body;
+
+    // Check if Unit Head has company assignment
+    if (!req.user.companyId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Unit Head must be assigned to a company/location before creating Unit Managers. Please contact system administrator.'
+      });
+    }
+
+    // Get Unit Head's company information
+    const unitHeadCompany = await Company.findById(req.user.companyId);
+    if (!unitHeadCompany) {
+      return res.status(400).json({
+        success: false,
+        message: 'Unit Head company assignment not found. Please contact system administrator.'
+      });
+    }
 
     // Validation
     if (!username || !email || !password || !fullName) {
@@ -137,7 +156,7 @@ export const createUnitManager = async (req, res) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Create new unit manager under the same unit as the Unit Head
+    // Create new unit manager under the same unit and company as the Unit Head
     const newUser = new User({
       username,
       email,
@@ -145,6 +164,7 @@ export const createUnitManager = async (req, res) => {
       fullName,
       role: 'Unit Manager', // Fixed role
       unit: req.user.unit, // Same unit as the Unit Head
+      companyId: req.user.companyId, // Same company as the Unit Head
       permissions: {
         role: 'unit_manager', // Required permissions.role field
         canAccessAllUnits: false,
@@ -504,6 +524,51 @@ export const getUnitManagerModules = async (req, res) => {
     res.status(500).json({ 
       success: false, 
       message: 'Failed to fetch modules', 
+      error: error.message 
+    });
+  }
+};
+
+// Get Unit Head's company information for form pre-population
+export const getUnitHeadCompanyInfo = async (req, res) => {
+  try {
+    console.log('=== getUnitHeadCompanyInfo API called ===');
+    console.log('Unit Head user:', req.user.username, 'Company ID:', req.user.companyId);
+
+    // Check if Unit Head has company assignment
+    if (!req.user.companyId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Unit Head is not assigned to any company/location. Please contact system administrator.'
+      });
+    }
+
+    // Get Unit Head's company information
+    const company = await Company.findById(req.user.companyId);
+    if (!company) {
+      return res.status(404).json({
+        success: false,
+        message: 'Company information not found. Please contact system administrator.'
+      });
+    }
+
+    // Return company info for form pre-population
+    res.json({
+      success: true,
+      data: {
+        companyId: company._id,
+        companyName: company.name,
+        unitName: company.unitName,
+        location: `${company.name}, ${company.city}`,
+        city: company.city,
+        address: company.address
+      }
+    });
+  } catch (error) {
+    console.error('Get unit head company info error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch company information', 
       error: error.message 
     });
   }

@@ -189,6 +189,23 @@ app.use('/uploads', express.static('uploads'));
       app.use('/api/super-admin', superAdminRoutes);
       console.log('Super Admin routes registered at /api/super-admin');
 
+      const adminRoutes = (await import('./routes/adminRoutes.js')).default;
+      app.use('/api/admin', adminRoutes);
+      console.log('Admin routes registered at /api/admin');
+
+      // Add direct routes for specific endpoints
+      const { authenticateToken } = await import('./middleware/auth.js');
+      const { getAllOrders } = await import('./controllers/unitManagerController.js');
+      const { getUnitHeadOrders } = await import('./controllers/unitHeadController.js');
+      
+      // Direct route for sales-order-list (bypasses /api/unit-manager prefix)
+      app.get('/sales-order-list', authenticateToken, getAllOrders);
+      console.log('Direct sales-order-list route registered');
+
+      // Direct route for unit-head/orders (bypasses /api/unit-head prefix)
+      app.get('/unit-head/orders', authenticateToken, getUnitHeadOrders);
+      console.log('Direct unit-head/orders route registered');
+
       // Customer seeding available via endpoint only
 
       // Seed routes without authentication (development only)

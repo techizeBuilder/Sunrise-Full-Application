@@ -51,7 +51,8 @@ import {
   RefreshCw,
   FolderPlus,
   Tags,
-  Users
+  Users,
+  Building2
 } from 'lucide-react';
 
 import SimpleInventoryForm from './SimpleInventoryForm';
@@ -162,6 +163,7 @@ export default function ModernInventoryUI() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedStore, setSelectedStore] = useState('all');
+  const [selectedLocation, setSelectedLocation] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
@@ -185,10 +187,19 @@ export default function ModernInventoryUI() {
     queryKey: [`${apiBasePath}/customer-categories`],
   });
 
+  // Fetch companies for location dropdown
+  const { data: companiesData } = useQuery({
+    queryKey: ['companies-public'],
+    queryFn: () => apiRequest('GET', '/api/companies/public'),
+  });
+
   // Extract arrays from API response
   const items = Array.isArray(itemsData?.items) ? itemsData.items : [];
   const categories = Array.isArray(categoriesData?.categories) ? categoriesData.categories : [];
   const customerCategories = Array.isArray(customerCategoriesData?.customerCategories) ? customerCategoriesData.customerCategories : [];
+  const companies = Array.isArray(companiesData?.companies) ? companiesData.companies : [];
+
+  console.log('Companies data:', companies);
 
   // Mutations
   const deleteItemMutation = useMutation({
@@ -310,12 +321,19 @@ export default function ModernInventoryUI() {
       item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.store?.toLowerCase().includes(searchTerm.toLowerCase());
+      item.store?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.storeLocation?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesCategory = !selectedCategory || selectedCategory === 'all' || item.category === selectedCategory;
     const matchesStore = !selectedStore || selectedStore === 'all' || item.store === selectedStore;
     
-    return matchesSearch && matchesCategory && matchesStore;
+    // Match location by company ID or store field
+    const matchesLocation = !selectedLocation || selectedLocation === 'all' || 
+      item.companyId === selectedLocation || 
+      item.store === selectedLocation ||
+      item.location === selectedLocation;
+    
+    return matchesSearch && matchesCategory && matchesStore && matchesLocation;
   }).sort((a, b) => {
     switch (sortBy) {
       case 'name':
@@ -343,7 +361,7 @@ export default function ModernInventoryUI() {
     // Reset to first page when search or filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedCategory, selectedStore, sortBy]);
+  }, [searchTerm, selectedCategory, selectedStore, selectedLocation, sortBy]);
 
   const handlePageChange = (page) => {
     setCurrentPage(page);
@@ -451,36 +469,26 @@ export default function ModernInventoryUI() {
                   ))}
                 </SelectContent>
               </Select>
-              <Select value={selectedStore} onValueChange={setSelectedStore}>
-                <SelectTrigger className="w-[180px] border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400">
-                  <Package2 className="h-4 w-4 mr-2 text-gray-400" />
-                  <SelectValue placeholder="All Stores" />
+              <Select value={selectedLocation} onValueChange={setSelectedLocation}>
+                <SelectTrigger className="w-[200px] border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400">
+                  <Building2 className="h-4 w-4 mr-2 text-gray-400" />
+                  <SelectValue placeholder="All Locations" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">
                     <div className="flex items-center gap-2">
-                      <Package2 className="h-4 w-4" />
-                      All Stores
+                      <Building2 className="h-4 w-4" />
+                      All Locations
                     </div>
                   </SelectItem>
-                  <SelectItem value="Hyderabad">
-                    <div className="flex items-center gap-2">
-                      <Package2 className="h-4 w-4" />
-                      Hyderabad
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="Bengaluru">
-                    <div className="flex items-center gap-2">
-                      <Package2 className="h-4 w-4" />
-                      Bengaluru
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="Tirupati">
-                    <div className="flex items-center gap-2">
-                      <Package2 className="h-4 w-4" />
-                      Tirupati
-                    </div>
-                  </SelectItem>
+                  {companies.length > 0 && companies.map((company) => (
+                    <SelectItem key={company.value} value={company.value}>
+                      <div className="flex items-center gap-2">
+                        <Building2 className="h-4 w-4" />
+                        {company.label}
+                      </div>
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <Select value={sortBy} onValueChange={setSortBy}>
@@ -569,7 +577,7 @@ export default function ModernInventoryUI() {
                         </TableCell>
                         <TableCell className="py-4">
                           <Badge variant="secondary" className="bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/30 dark:text-purple-300 dark:border-purple-800">
-                            {item.store || 'No location'}
+                            {item.storeLocation || item.store || 'No location'}
                           </Badge>
                         </TableCell>
                         <TableCell className="py-4">
@@ -707,6 +715,7 @@ export default function ModernInventoryUI() {
           item={editingItem}
           categories={categories}
           customerCategories={customerCategories}
+          companies={companies}
           onSubmit={handleFormSubmit}
           isLoading={createItemMutation.isPending || updateItemMutation.isPending}
         />

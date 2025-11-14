@@ -60,6 +60,7 @@ export const getUsers = async (req, res) => {
     // Fetch users with pagination
     const users = await User.find(query)
       .select('-password')
+      .populate('companyId', 'name unitName city state displayName') // Populate company info
       .sort(sort)
       .skip(skip)
       .limit(parseInt(limit))
@@ -144,7 +145,9 @@ export const getUsers = async (req, res) => {
 export const getUserById = async (req, res) => {
   try {
     const { id } = req.params;
-    const user = await User.findById(id).select('-password');
+    const user = await User.findById(id)
+      .select('-password')
+      .populate('companyId', 'name unitName city state displayName'); // Populate company info
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
@@ -162,9 +165,9 @@ export const getUserById = async (req, res) => {
 export const createUser = async (req, res) => {
   try {
     console.log('Create user request body:', req.body);
-    const { username, email, password, fullName, role, unit, permissions, isActive } = req.body;
+    const { username, email, password, fullName, role, unit, companyId, permissions, isActive } = req.body;
 
-    // Validate required fields (unit is now optional)
+    // Validate required fields (unit and companyId are optional)
     if (!username || !email || !password || !role) {
       console.log('Validation failed - missing required fields');
       return res.status(400).json({ 
@@ -193,6 +196,7 @@ export const createUser = async (req, res) => {
       fullName: fullName || '',
       role,
       unit: unit || '',
+      companyId: companyId || null, // Add company assignment
       isActive: isActive !== undefined ? isActive : true,
       permissions: permissions || {}
     };
@@ -225,7 +229,7 @@ export const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
     console.log('Update user request:', id, req.body);
-    const { username, email, password, fullName, role, unit, permissions, isActive } = req.body;
+    const { username, email, password, fullName, role, unit, companyId, permissions, isActive } = req.body;
 
     // Check if user exists
     const user = await User.findById(id);
@@ -263,6 +267,7 @@ export const updateUser = async (req, res) => {
       fullName: fullName || '',
       role,
       unit: unit || '',
+      companyId: companyId || null, // Add company assignment
       isActive: isActive !== undefined ? isActive : true,
       permissions: permissions || {}
     };

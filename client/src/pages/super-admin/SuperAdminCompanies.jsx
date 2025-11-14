@@ -1,0 +1,933 @@
+import React, { useState, useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import {
+  Building2,
+  Plus,
+  Search,
+  Filter,
+  MoreHorizontal,
+  Eye,
+  Edit,
+  Trash2,
+  RefreshCw,
+  MapPin,
+  Phone,
+  Mail,
+  Clock,
+  FileText
+} from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { api } from '@/services/api';
+
+const SuperAdminCompanies = () => {
+  const [filters, setFilters] = useState({
+    search: '',
+    city: '',
+    state: '',
+    companyType: '',
+    isActive: ''
+  });
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10
+  });
+  const [selectedCompany, setSelectedCompany] = useState(null);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Fetch companies
+  const { data: companiesData, isLoading, error, refetch } = useQuery({
+    queryKey: ['companies', filters, pagination],
+    queryFn: () => api.getCompanies({ ...filters, ...pagination }),
+  });
+
+  // Fetch company stats
+  const { data: statsData } = useQuery({
+    queryKey: ['company-stats'],
+    queryFn: () => api.getCompanyStats(),
+  });
+
+  // Create company mutation
+  const createCompanyMutation = useMutation({
+    mutationFn: (data) => api.createCompany(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['companies']);
+      queryClient.invalidateQueries(['company-stats']);
+      setIsCreateModalOpen(false);
+      toast({
+        title: "Success",
+        description: "Company created successfully",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create company",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Update company mutation
+  const updateCompanyMutation = useMutation({
+    mutationFn: ({ id, data }) => api.updateCompany(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['companies']);
+      queryClient.invalidateQueries(['company-stats']);
+      setIsEditModalOpen(false);
+      setSelectedCompany(null);
+      toast({
+        title: "Success",
+        description: "Company updated successfully",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update company",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete company mutation
+  const deleteCompanyMutation = useMutation({
+    mutationFn: (id) => api.deleteCompany(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['companies']);
+      queryClient.invalidateQueries(['company-stats']);
+      setIsDeleteModalOpen(false);
+      setSelectedCompany(null);
+      toast({
+        title: "Success",
+        description: "Company deleted successfully",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete company",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const companies = companiesData?.companies || [];
+  const paginationInfo = companiesData?.pagination || {};
+  const filterOptions = companiesData?.filters || {};
+  const stats = statsData || {};
+
+  const handleFilterChange = (key, value) => {
+    // Convert display values back to API values
+    let apiValue = value;
+    if (key === 'isActive') {
+      if (value === 'active') apiValue = 'true';
+      else if (value === 'inactive') apiValue = 'false';
+      else if (value === 'all') apiValue = '';
+    } else if (value === 'all') {
+      apiValue = '';
+    }
+    
+    setFilters(prev => ({ ...prev, [key]: apiValue }));
+    setPagination(prev => ({ ...prev, page: 1 }));
+  };
+
+  const handlePageChange = (newPage) => {
+    setPagination(prev => ({ ...prev, page: newPage }));
+  };
+
+  const getCompanyTypeBadgeVariant = (type) => {
+    switch (type) {
+      case 'Main Branch': return 'default';
+      case 'Branch': return 'secondary';
+      case 'Manufacturing Unit': return 'outline';
+      case 'Distribution Center': return 'destructive';
+      default: return 'secondary';
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="p-6 space-y-6">
+        {/* Header Skeleton */}
+        <div className="flex items-center justify-between">
+          <div>
+            <Skeleton className="h-8 w-64 mb-2" />
+            <Skeleton className="h-4 w-80" />
+          </div>
+          <Skeleton className="h-10 w-32" />
+        </div>
+
+        {/* Stats Cards Skeleton */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-4" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-8 w-12" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Filters Skeleton */}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex flex-wrap gap-4">
+              <Skeleton className="h-10 flex-1 min-w-[200px]" />
+              <Skeleton className="h-10 w-[150px]" />
+              <Skeleton className="h-10 w-[180px]" />
+              <Skeleton className="h-10 w-[120px]" />
+              <Skeleton className="h-10 w-32" />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Table Skeleton */}
+        <Card>
+          <CardContent>
+            <div className="space-y-3">
+              {/* Table Header */}
+              <div className="grid grid-cols-6 gap-4 py-3 border-b">
+                {['Company', 'Location', 'Type', 'Contact', 'Status', 'Actions'].map((header, i) => (
+                  <Skeleton key={i} className="h-4 w-full" />
+                ))}
+              </div>
+              
+              {/* Table Rows */}
+              {[...Array(5)].map((_, rowIndex) => (
+                <div key={rowIndex} className="grid grid-cols-6 gap-4 py-4">
+                  <div className="space-y-1">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-24" />
+                  </div>
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-6 w-20" />
+                  <div className="space-y-1">
+                    <Skeleton className="h-3 w-24" />
+                    <Skeleton className="h-3 w-32" />
+                  </div>
+                  <Skeleton className="h-6 w-16" />
+                  <Skeleton className="h-8 w-8" />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <Card>
+          <CardContent className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <p className="text-red-500 mb-2">Error loading companies</p>
+              <p className="text-sm text-gray-500 mb-4">{error.message}</p>
+              <Button onClick={() => refetch()}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Try Again
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Company Management</h1>
+          <p className="text-muted-foreground">
+            Manage all companies across different locations
+          </p>
+        </div>
+        <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Company
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[600px]">
+            <CompanyForm
+              onSubmit={(data) => createCompanyMutation.mutate(data)}
+              isLoading={createCompanyMutation.isPending}
+              onCancel={() => setIsCreateModalOpen(false)}
+            />
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {isLoading ? (
+          // Loading skeleton for stats
+          <>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-4" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-8 w-16" />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-4" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-8 w-16" />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-4" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-8 w-16" />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-4" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-8 w-16" />
+              </CardContent>
+            </Card>
+          </>
+        ) : stats.success ? (
+          <>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Companies</CardTitle>
+                <Building2 className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.total || 0}</div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Cities</CardTitle>
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.byCity?.length || 0}</div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Unit Types</CardTitle>
+                <FileText className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.byUnit?.length || 0}</div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Company Types</CardTitle>
+                <Building2 className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.byType?.length || 0}</div>
+              </CardContent>
+            </Card>
+          </>
+        ) : null}
+      </div>
+
+      {/* Filters */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-wrap gap-4">
+            <div className="flex-1 min-w-[200px]">
+              <div className="relative">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search companies..."
+                  value={filters.search}
+                  onChange={(e) => handleFilterChange('search', e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+            </div>
+            
+            <Select
+              value={filters.city || 'all'}
+              onValueChange={(value) => handleFilterChange('city', value)}
+            >
+              <SelectTrigger className="w-[150px]">
+                <SelectValue placeholder="Filter by City" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Cities</SelectItem>
+                {filterOptions.cities?.filter(city => city && city.trim() !== '').map((city) => (
+                  <SelectItem key={city} value={city}>{city}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={filters.companyType || 'all'}
+              onValueChange={(value) => handleFilterChange('companyType', value)}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filter by Type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                {filterOptions.companyTypes?.filter(type => type && type.trim() !== '').map((type) => (
+                  <SelectItem key={type} value={type}>{type}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={filters.isActive === 'true' ? 'active' : filters.isActive === 'false' ? 'inactive' : 'all'}
+              onValueChange={(value) => handleFilterChange('isActive', value)}
+            >
+              <SelectTrigger className="w-[120px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Button
+              variant="outline"
+              onClick={() => {
+                setFilters({ search: '', city: '', state: '', companyType: '', isActive: '' });
+                setPagination({ page: 1, limit: 10 });
+              }}
+            >
+              <Filter className="h-4 w-4 mr-2" />
+              Clear Filters
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Companies Table */}
+      <Card>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Company</TableHead>
+                <TableHead>Location</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Contact</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {companies.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8">
+                    <div className="flex flex-col items-center space-y-3">
+                      <Building2 className="h-12 w-12 text-muted-foreground" />
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium">No companies found</p>
+                        <p className="text-xs text-muted-foreground">
+                          Try adjusting your filters or create a new company
+                        </p>
+                      </div>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                companies.map((company) => (
+                  <TableRow key={company._id}>
+                    <TableCell>
+                      <div>
+                        <div className="font-medium">{company.name}</div>
+                        <div className="text-sm text-muted-foreground">{company.unitName}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center">
+                        <MapPin className="h-4 w-4 mr-1 text-muted-foreground" />
+                        <span>{company.city}, {company.state}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={getCompanyTypeBadgeVariant(company.companyType)}>
+                        {company.companyType}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        <div className="flex items-center text-sm">
+                          <Phone className="h-3 w-3 mr-1 text-muted-foreground" />
+                          {company.mobile}
+                        </div>
+                        <div className="flex items-center text-sm">
+                          <Mail className="h-3 w-3 mr-1 text-muted-foreground" />
+                          {company.email}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={company.isActive ? "default" : "secondary"}>
+                        {company.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setSelectedCompany(company);
+                              setIsViewModalOpen(true);
+                            }}
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            View Details
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setSelectedCompany(company);
+                              setIsEditModalOpen(true);
+                            }}
+                          >
+                            <Edit className="h-4 w-4 mr-2" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setSelectedCompany(company);
+                              setIsDeleteModalOpen(true);
+                            }}
+                            className="text-red-600"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+
+          {/* Pagination */}
+          {paginationInfo.total > 1 && (
+            <div className="flex items-center justify-between mt-4">
+              <div className="text-sm text-muted-foreground">
+                Showing {((paginationInfo.current - 1) * pagination.limit) + 1} to{' '}
+                {Math.min(paginationInfo.current * pagination.limit, paginationInfo.count)} of{' '}
+                {paginationInfo.count} companies
+              </div>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(paginationInfo.current - 1)}
+                  disabled={!paginationInfo.hasPrev}
+                >
+                  Previous
+                </Button>
+                <span className="text-sm">
+                  Page {paginationInfo.current} of {paginationInfo.total}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(paginationInfo.current + 1)}
+                  disabled={!paginationInfo.hasNext}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Edit Modal */}
+      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          {selectedCompany && (
+            <CompanyForm
+              company={selectedCompany}
+              onSubmit={(data) => updateCompanyMutation.mutate({ id: selectedCompany._id, data })}
+              isLoading={updateCompanyMutation.isPending}
+              onCancel={() => {
+                setIsEditModalOpen(false);
+                setSelectedCompany(null);
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* View Modal */}
+      <Dialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          {selectedCompany && <CompanyViewDetails company={selectedCompany} />}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Company</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete "{selectedCompany?.name}"? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsDeleteModalOpen(false);
+                setSelectedCompany(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteCompanyMutation.mutate(selectedCompany._id)}
+              disabled={deleteCompanyMutation.isPending}
+            >
+              {deleteCompanyMutation.isPending ? 'Deleting...' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+// Company Form Component
+const CompanyForm = ({ company, onSubmit, isLoading, onCancel }) => {
+  const [formData, setFormData] = useState({
+    unitName: company?.unitName || '',
+    mobile: company?.mobile || '',
+    email: company?.email || '',
+    address: company?.address || '',
+    locationPin: company?.locationPin || '',
+    city: company?.city || '',
+    state: company?.state || '',
+    country: company?.country || 'India',
+    isActive: true, // Always active, not editable
+    companyType: company?.companyType || 'Main Branch',
+  });
+
+  const [errors, setErrors] = useState({});
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    
+    // Basic validation
+    const newErrors = {};
+    const requiredFields = ['unitName', 'locationPin', 'city', 'state'];
+    
+    requiredFields.forEach(field => {
+      if (!formData[field].trim()) {
+        newErrors[field] = `${field} is required`;
+      }
+    });
+
+    // Email validation (if provided)
+    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      newErrors.email = 'Please enter a valid email address';
+    }
+
+    // PIN code validation
+    if (formData.locationPin && !/^[1-9][0-9]{5}$/.test(formData.locationPin)) {
+      newErrors.locationPin = 'Please enter a valid 6-digit PIN code';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    setErrors({});
+    onSubmit(formData);
+  };
+
+  const handleChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: '' }));
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <DialogHeader>
+        <DialogTitle>{company ? 'Edit Company' : 'Add New Company'}</DialogTitle>
+        <DialogDescription>
+          {company ? 'Update company information' : 'Fill in the details to create a new company'}
+        </DialogDescription>
+      </DialogHeader>
+      
+      <div className="grid gap-4 py-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="unitName">Unit Name *</Label>
+            <Input
+              id="unitName"
+              value={formData.unitName}
+              onChange={(e) => handleChange('unitName', e.target.value)}
+              placeholder="Enter unit name"
+              className={errors.unitName ? 'border-red-500' : ''}
+            />
+            {errors.unitName && <p className="text-sm text-red-500">{errors.unitName}</p>}
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="mobile">Mobile</Label>
+            <Input
+              id="mobile"
+              value={formData.mobile}
+              onChange={(e) => handleChange('mobile', e.target.value)}
+              placeholder="+91-9876543210"
+              className={errors.mobile ? 'border-red-500' : ''}
+            />
+            {errors.mobile && <p className="text-sm text-red-500">{errors.mobile}</p>}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              value={formData.email}
+              onChange={(e) => handleChange('email', e.target.value)}
+              placeholder="company@example.com"
+              className={errors.email ? 'border-red-500' : ''}
+            />
+            {errors.email && <p className="text-sm text-red-500">{errors.email}</p>}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="address">Address</Label>
+          <Input
+            id="address"
+            value={formData.address}
+            onChange={(e) => handleChange('address', e.target.value)}
+            placeholder="Enter complete address"
+            className={errors.address ? 'border-red-500' : ''}
+          />
+          {errors.address && <p className="text-sm text-red-500">{errors.address}</p>}
+        </div>
+
+        <div className="grid grid-cols-3 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="city">City *</Label>
+            <Input
+              id="city"
+              value={formData.city}
+              onChange={(e) => handleChange('city', e.target.value)}
+              placeholder="Enter city"
+              className={errors.city ? 'border-red-500' : ''}
+            />
+            {errors.city && <p className="text-sm text-red-500">{errors.city}</p>}
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="state">State *</Label>
+            <Input
+              id="state"
+              value={formData.state}
+              onChange={(e) => handleChange('state', e.target.value)}
+              placeholder="Enter state"
+              className={errors.state ? 'border-red-500' : ''}
+            />
+            {errors.state && <p className="text-sm text-red-500">{errors.state}</p>}
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="locationPin">PIN Code *</Label>
+            <Input
+              id="locationPin"
+              value={formData.locationPin}
+              onChange={(e) => handleChange('locationPin', e.target.value)}
+              placeholder="123456"
+              className={errors.locationPin ? 'border-red-500' : ''}
+            />
+            {errors.locationPin && <p className="text-sm text-red-500">{errors.locationPin}</p>}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="companyType">Company Type</Label>
+            <Select
+              value={formData.companyType}
+              onValueChange={(value) => handleChange('companyType', value)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Main Branch">Main Branch</SelectItem>
+                <SelectItem value="Branch">Branch</SelectItem>
+                <SelectItem value="Manufacturing Unit">Manufacturing Unit</SelectItem>
+                <SelectItem value="Distribution Center">Distribution Center</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
+
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={isLoading}>
+          {isLoading ? 'Saving...' : (company ? 'Update' : 'Create')}
+        </Button>
+      </DialogFooter>
+    </form>
+  );
+};
+
+// Company View Details Component
+const CompanyViewDetails = ({ company }) => {
+  return (
+    <div>
+      <DialogHeader>
+        <DialogTitle>{company.name}</DialogTitle>
+        <DialogDescription>{company.unitName}</DialogDescription>
+      </DialogHeader>
+      
+      <div className="grid gap-4 py-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label className="text-sm font-medium text-muted-foreground">Company Type</Label>
+            <div className="mt-1">
+              <Badge variant={company.companyType === 'Main Branch' ? 'default' : 'secondary'}>
+                {company.companyType}
+              </Badge>
+            </div>
+          </div>
+          <div>
+            <Label className="text-sm font-medium text-muted-foreground">Status</Label>
+            <div className="mt-1">
+              <Badge variant={company.isActive ? 'default' : 'secondary'}>
+                {company.isActive ? 'Active' : 'Inactive'}
+              </Badge>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <Label className="text-sm font-medium text-muted-foreground">Address</Label>
+          <p className="mt-1">{company.fullAddress || `${company.address}, ${company.city}, ${company.state} - ${company.locationPin}`}</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label className="text-sm font-medium text-muted-foreground">Contact Details</Label>
+            <div className="mt-1 space-y-1">
+              <div className="flex items-center">
+                <Phone className="h-3 w-3 mr-2 text-muted-foreground" />
+                <span className="text-sm">{company.mobile}</span>
+              </div>
+              <div className="flex items-center">
+                <Mail className="h-3 w-3 mr-2 text-muted-foreground" />
+                <span className="text-sm">{company.email}</span>
+              </div>
+            </div>
+          </div>
+          
+          <div>
+            <Label className="text-sm font-medium text-muted-foreground">Business Hours</Label>
+            <div className="mt-1 flex items-center">
+              <Clock className="h-3 w-3 mr-2 text-muted-foreground" />
+              <span className="text-sm">
+                {company.businessHours?.opening || '09:00'} - {company.businessHours?.closing || '18:00'}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default SuperAdminCompanies;
