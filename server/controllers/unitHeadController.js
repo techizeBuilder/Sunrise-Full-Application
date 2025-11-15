@@ -493,6 +493,11 @@ export const getUnitHeadCustomers = async (req, res) => {
 
     let query = {};
 
+    // Add company filtering for Unit Head users
+    if (req.user.role === 'Unit Head' && req.user.companyId) {
+      query.companyId = req.user.companyId;
+    }
+
     if (search) {
       const searchRegex = { $regex: search, $options: 'i' };
       query.$or = [
@@ -508,17 +513,39 @@ export const getUnitHeadCustomers = async (req, res) => {
     }
 
     const customers = await Customer.find(query)
-      .select('name email phone address city state active createdAt')
+      .populate('companyId', 'name location')
+      .populate('salesContact', 'fullName username')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
 
     const total = await Customer.countDocuments(query);
 
+    // Calculate summary statistics for the UI
+    let summaryQuery = {};
+    if (req.user.role === 'Unit Head' && req.user.companyId) {
+      summaryQuery.companyId = req.user.companyId;
+    }
+
+    const totalCustomers = await Customer.countDocuments(summaryQuery);
+    const activeCustomers = await Customer.countDocuments({ ...summaryQuery, active: true });
+    const inactiveCustomers = await Customer.countDocuments({ ...summaryQuery, active: false });
+    
+    // Get unique cities for this company's customers
+    const cityDistribution = await Customer.distinct('city', summaryQuery);
+
+    const summary = {
+      totalCustomers,
+      activeCustomers,
+      inactiveCustomers,
+      cityDistribution: cityDistribution.filter(city => city) // Remove null/empty cities
+    };
+
     res.json({
       success: true,
       data: {
         customers,
+        summary,
         pagination: {
           page: parseInt(page),
           limit: parseInt(limit),
@@ -542,12 +569,21 @@ export const getUnitHeadCustomerById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const customer = await Customer.findById(id);
+    let query = { _id: id };
+
+    // Add company filtering for Unit Head users
+    if (req.user.role === 'Unit Head' && req.user.companyId) {
+      query.companyId = req.user.companyId;
+    }
+
+    const customer = await Customer.findOne(query)
+      .populate('companyId', 'name location')
+      .populate('salesContact', 'fullName username');
 
     if (!customer) {
       return res.status(404).json({
         success: false,
-        message: 'Customer not found'
+        message: 'Customer not found or not accessible'
       });
     }
 
@@ -587,7 +623,9 @@ export const getUnitHeadDashboard = async (req, res) => {
     const salesPersonsCount = req.user.companyId 
       ? await User.countDocuments({ companyId: req.user.companyId, role: 'Sales' })
       : 0;
-    const customersCount = await Customer.countDocuments({ active: true });
+    const customersCount = req.user.companyId 
+      ? await Customer.countDocuments({ active: true, companyId: req.user.companyId })
+      : await Customer.countDocuments({ active: true });
 
     res.json({
       success: true,

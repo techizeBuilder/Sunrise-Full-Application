@@ -309,42 +309,50 @@ export const getSalespersonCustomers = async (req, res) => {
     const salespersonId = req.user._id || req.user.id;
     const salespersonUsername = req.user.username;
     const userRole = req.user.role;
+    const userCompanyId = req.user.companyId;
 
-    // Build filter query based on user role
+    console.log('🔍 getSalespersonCustomers called:', {
+      username: salespersonUsername,
+      role: userRole,
+      companyId: userCompanyId
+    });
+
+    // Build filter query based on user role with company isolation
     let query = {};
+
+    // Always filter by company for data isolation
+    if (userCompanyId) {
+      query.companyId = userCompanyId;
+    }
 
     // If user is Sales role, only show customers assigned to them
     if (userRole === 'Sales') {
-      query = {
-        $or: [
-          { salesContact: salespersonUsername },
-          { salesContact: salespersonId.toString() }
-        ]
-      };
+      query.$and = [
+        { companyId: userCompanyId }, // Company isolation
+        { salesContact: salespersonId } // Assigned customers only
+      ];
     }
-    // Unit Manager and Super Admin can see all customers
-    // For other roles, also restrict to their assigned customers
-    else if (userRole !== 'Unit Manager' && userRole !== 'Super Admin') {
-      query = {
-        $or: [
-          { salesContact: salespersonUsername },
-          { salesContact: salespersonId.toString() }
-        ]
-      };
+    // Unit Manager and Super Admin can see all customers from their company
+    else if (userRole !== 'Super Admin') {
+      // For non-Super Admin roles, ensure company filtering
+      query.companyId = userCompanyId;
     }
 
     if (search) {
-      query.$and = [
-        query.$and || {},
-        {
-          $or: [
-            { name: { $regex: search, $options: 'i' } },
-            { contactPerson: { $regex: search, $options: 'i' } },
-            { email: { $regex: search, $options: 'i' } },
-            { mobile: { $regex: search, $options: 'i' } }
-          ]
-        }
-      ];
+      const searchQuery = {
+        $or: [
+          { name: { $regex: search, $options: 'i' } },
+          { contactPerson: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } },
+          { mobile: { $regex: search, $options: 'i' } }
+        ]
+      };
+      
+      if (query.$and) {
+        query.$and.push(searchQuery);
+      } else {
+        query.$and = [query, searchQuery];
+      }
     }
 
     if (category) {
@@ -354,6 +362,8 @@ export const getSalespersonCustomers = async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const customers = await Customer.find(query)
+      .populate('salesContact', 'username email')
+      .populate('companyId', 'name')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -381,19 +391,31 @@ export const getSalespersonDeliveries = async (req, res) => {
     const { page = 1, limit = 10, status = '', search = '' } = req.query;
     const salespersonId = req.user._id || req.user.id;
     const userRole = req.user.role;
+    const userCompanyId = req.user.companyId;
 
-    // Build filter query based on user role
+    console.log('🚚 getSalespersonDeliveries called:', {
+      userId: salespersonId,
+      role: userRole,
+      companyId: userCompanyId
+    });
+
+    // Build filter query based on user role with company isolation
     let query = {
       status: { $in: ['Shipped', 'Out for Delivery', 'Delivered'] }
     };
+
+    // Always filter by company for data isolation
+    if (userCompanyId) {
+      query.companyId = userCompanyId;
+    }
 
     // If user is Sales role, only show their deliveries
     if (userRole === 'Sales') {
       query.salesPerson = salespersonId;
     }
-    // Unit Manager and Super Admin can see all deliveries
-    // For other roles, also restrict to their own deliveries
-    else if (userRole !== 'Unit Manager' && userRole !== 'Super Admin') {
+    // Unit Manager can see all deliveries from their company
+    // Super Admin can see all deliveries
+    else if (userRole !== 'Super Admin' && userRole !== 'Unit Manager') {
       query.salesPerson = salespersonId;
     }
 
@@ -440,17 +462,29 @@ export const getSalespersonInvoices = async (req, res) => {
     const { page = 1, limit = 10, paymentStatus = '', search = '' } = req.query;
     const salespersonId = req.user._id || req.user.id;
     const userRole = req.user.role;
+    const userCompanyId = req.user.companyId;
 
-    // Find orders by role-based filtering
+    console.log('🧾 getSalespersonInvoices called:', {
+      userId: salespersonId,
+      role: userRole,
+      companyId: userCompanyId
+    });
+
+    // Find orders by role-based filtering with company isolation
     let orderQuery = {};
+
+    // Always filter by company for data isolation
+    if (userCompanyId) {
+      orderQuery.companyId = userCompanyId;
+    }
 
     // If user is Sales role, only show their invoices
     if (userRole === 'Sales') {
       orderQuery.salesPerson = salespersonId;
     }
-    // Unit Manager and Super Admin can see all invoices
-    // For other roles, also restrict to their own invoices
-    else if (userRole !== 'Unit Manager' && userRole !== 'Super Admin') {
+    // Unit Manager can see all invoices from their company
+    // Super Admin can see all invoices
+    else if (userRole !== 'Super Admin' && userRole !== 'Unit Manager') {
       orderQuery.salesPerson = salespersonId;
     }
     
@@ -502,17 +536,29 @@ export const getSalespersonRefundReturns = async (req, res) => {
     const { page = 1, limit = 10, status = '', search = '' } = req.query;
     const salespersonId = req.user._id || req.user.id;
     const userRole = req.user.role;
+    const userCompanyId = req.user.companyId;
 
-    // Find orders by role-based filtering
+    console.log('🔄 getSalespersonRefundReturns called:', {
+      userId: salespersonId,
+      role: userRole,
+      companyId: userCompanyId
+    });
+
+    // Find orders by role-based filtering with company isolation
     let orderQuery = {};
+
+    // Always filter by company for data isolation
+    if (userCompanyId) {
+      orderQuery.companyId = userCompanyId;
+    }
 
     // If user is Sales role, only show their returns
     if (userRole === 'Sales') {
       orderQuery.salesPerson = salespersonId;
     }
-    // Unit Manager and Super Admin can see all returns
-    // For other roles, also restrict to their own returns
-    else if (userRole !== 'Unit Manager' && userRole !== 'Super Admin') {
+    // Unit Manager can see all returns from their company
+    // Super Admin can see all returns
+    else if (userRole !== 'Super Admin' && userRole !== 'Unit Manager') {
       orderQuery.salesPerson = salespersonId;
     }
     

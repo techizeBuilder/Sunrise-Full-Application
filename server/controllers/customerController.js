@@ -1,4 +1,5 @@
 import Customer from '../models/Customer.js';
+import User from '../models/User.js';
 import * as XLSX from 'xlsx';
 import multer from 'multer';
 import { body, validationResult, query } from 'express-validator';
@@ -141,6 +142,12 @@ export const getCustomers = [
 
       // Build filter object
       const filter = {};
+      
+      // Add company filtering based on user role
+      if (req.user.role !== 'Super Admin' && req.user.companyId) {
+        filter.companyId = req.user.companyId;
+      }
+      
       if (status) {
         // Handle status filter - backend stores 'Yes'/'No' but query might send 'Active'/'Inactive'
         if (status === 'Active') filter.active = 'Yes';
@@ -169,6 +176,8 @@ export const getCustomers = [
       // Execute queries
       const [customers, total] = await Promise.all([
         Customer.find(filter)
+          .populate('salesContact', 'username email')
+          .populate('companyId', 'name')
           .sort(sort)
           .skip(skip)
           .limit(parseInt(limit))
@@ -208,7 +217,9 @@ export const getCustomerById = async (req, res) => {
       });
     }
 
-    const customer = await Customer.findById(id);
+    const customer = await Customer.findById(id)
+      .populate('salesContact', 'username email')
+      .populate('companyId', 'name');
     if (!customer) {
       return res.status(404).json({
         success: false,
@@ -257,7 +268,16 @@ export const createCustomer = [
         }
       }
 
-      const customer = new Customer(req.body);
+      // Prepare customer data with auto-assigned fields
+      const customerData = {
+        ...req.body,
+        // Auto-assign company from logged-in user
+        companyId: req.user.companyId,
+        // Auto-assign sales contact for Sales users
+        salesContact: req.user.role === 'Sales' ? req.user._id || req.user.id : req.body.salesContact || null
+      };
+
+      const customer = new Customer(customerData);
       await customer.save();
 
       // Trigger notification for new customer
@@ -340,9 +360,35 @@ export const updateCustomer = [
         }
       }
 
+      // Prepare update data with proper salesContact handling
+      const updateData = { ...req.body };
+      
+      // Handle salesContact field - convert username to ObjectId if needed
+      if (req.body.salesContact !== undefined) {
+        if (req.body.salesContact === '' || req.body.salesContact === null) {
+          // Handle empty/null values - remove the field
+          delete updateData.salesContact;
+        } else if (typeof req.body.salesContact === 'string') {
+          // Check if it's already a valid ObjectId string
+          if (req.body.salesContact.match(/^[0-9a-fA-F]{24}$/)) {
+            // It's already an ObjectId string, keep it
+            updateData.salesContact = req.body.salesContact;
+          } else {
+            // It's a username, try to find the user
+            const salesUser = await User.findOne({ username: req.body.salesContact });
+            if (salesUser) {
+              updateData.salesContact = salesUser._id;
+            } else {
+              // Username not found, remove the field
+              delete updateData.salesContact;
+            }
+          }
+        }
+      }
+
       const customer = await Customer.findByIdAndUpdate(
         id,
-        req.body,
+        updateData,
         { new: true, runValidators: true }
       );
 

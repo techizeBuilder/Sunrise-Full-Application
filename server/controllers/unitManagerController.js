@@ -21,13 +21,28 @@ export const getItems = async (req, res) => {
     const search = req.query.search || '';
     const skip = (page - 1) * limit;
 
+    // Create base filter to ensure company isolation
+    const baseFilter = {
+      companyId: user.companyId
+    };
+    
+    // Add unit to filter only if it exists (backward compatibility)
+    if (user.unit) {
+      baseFilter.unit = user.unit;
+    }
+
     // Build search query
-    const searchQuery = {};
+    const searchQuery = { ...baseFilter };
     if (search) {
-      searchQuery.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { code: { $regex: search, $options: 'i' } },
-        { category: { $regex: search, $options: 'i' } }
+      searchQuery.$and = [
+        baseFilter,
+        {
+          $or: [
+            { name: { $regex: search, $options: 'i' } },
+            { code: { $regex: search, $options: 'i' } },
+            { category: { $regex: search, $options: 'i' } }
+          ]
+        }
       ];
     }
 
@@ -87,12 +102,22 @@ export const updateOrderStatus = async (req, res) => {
       });
     }
 
-    // Find the order
-    const order = await Order.findById(orderId);
+    // Create base filter to ensure company isolation
+    const baseFilter = {
+      companyId: user.companyId
+    };
+    
+    // Add unit to filter only if it exists (backward compatibility)
+    if (user.unit) {
+      baseFilter.unit = user.unit;
+    }
+
+    // Find the order with company isolation
+    const order = await Order.findOne({ _id: orderId, ...baseFilter });
     if (!order) {
       return res.status(404).json({
         success: false,
-        message: 'Order not found'
+        message: 'Order not found or not accessible'
       });
     }
 
@@ -151,10 +176,22 @@ export const fixOrdersSalesPersonAssignment = async (req, res) => {
       });
     }
 
+    // Create base filter to ensure company isolation for Unit Managers
+    let findQuery = { salesPerson: { $exists: false } };
+    if (user.role === 'Unit Manager') {
+      findQuery = {
+        ...findQuery,
+        companyId: user.companyId
+      };
+      
+      // Add unit to filter only if it exists (backward compatibility)
+      if (user.unit) {
+        findQuery.unit = user.unit;
+      }
+    }
+
     // Find orders without salesPerson
-    const ordersWithoutSalesPerson = await Order.find({
-      salesPerson: { $exists: false }
-    });
+    const ordersWithoutSalesPerson = await Order.find(findQuery);
 
     console.log('Found orders without salesPerson:', ordersWithoutSalesPerson.length);
 
@@ -402,7 +439,29 @@ export const getDashboardStats = async (req, res) => {
       });
     }
 
-    console.log('📊 Dashboard API called for period:', req.query.period || 'current-month');
+    console.log('📊 Dashboard API called for Unit Manager:', user.username);
+    console.log('📊 Unit Manager details - Unit:', user.unit, 'CompanyId:', user.companyId);
+
+    // Validate Unit Manager has proper company assignment
+    if (!user.companyId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Unit Manager must be assigned to a company. Please contact administrator.',
+        debug: { companyId: user.companyId }
+      });
+    }
+
+    // Create base filter for Unit Manager's company (unit not required)
+    const baseFilter = {
+      companyId: user.companyId
+    };
+    
+    // Add unit to filter only if it exists (backward compatibility)
+    if (user.unit) {
+      baseFilter.unit = user.unit;
+    }
+
+    console.log('📊 Using filter:', baseFilter);
 
     const period = req.query.period || 'current-month';
     const today = new Date();
@@ -411,9 +470,11 @@ export const getDashboardStats = async (req, res) => {
     const startOfPrevMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
     const endOfPrevMonth = new Date(today.getFullYear(), today.getMonth(), 0);
 
-    // Get comprehensive order statistics with proper status distribution
+    // Get comprehensive order statistics with proper status distribution - filtered by Unit Manager's unit and company
     const [orderStats, inventoryStats] = await Promise.all([
       Order.aggregate([
+        // Apply base filter to only get orders from Unit Manager's unit/company
+        { $match: baseFilter },
         {
           $facet: {
             total: [{ $count: "count" }],
@@ -492,6 +553,8 @@ export const getDashboardStats = async (req, res) => {
         }
       ]),
       Item.aggregate([
+        // Apply base filter to only get inventory from Unit Manager's unit/company
+        { $match: baseFilter },
         {
           $facet: {
             total: [{ $count: "count" }],
@@ -562,10 +625,11 @@ export const getDashboardStats = async (req, res) => {
       ])
     ]);
 
-    // Get sales person performance with more inclusive role matching
+    // Get sales person performance with more inclusive role matching - filtered by Unit Manager's unit/company
     const salesPersonStats = await User.aggregate([
       { 
         $match: { 
+          ...baseFilter, // Add unit/company filtering
           $or: [
             { role: 'Sales' },
             { role: 'sales' },
@@ -605,8 +669,10 @@ export const getDashboardStats = async (req, res) => {
       { $sort: { totalRevenue: -1 } }
     ]);
 
-    // Get customer analytics
+    // Get customer analytics - filtered by Unit Manager's unit/company
     const customerStats = await Order.aggregate([
+      // Apply base filter first
+      { $match: baseFilter },
       {
         $group: {
           _id: "$customer",
@@ -737,11 +803,25 @@ export const getSalesPersons = async (req, res) => {
       });
     }
 
-    // Get users with Sales-related roles (check multiple variations)
-    const allUsers = await User.find({}).select('_id username email fullName role').lean();
-    console.log('All users in database:', allUsers);
+    console.log('🔍 Unit Manager getSalesPersons - Company filtering enabled');
+    console.log('User details:', { 
+      username: user.username, 
+      companyId: user.companyId, 
+      unit: user.unit 
+    });
 
+    // Validate Unit Manager has proper company assignment
+    if (!user.companyId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Unit Manager must be assigned to a company. Please contact administrator.',
+        users: [] // Return empty array
+      });
+    }
+
+    // Get users with Sales-related roles from the same company only
     const salesPersons = await User.find({ 
+      companyId: user.companyId, // Filter by same company
       $or: [
         { role: 'Sales' },
         { role: 'sales' },
@@ -752,11 +832,11 @@ export const getSalesPersons = async (req, res) => {
       ],
       isActive: { $ne: false } // Include users where isActive is true or undefined
     })
-    .select('_id username email fullName role')
+    .select('_id username email fullName role companyId')
     .sort({ username: 1 })
     .lean();
 
-    console.log('Unit Manager getSalesPersons - Found sales users:', salesPersons);
+    console.log(`✅ Found ${salesPersons.length} sales persons from same company`);
 
     res.status(200).json({
       success: true,
@@ -1024,7 +1104,17 @@ export const getOrderById = async (req, res) => {
       });
     }
 
-    const order = await Order.findById(orderId)
+    // Create base filter to ensure company isolation
+    const baseFilter = {
+      companyId: user.companyId
+    };
+    
+    // Add unit to filter only if it exists (backward compatibility)
+    if (user.unit) {
+      baseFilter.unit = user.unit;
+    }
+
+    const order = await Order.findOne({ _id: orderId, ...baseFilter })
       .populate('customer', 'name email phone address city state pincode')
       .populate('salesPerson', 'fullName email phone')
       .populate('products.product', 'name code category subCategory brand specifications')
@@ -1033,7 +1123,7 @@ export const getOrderById = async (req, res) => {
     if (!order) {
       return res.status(404).json({
         success: false,
-        message: 'Order not found'
+        message: 'Order not found or not accessible'
       });
     }
 

@@ -276,11 +276,11 @@ export default function RolePermissionManagement() {
     retry: 1
   });
 
-  // Fetch Unit Head company info (only for Unit Heads)
+  // Fetch Unit Head company info - Only needed in Unit Head context, not Super Admin context
   const { data: unitHeadCompanyResponse } = useQuery({
     queryKey: ['/api/unit-head/company-info'],
     queryFn: () => apiRequest('GET', '/api/unit-head/company-info'),
-    enabled: true, // Try to fetch regardless of role, API will handle access control
+    enabled: false, // Disabled in Super Admin context - Unit Head uses separate component
     retry: false
   });
 
@@ -364,18 +364,13 @@ export default function RolePermissionManagement() {
       return;
     }
 
-    // Validate Unit Head company assignment for Unit Manager creation
-    if (formData.role === 'Unit Manager' && !unitHeadCompanyInfo) {
-      showSmartToast({ 
-        message: 'Unit Head must have a company assigned to create Unit Managers' 
-      }, 'Company Assignment Required');
-      return;
-    }
+    // Note: Unit Head company validation is only needed when Unit Head creates Unit Managers
+    // This is handled in the Unit Head specific component, not here in Super Admin interface
 
     // Ensure permissions structure is properly formatted
     const userData = {
       ...formData,
-      companyId: formData.companyId || null, // Include company assignment (optional)
+      companyId: formData.companyId || null, // Include company assignment (optional))
       permissions: {
         role: formData.role.toLowerCase().replace(' ', '_'),
         unit: formData.unit || '',
@@ -793,30 +788,8 @@ export default function RolePermissionManagement() {
                     placeholder="test"
                   />
                 </div>
-                {/* Show company field for Unit Head role or if company info is available */}
-                {(formData.role === 'Unit Head' || unitHeadCompanyInfo) && (
-                  <div>
-                    <Label htmlFor="companyLocation">Company/Location</Label>
-                    <Input
-                      id="companyLocation"
-                      value={
-                        unitHeadCompanyInfo 
-                          ? `${unitHeadCompanyInfo.name} - ${unitHeadCompanyInfo.location}` 
-                          : 'No company assigned'
-                      }
-                      readOnly
-                      className={`cursor-not-allowed ${
-                        unitHeadCompanyInfo ? 'bg-gray-50' : 'bg-red-50 text-red-600'
-                      }`}
-                      placeholder="Company/Location (Auto-assigned)"
-                    />
-                    {!unitHeadCompanyInfo && formData.role === 'Unit Head' && (
-                      <p className="text-sm text-red-600 mt-1">
-                        Unit Head must have a company assigned to create Unit Managers
-                      </p>
-                    )}
-                  </div>
-                )}
+                {/* Company/Location field removed from Super Admin interface */}
+                {/* Super Admins use the company dropdown below to assign companies to users */}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

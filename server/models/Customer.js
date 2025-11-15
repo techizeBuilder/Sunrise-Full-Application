@@ -82,9 +82,14 @@ const customerSchema = new mongoose.Schema({
     }
   },
   salesContact: {
-    type: String,
-    trim: true,
-    maxlength: [50, 'Sales contact cannot exceed 50 characters']
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
+  companyId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Company',
+    required: [true, 'Company is required']
   },
 
   // Address Information
@@ -159,5 +164,7 @@ customerSchema.index({ active: 1 });
 customerSchema.index({ mobile: 1 });
 customerSchema.index({ email: 1 });
 customerSchema.index({ createdAt: -1 });
+customerSchema.index({ companyId: 1 });
+customerSchema.index({ salesContact: 1 });
 
 export default mongoose.model('Customer', customerSchema);

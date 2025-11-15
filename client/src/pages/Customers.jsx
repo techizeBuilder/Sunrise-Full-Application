@@ -409,7 +409,7 @@ export default function Customers() {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Sales Contact</p>
-                    <p className="text-base">{viewingCustomer.salesContact || 'Not assigned'}</p>
+                    <p className="text-base">{viewingCustomer.salesContact?.username || viewingCustomer.salesContact || 'Not assigned'}</p>
                   </div>
                 </div>
               </div>

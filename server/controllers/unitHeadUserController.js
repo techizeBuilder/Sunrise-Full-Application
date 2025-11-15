@@ -8,7 +8,21 @@ export const getUnitManagers = async (req, res) => {
   try {
     console.log('=== getUnitManagers API called ===');
     console.log('Query parameters:', req.query);
-    console.log('Unit Head user:', req.user?.username, 'Unit:', req.user?.unit);
+    console.log('Unit Head user:', req.user?.username, 'Unit:', req.user?.unit, 'CompanyId:', req.user?.companyId);
+    
+    // Debug: Check if companyId exists
+    if (!req.user?.companyId) {
+      console.log('🚨 WARNING: Unit Head has no companyId assigned!');
+      return res.status(400).json({
+        success: false,
+        message: 'Unit Head must be assigned to a company. Please contact administrator.',
+        debug: {
+          user: req.user?.username,
+          unit: req.user?.unit,
+          companyId: req.user?.companyId
+        }
+      });
+    }
     
     const { 
       page = 1, 
@@ -21,11 +35,15 @@ export const getUnitManagers = async (req, res) => {
     
     const skip = (page - 1) * limit;
 
-    // Unit Head can only see Unit Managers from their own unit
+    // Unit Head can only see Unit Managers from their own unit AND company
     let query = {
       role: 'Unit Manager',
-      unit: req.user.unit // Only show users from the same unit
+      unit: req.user.unit, // Only show users from the same unit
+      companyId: req.user.companyId // Only show users from the same company
     };
+
+    console.log('Filtering query:', query);
+    console.log('Unit Head companyId:', req.user.companyId);
 
     // Filter by status
     if (status !== 'all') {
@@ -56,9 +74,15 @@ export const getUnitManagers = async (req, res) => {
     // Get total count for pagination
     const total = await User.countDocuments(query);
 
-    // Get summary statistics for this unit
+    // Get summary statistics for this unit and company
     const stats = await User.aggregate([
-      { $match: { unit: req.user.unit, role: 'Unit Manager' } },
+      { 
+        $match: { 
+          unit: req.user.unit, 
+          role: 'Unit Manager',
+          companyId: req.user.companyId // Filter by company
+        } 
+      },
       {
         $group: {
           _id: null,
@@ -82,6 +106,11 @@ export const getUnitManagers = async (req, res) => {
     console.log('=== getUnitManagers response ===');
     console.log('Total unit managers found:', total);
     console.log('Unit managers count:', unitManagers.length);
+    console.log('Unit managers sample:', unitManagers.slice(0, 2).map(u => ({ 
+      username: u.username, 
+      unit: u.unit, 
+      companyId: u.companyId 
+    })));
 
     res.json({
       success: true,
@@ -208,11 +237,12 @@ export const updateUnitManager = async (req, res) => {
     const { userId } = req.params;
     const { username, email, fullName, permissions, isActive } = req.body;
 
-    // Find the user and ensure they are a Unit Manager in the same unit
+    // Find the user and ensure they are a Unit Manager in the same unit AND company
     const user = await User.findOne({
       _id: userId,
       role: 'Unit Manager',
-      unit: req.user.unit
+      unit: req.user.unit,
+      companyId: req.user.companyId // Ensure same company
     });
 
     if (!user) {
@@ -300,11 +330,12 @@ export const updateUnitManagerPassword = async (req, res) => {
       });
     }
 
-    // Find the user and ensure they are a Unit Manager in the same unit
+    // Find the user and ensure they are a Unit Manager in the same unit AND company
     const user = await User.findOne({
       _id: userId,
       role: 'Unit Manager',
-      unit: req.user.unit
+      unit: req.user.unit,
+      companyId: req.user.companyId // Ensure same company
     });
 
     if (!user) {
@@ -378,11 +409,12 @@ export const deleteUnitManager = async (req, res) => {
     const { userId } = req.params;
     const { permanent = false } = req.body;
 
-    // Find the user and ensure they are a Unit Manager in the same unit
+    // Find the user and ensure they are a Unit Manager in the same unit AND company
     const user = await User.findOne({
       _id: userId,
       role: 'Unit Manager',
-      unit: req.user.unit
+      unit: req.user.unit,
+      companyId: req.user.companyId // Ensure same company
     });
 
     if (!user) {
@@ -436,11 +468,12 @@ export const getUnitManagerById = async (req, res) => {
     
     const { userId } = req.params;
 
-    // Find the user and ensure they are a Unit Manager in the same unit
+    // Find the user and ensure they are a Unit Manager in the same unit AND company
     const user = await User.findOne({
       _id: userId,
       role: 'Unit Manager',
-      unit: req.user.unit
+      unit: req.user.unit,
+      companyId: req.user.companyId // Ensure same company
     }).select('-password');
 
     if (!user) {

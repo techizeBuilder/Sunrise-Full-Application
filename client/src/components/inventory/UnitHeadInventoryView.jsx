@@ -142,6 +142,18 @@ export default function UnitHeadInventoryView() {
     queryKey: ['/api/unit-head/inventory/categories'],
   });
 
+  // Fetch current user profile to get company info
+  const { data: profile } = useQuery({
+    queryKey: ['/api/profile'],
+  });
+
+  // Auto-set store filter when profile loads
+  useEffect(() => {
+    if (profile?.company && selectedStore === 'all') {
+      setSelectedStore(profile.company.name);
+    }
+  }, [profile, selectedStore]);
+
   // Extract arrays from API response
   const items = Array.isArray(itemsData?.items) ? itemsData.items : [];
   const categories = Array.isArray(categoriesData?.categories) ? categoriesData.categories : [];
@@ -266,33 +278,24 @@ export default function UnitHeadInventoryView() {
                 <Select value={selectedStore} onValueChange={setSelectedStore}>
                   <SelectTrigger className="w-[180px] border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400">
                     <Package2 className="h-4 w-4 mr-2 text-gray-400" />
-                    <SelectValue placeholder="All Stores" />
+                    <SelectValue placeholder="Store" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">
-                      <div className="flex items-center gap-2">
-                        <Package2 className="h-4 w-4" />
-                        All Stores
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="Hyderabad">
-                      <div className="flex items-center gap-2">
-                        <Package2 className="h-4 w-4" />
-                        Hyderabad
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="Bengaluru">
-                      <div className="flex items-center gap-2">
-                        <Package2 className="h-4 w-4" />
-                        Bengaluru
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="Tirupati">
-                      <div className="flex items-center gap-2">
-                        <Package2 className="h-4 w-4" />
-                        Tirupati
-                      </div>
-                    </SelectItem>
+                    {profile?.company ? (
+                      <SelectItem value={profile.company.name}>
+                        <div className="flex items-center gap-2">
+                          <Package2 className="h-4 w-4" />
+                          {profile.company.name} ({profile.company.location})
+                        </div>
+                      </SelectItem>
+                    ) : (
+                      <SelectItem value="all">
+                        <div className="flex items-center gap-2">
+                          <Package2 className="h-4 w-4" />
+                          Loading...
+                        </div>
+                      </SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
                 <Select value={sortBy} onValueChange={setSortBy}>

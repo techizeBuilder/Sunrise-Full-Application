@@ -65,7 +65,6 @@ const SuperAdminCompanies = () => {
     search: '',
     city: '',
     state: '',
-    companyType: '',
     isActive: ''
   });
   const [pagination, setPagination] = useState({
@@ -182,16 +181,6 @@ const SuperAdminCompanies = () => {
     setPagination(prev => ({ ...prev, page: newPage }));
   };
 
-  const getCompanyTypeBadgeVariant = (type) => {
-    switch (type) {
-      case 'Main Branch': return 'default';
-      case 'Branch': return 'secondary';
-      case 'Manufacturing Unit': return 'outline';
-      case 'Distribution Center': return 'destructive';
-      default: return 'secondary';
-    }
-  };
-
   if (isLoading) {
     return (
       <div className="p-6 space-y-6">
@@ -237,21 +226,20 @@ const SuperAdminCompanies = () => {
           <CardContent>
             <div className="space-y-3">
               {/* Table Header */}
-              <div className="grid grid-cols-6 gap-4 py-3 border-b">
-                {['Company', 'Location', 'Type', 'Contact', 'Status', 'Actions'].map((header, i) => (
+              <div className="grid grid-cols-5 gap-4 py-3 border-b">
+                {['Company', 'Location', 'Contact', 'Status', 'Actions'].map((header, i) => (
                   <Skeleton key={i} className="h-4 w-full" />
                 ))}
               </div>
               
               {/* Table Rows */}
               {[...Array(5)].map((_, rowIndex) => (
-                <div key={rowIndex} className="grid grid-cols-6 gap-4 py-4">
+                <div key={rowIndex} className="grid grid-cols-5 gap-4 py-4">
                   <div className="space-y-1">
                     <Skeleton className="h-4 w-32" />
                     <Skeleton className="h-3 w-24" />
                   </div>
                   <Skeleton className="h-4 w-28" />
-                  <Skeleton className="h-6 w-20" />
                   <div className="space-y-1">
                     <Skeleton className="h-3 w-24" />
                     <Skeleton className="h-3 w-32" />
@@ -314,19 +302,10 @@ const SuperAdminCompanies = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {isLoading ? (
           // Loading skeleton for stats
           <>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <Skeleton className="h-4 w-20" />
-                <Skeleton className="h-4 w-4" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-8 w-16" />
-              </CardContent>
-            </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <Skeleton className="h-4 w-20" />
@@ -386,16 +365,6 @@ const SuperAdminCompanies = () => {
                 <div className="text-2xl font-bold">{stats.byUnit?.length || 0}</div>
               </CardContent>
             </Card>
-            
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Company Types</CardTitle>
-                <Building2 className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.byType?.length || 0}</div>
-              </CardContent>
-            </Card>
           </>
         ) : null}
       </div>
@@ -427,21 +396,6 @@ const SuperAdminCompanies = () => {
                 <SelectItem value="all">All Cities</SelectItem>
                 {filterOptions.cities?.filter(city => city && city.trim() !== '').map((city) => (
                   <SelectItem key={city} value={city}>{city}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select
-              value={filters.companyType || 'all'}
-              onValueChange={(value) => handleFilterChange('companyType', value)}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filter by Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                {filterOptions.companyTypes?.filter(type => type && type.trim() !== '').map((type) => (
-                  <SelectItem key={type} value={type}>{type}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -482,7 +436,6 @@ const SuperAdminCompanies = () => {
               <TableRow>
                 <TableHead>Company</TableHead>
                 <TableHead>Location</TableHead>
-                <TableHead>Type</TableHead>
                 <TableHead>Contact</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -491,7 +444,7 @@ const SuperAdminCompanies = () => {
             <TableBody>
               {companies.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8">
+                  <TableCell colSpan={5} className="text-center py-8">
                     <div className="flex flex-col items-center space-y-3">
                       <Building2 className="h-12 w-12 text-muted-foreground" />
                       <div className="space-y-1">
@@ -517,11 +470,6 @@ const SuperAdminCompanies = () => {
                         <MapPin className="h-4 w-4 mr-1 text-muted-foreground" />
                         <span>{company.city}, {company.state}</span>
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={getCompanyTypeBadgeVariant(company.companyType)}>
-                        {company.companyType}
-                      </Badge>
                     </TableCell>
                     <TableCell>
                       <div className="space-y-1">
@@ -687,8 +635,7 @@ const CompanyForm = ({ company, onSubmit, isLoading, onCancel }) => {
     city: company?.city || '',
     state: company?.state || '',
     country: company?.country || 'India',
-    isActive: true, // Always active, not editable
-    companyType: company?.companyType || 'Main Branch',
+    isActive: true // Always active, not editable
   });
 
   const [errors, setErrors] = useState({});
@@ -832,26 +779,6 @@ const CompanyForm = ({ company, onSubmit, isLoading, onCancel }) => {
             {errors.locationPin && <p className="text-sm text-red-500">{errors.locationPin}</p>}
           </div>
         </div>
-
-        <div className="grid grid-cols-1 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="companyType">Company Type</Label>
-            <Select
-              value={formData.companyType}
-              onValueChange={(value) => handleChange('companyType', value)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Main Branch">Main Branch</SelectItem>
-                <SelectItem value="Branch">Branch</SelectItem>
-                <SelectItem value="Manufacturing Unit">Manufacturing Unit</SelectItem>
-                <SelectItem value="Distribution Center">Distribution Center</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
       </div>
 
       <DialogFooter>
@@ -876,15 +803,7 @@ const CompanyViewDetails = ({ company }) => {
       </DialogHeader>
       
       <div className="grid gap-4 py-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label className="text-sm font-medium text-muted-foreground">Company Type</Label>
-            <div className="mt-1">
-              <Badge variant={company.companyType === 'Main Branch' ? 'default' : 'secondary'}>
-                {company.companyType}
-              </Badge>
-            </div>
-          </div>
+        <div className="grid grid-cols-1 gap-4">
           <div>
             <Label className="text-sm font-medium text-muted-foreground">Status</Label>
             <div className="mt-1">

@@ -29,7 +29,6 @@ export const getCompanies = async (req, res) => {
       unitName, 
       name, 
       state,
-      companyType,
       isActive,
       search,
       page = 1, 
@@ -46,7 +45,6 @@ export const getCompanies = async (req, res) => {
     if (unitName) filter.unitName = new RegExp(unitName, 'i');
     if (name) filter.name = new RegExp(name, 'i');
     if (state) filter.state = new RegExp(state, 'i');
-    if (companyType) filter.companyType = companyType;
     if (isActive !== undefined) filter.isActive = isActive === 'true';
 
     // Global search across multiple fields
@@ -80,7 +78,6 @@ export const getCompanies = async (req, res) => {
     // Get unique cities for filter options
     const cities = await Company.distinct('city', { isActive: true });
     const states = await Company.distinct('state', { isActive: true });
-    const companyTypes = await Company.distinct('companyType');
 
     console.log(`Found ${companies.length} companies, total: ${total}`);
 
@@ -96,8 +93,7 @@ export const getCompanies = async (req, res) => {
       },
       filters: {
         cities: cities.sort(),
-        states: states.sort(),
-        companyTypes
+        states: states.sort()
       }
     });
   } catch (error) {
@@ -310,22 +306,11 @@ export const getCompanyStats = async (req, res) => {
       { $sort: { count: -1 } }
     ]);
 
-    const companiesByType = await Company.aggregate([
-      { $match: { isActive: true } },
-      {
-        $group: {
-          _id: '$companyType',
-          count: { $sum: 1 }
-        }
-      }
-    ]);
-
     res.json({
       success: true,
       total: totalCompanies,
       byCity: companiesByCity,
-      byUnit: companiesByUnit,
-      byType: companiesByType
+      byUnit: companiesByUnit
     });
   } catch (error) {
     console.error('Get company stats error:', error);
@@ -360,7 +345,7 @@ export const getCompaniesDropdown = async (req, res) => {
     }
 
     const companies = await Company.find(filter)
-      .select('_id name city state unitName companyType')
+      .select('_id name city state unitName')
       .sort({ name: 1, city: 1 })
       .limit(100); // Limit for dropdown performance
 
@@ -371,8 +356,7 @@ export const getCompaniesDropdown = async (req, res) => {
       name: company.name,
       city: company.city,
       state: company.state,
-      unitName: company.unitName,
-      companyType: company.companyType
+      unitName: company.unitName
     }));
 
     res.json({

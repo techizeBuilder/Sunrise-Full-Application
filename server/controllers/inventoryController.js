@@ -58,6 +58,11 @@ export const getItems = async (req, res) => {
     const skip = (page - 1) * limit;
     let query = {};
 
+    // Add company filtering for Unit Head users
+    if (req.user.role === 'Unit Head' && req.user.companyId) {
+      query.store = req.user.companyId;
+    }
+
     // Search filter
     if (search) {
       query.$or = [
@@ -195,7 +200,13 @@ export const getItemById = async (req, res) => {
       return exportItemsToExcel(req, res);
     }
     
-    const item = await Item.findById(id);
+    // Build query with company filtering for Unit Head
+    let query = { _id: id };
+    if (req.user.role === 'Unit Head' && req.user.companyId) {
+      query.store = req.user.companyId;
+    }
+    
+    const item = await Item.findOne(query);
 
     if (!item) {
       return res.status(404).json({ message: 'Item not found' });
@@ -578,7 +589,22 @@ export const getCategories = async (req, res) => {
       return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
     }
 
-    const categories = await Category.find().sort({ createdAt: -1, name: 1 });
+    let categories;
+
+    // For Unit Head users, only show categories that exist in their company's inventory
+    if (req.user.role === 'Unit Head' && req.user.companyId) {
+      // Get distinct categories from items that belong to the Unit Head's company
+      const companyCategories = await Item.distinct('category', { store: req.user.companyId });
+      
+      // Get category documents for those categories that exist in the company
+      categories = await Category.find({ 
+        name: { $in: companyCategories } 
+      }).sort({ createdAt: -1, name: 1 });
+    } else {
+      // For Super Admin and other roles, show all categories
+      categories = await Category.find().sort({ createdAt: -1, name: 1 });
+    }
+
     res.json({ categories });
   } catch (error) {
     console.error('Get categories error:', error);
@@ -846,7 +872,14 @@ const upload = multer({
 export const exportItemsToExcel = async (req, res) => {
   try {
     console.log('Starting Excel export for inventory items');
-    const items = await Item.find({}).sort({ createdAt: -1 });
+    
+    // Build query with company filtering for Unit Head
+    let query = {};
+    if (req.user.role === 'Unit Head' && req.user.companyId) {
+      query.store = req.user.companyId;
+    }
+    
+    const items = await Item.find(query).sort({ createdAt: -1 });
     console.log(`Found ${items.length} items to export`);
     
     if (items.length === 0) {
@@ -1137,9 +1170,13 @@ export const getLowStockItems = async (req, res) => {
       return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
     }
 
-    const lowStockItems = await Item.find({
-      $expr: { $lte: ['$qty', '$minStock'] }
-    }).sort({ qty: 1 });
+    // Build query with company filtering for Unit Head
+    let query = { $expr: { $lte: ['$qty', '$minStock'] } };
+    if (req.user.role === 'Unit Head' && req.user.companyId) {
+      query.store = req.user.companyId;
+    }
+
+    const lowStockItems = await Item.find(query).sort({ qty: 1 });
 
     res.json({ lowStockItems });
   } catch (error) {
@@ -1154,42 +1191,62 @@ export const getInventoryStats = async (req, res) => {
       return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
     }
 
-    const stats = await Item.aggregate([
-      {
-        $group: {
-          _id: null,
-          totalItems: { $sum: 1 },
-          totalValue: { $sum: { $multiply: ['$qty', '$stdCost'] } },
-          totalQty: { $sum: '$qty' },
-          lowStockCount: {
-            $sum: {
-              $cond: [{ $lte: ['$qty', '$minStock'] }, 1, 0]
-            }
+    // Build match stage for company filtering
+    let matchStage = {};
+    if (req.user.role === 'Unit Head' && req.user.companyId) {
+      matchStage = { store: req.user.companyId };
+    }
+
+    const pipeline = [];
+    if (Object.keys(matchStage).length > 0) {
+      pipeline.push({ $match: matchStage });
+    }
+    
+    pipeline.push({
+      $group: {
+        _id: null,
+        totalItems: { $sum: 1 },
+        totalValue: { $sum: { $multiply: ['$qty', '$stdCost'] } },
+        totalQty: { $sum: '$qty' },
+        lowStockCount: {
+          $sum: {
+            $cond: [{ $lte: ['$qty', '$minStock'] }, 1, 0]
           }
         }
       }
-    ]);
+    });
 
-    const categoryStats = await Item.aggregate([
-      {
-        $group: {
-          _id: '$category',
-          count: { $sum: 1 },
-          totalValue: { $sum: { $multiply: ['$qty', '$stdCost'] } }
-        }
-      },
-      { $sort: { count: -1 } }
-    ]);
+    const stats = await Item.aggregate(pipeline);
 
-    const typeStats = await Item.aggregate([
-      {
-        $group: {
-          _id: '$type',
-          count: { $sum: 1 },
-          totalValue: { $sum: { $multiply: ['$qty', '$stdCost'] } }
-        }
+    // Build category stats pipeline with company filtering
+    const categoryPipeline = [];
+    if (Object.keys(matchStage).length > 0) {
+      categoryPipeline.push({ $match: matchStage });
+    }
+    categoryPipeline.push({
+      $group: {
+        _id: '$category',
+        count: { $sum: 1 },
+        totalValue: { $sum: { $multiply: ['$qty', '$stdCost'] } }
       }
-    ]);
+    }, { $sort: { count: -1 } });
+
+    const categoryStats = await Item.aggregate(categoryPipeline);
+
+    // Build type stats pipeline with company filtering
+    const typePipeline = [];
+    if (Object.keys(matchStage).length > 0) {
+      typePipeline.push({ $match: matchStage });
+    }
+    typePipeline.push({
+      $group: {
+        _id: '$type',
+        count: { $sum: 1 },
+        totalValue: { $sum: { $multiply: ['$qty', '$stdCost'] } }
+      }
+    });
+
+    const typeStats = await Item.aggregate(typePipeline);
 
     res.json({
       overview: stats[0] || { totalItems: 0, totalValue: 0, totalQty: 0, lowStockCount: 0 },

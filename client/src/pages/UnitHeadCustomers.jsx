@@ -364,7 +364,7 @@ export default function UnitHeadCustomers() {
                         </div>
                         <div className="flex items-center gap-2">
                           <Phone className="h-4 w-4 text-muted-foreground" />
-                          <span>{customer.mobile}</span>
+                          <span>{customer.mobile || 'N/A'}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <MapPin className="h-4 w-4 text-muted-foreground" />
@@ -372,7 +372,7 @@ export default function UnitHeadCustomers() {
                         </div>
                         <div className="flex items-center gap-2">
                           <Building className="h-4 w-4 text-muted-foreground" />
-                          <span>{customer.address || 'N/A'}</span>
+                          <span>{customer.address1 || customer.address || 'N/A'}</span>
                         </div>
                       </div>
                       
@@ -416,7 +416,7 @@ export default function UnitHeadCustomers() {
                           <div>
                             <p className="font-medium">{customer.name}</p>
                             <p className="text-xs text-muted-foreground truncate max-w-[200px]">
-                              {customer.address || 'No address'}
+                              {customer.address1 || customer.address || 'No address'}
                             </p>
                           </div>
                         </TableCell>
@@ -424,7 +424,7 @@ export default function UnitHeadCustomers() {
                         <TableCell>
                           <span className="truncate max-w-[150px] block">{customer.email}</span>
                         </TableCell>
-                        <TableCell>{customer.mobile}</TableCell>
+                        <TableCell>{customer.mobile || 'N/A'}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
                             <MapPin className="h-3 w-3" />
@@ -507,27 +507,27 @@ export default function UnitHeadCustomers() {
                   <CardContent className="space-y-3">
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">Customer Name:</span>
-                      <span className="font-semibold">{customerDetail.data.customer.name}</span>
+                      <span className="font-semibold">{customerDetail.data.name}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">Contact Person:</span>
-                      <span>{customerDetail.data.customer.contactPerson || 'N/A'}</span>
+                      <span>{customerDetail.data.contactPerson || 'N/A'}</span>
                     </div>
                     <div className="flex justify-between items-start">
                       <span className="text-muted-foreground">Email:</span>
-                      <span className="text-right">{customerDetail.data.customer.email}</span>
+                      <span className="text-right">{customerDetail.data.email}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">Phone:</span>
-                      <span>{customerDetail.data.customer.mobile}</span>
+                      <span>{customerDetail.data.mobile || 'N/A'}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">Status:</span>
-                      {getStatusBadge(customerDetail.data.customer.active)}
+                      {getStatusBadge(customerDetail.data.active)}
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">Joined:</span>
-                      <span>{formatDate(customerDetail.data.customer.createdAt)}</span>
+                      <span>{formatDate(customerDetail.data.createdAt)}</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -539,23 +539,23 @@ export default function UnitHeadCustomers() {
                   <CardContent className="space-y-3">
                     <div className="flex justify-between items-start">
                       <span className="text-muted-foreground">Address:</span>
-                      <span className="text-right max-w-[200px]">{customerDetail.data.customer.address || 'N/A'}</span>
+                      <span className="text-right max-w-[200px]">{customerDetail.data.address1 || customerDetail.data.address || 'N/A'}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">City:</span>
-                      <span>{customerDetail.data.customer.city || 'N/A'}</span>
+                      <span>{customerDetail.data.city || 'N/A'}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">State:</span>
-                      <span>{customerDetail.data.customer.state || 'N/A'}</span>
+                      <span>{customerDetail.data.state || 'N/A'}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">Postal Code:</span>
-                      <span>{customerDetail.data.customer.postalCode || 'N/A'}</span>
+                      <span>{customerDetail.data.pin || 'N/A'}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">Country:</span>
-                      <span>{customerDetail.data.customer.country || 'N/A'}</span>
+                      <span>{customerDetail.data.country || 'N/A'}</span>
                     </div>
                   </CardContent>
                 </Card>

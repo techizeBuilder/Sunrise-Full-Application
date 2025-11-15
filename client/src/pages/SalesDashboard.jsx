@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
+import { salesApi } from '@/api/salesService';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -84,11 +85,13 @@ const SalesDashboard = () => {
   // API queries for dynamic data
   const { data: salesSummary, isLoading: summaryLoading } = useQuery({
     queryKey: ['/api/sales/summary'],
+    queryFn: () => salesApi.getDashboardSummary(),
     staleTime: 30000, // 30 seconds
   });
 
   const { data: recentOrdersData, isLoading: ordersLoading } = useQuery({
     queryKey: ['/api/sales/recent-orders'],
+    queryFn: () => salesApi.getRecentOrders(5),
     staleTime: 30000, // 30 seconds
   });
 

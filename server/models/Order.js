@@ -38,6 +38,15 @@ const orderSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   },
+  companyId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Company',
+    required: [true, 'Company is required']
+  },
+  unit: {
+    type: String,
+    trim: true
+  },
   orderDate: {
     type: Date,
     required: true
@@ -110,6 +119,8 @@ const orderSchema = new mongoose.Schema({
 orderSchema.index({ orderCode: 1 });
 orderSchema.index({ customer: 1 });
 orderSchema.index({ salesPerson: 1 });
+orderSchema.index({ companyId: 1 });
+orderSchema.index({ unit: 1 });
 orderSchema.index({ orderDate: -1 });
 orderSchema.index({ status: 1 });
 orderSchema.index({ priority: 1 });

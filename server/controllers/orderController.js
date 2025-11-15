@@ -102,10 +102,12 @@ const createOrder = async (req, res) => {
       orderCode,
       customer: customerId,
       salesPerson: req.user._id || req.user.id, // Use _id or id from authenticated user
+      companyId: req.user.companyId, // Auto-assign company from logged-in user
+      unit: req.user.unit, // Auto-assign unit from logged-in user
       orderDate: new Date(orderDate),
       products: orderProducts,
       totalAmount,
-      status: 'Pending',
+      status: 'pending',
       notes
     });
 
@@ -447,7 +449,7 @@ const updateOrderStatus = async (req, res) => {
     const { status, remarks } = req.body;
 
     // Enhanced validation for Unit Manager workflow
-    const validStatuses = ['Pending', 'Approved', 'Disapproved', 'In_Production', 'Completed', 'Cancelled'];
+    const validStatuses = ['pending', 'approved', 'rejected', 'in_production', 'completed', 'cancelled'];
     if (!status || !validStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
@@ -478,7 +480,7 @@ const updateOrderStatus = async (req, res) => {
           message: 'You can only update your own orders'
         });
       }
-      if (status !== 'Cancelled' || order.status !== 'Pending') {
+      if (status !== 'cancelled' || order.status !== 'pending') {
         return res.status(403).json({
           success: false,
           message: 'Sales can only cancel pending orders'
@@ -548,9 +550,19 @@ const getSalesSummary = async (req, res) => {
     const { unit } = req.query;
     let query = {};
 
-    // Apply unit filter for non-super users  
+    console.log('📊 getSalesSummary called:', {
+      user: req.user.username,
+      role: req.user.role,
+      companyId: req.user.companyId
+    });
+
+    // Apply company filter for data isolation
     if (req.user.role !== 'Super Admin') {
-      query.unit = req.user.unit;
+      query.companyId = req.user.companyId;
+      // Also add unit filter if it exists (backward compatibility)
+      if (req.user.unit) {
+        query.unit = req.user.unit;
+      }
     } else if (unit) {
       query.unit = unit;
     }
@@ -558,9 +570,9 @@ const getSalesSummary = async (req, res) => {
     // Get order counts by status
     const [totalOrders, deliveredCount, inProgressCount, preparationCount] = await Promise.all([
       Order.countDocuments(query),
-      Order.countDocuments({ ...query, status: { $in: ['Completed', 'Delivered'] } }),
-      Order.countDocuments({ ...query, status: { $in: ['Approved', 'Processing', 'In Progress', 'Shipped', 'Out for Delivery'] } }),
-      Order.countDocuments({ ...query, status: { $in: ['Pending', 'Created', 'Confirmed'] } })
+      Order.countDocuments({ ...query, status: { $in: ['completed', 'approved'] } }),
+      Order.countDocuments({ ...query, status: { $in: ['approved', 'in_production'] } }),
+      Order.countDocuments({ ...query, status: { $in: ['pending'] } })
     ]);
 
     res.json({
@@ -582,9 +594,19 @@ const getSalesRecentOrders = async (req, res) => {
     const { unit, limit = 5 } = req.query;
     let query = {};
 
-    // Apply unit filter for non-super users
+    console.log('📋 getSalesRecentOrders called:', {
+      user: req.user.username,
+      role: req.user.role,
+      companyId: req.user.companyId
+    });
+
+    // Apply company filter for data isolation
     if (req.user.role !== 'Super Admin') {
-      query.unit = req.user.unit;
+      query.companyId = req.user.companyId;
+      // Also add unit filter if it exists (backward compatibility)
+      if (req.user.unit) {
+        query.unit = req.user.unit;
+      }
     } else if (unit) {
       query.unit = unit;
     }
@@ -600,7 +622,7 @@ const getSalesRecentOrders = async (req, res) => {
       _id: order._id,
       orderCode: order.orderCode,
       customerName: order.customer?.customerName || order.customer?.name || 'Unknown Customer',
-      status: order.status || 'Pending',
+      status: order.status || 'pending',
       totalAmount: order.totalAmount || 0,
       totalQuantity: Array.isArray(order.products) ? order.products.reduce((sum, p) => sum + p.quantity, 0) : 0,
       totalItems: Array.isArray(order.products) ? order.products.length : 0,
@@ -635,17 +657,29 @@ const getSalespersonOrders = async (req, res) => {
 
     const salespersonId = req.user._id || req.user.id;
     const userRole = req.user.role;
+    const userCompanyId = req.user.companyId;
 
-    // Build filter query based on user role
+    console.log('📦 getSalespersonOrders called:', {
+      userId: salespersonId,
+      role: userRole,
+      companyId: userCompanyId
+    });
+
+    // Build filter query based on user role with company isolation
     const filter = {};
 
-    // If user is Sales role, only show their orders
+    // Always filter by company for data isolation
+    if (userCompanyId && userRole !== 'Super Admin') {
+      filter.companyId = userCompanyId;
+    }
+
+    // If user is Sales role, only show their orders from their company
     if (userRole === 'Sales') {
       filter.salesPerson = salespersonId;
     }
-    // Unit Manager and Super Admin can see all orders
-    // For other roles, also restrict to their own orders
-    else if (userRole !== 'Unit Manager' && userRole !== 'Super Admin') {
+    // Unit Manager can see all orders from their company
+    // Super Admin can see all orders
+    else if (userRole !== 'Super Admin' && userRole !== 'Unit Manager') {
       filter.salesPerson = salespersonId;
     }
 

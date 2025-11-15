@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
+import { salesApi } from '@/api/salesService';
 import { customerApi } from '@/api/customerService';
 import { 
   Card, 
@@ -85,10 +86,10 @@ const MyCustomers = () => {
   }
   if (categoryFilter !== 'All') queryParams.customerType = categoryFilter;
 
-  // Fetch customers with pagination and filtering
+  // Fetch customers with pagination and filtering (sales-specific API with company filtering)
   const { data: customersResponse, isLoading, refetch } = useQuery({
-    queryKey: ['/api/customers', queryParams],
-    queryFn: () => customerApi.getAll(queryParams),
+    queryKey: ['/api/sales/my-customers', queryParams],
+    queryFn: () => salesApi.getMyCustomers(queryParams),
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
@@ -499,7 +500,7 @@ const MyCustomers = () => {
                 </div>
                 <div className="space-y-2">
                   <Label className="text-sm font-medium text-gray-700">Sales Contact</Label>
-                  <p className="text-sm">{selectedCustomer.salesContact || 'N/A'}</p>
+                  <p className="text-sm">{selectedCustomer.salesContact?.username || selectedCustomer.salesContact || 'N/A'}</p>
                 </div>
               </div>
               <div className="flex justify-end">
@@ -953,7 +954,7 @@ const EditCustomerDialog = ({ isOpen, onOpenChange, customer, onSuccess }) => {
     state: customer?.state || '',
     country: 'India',
     pin: customer?.pin || '',
-    salesContact: customer?.salesContact || ''
+    salesContact: customer?.salesContact?.username || customer?.salesContact || ''
   });
 
   // Update form data when customer changes
@@ -975,7 +976,7 @@ const EditCustomerDialog = ({ isOpen, onOpenChange, customer, onSuccess }) => {
         state: customer.state || '',
         country: 'India',
         pin: customer.pin || '',
-        salesContact: customer.salesContact || ''
+        salesContact: customer.salesContact?.username || customer.salesContact || ''
       });
       setErrors({});
     }
@@ -1047,7 +1048,7 @@ const EditCustomerDialog = ({ isOpen, onOpenChange, customer, onSuccess }) => {
       state: customer?.state || '',
       country: 'India',
       pin: customer?.pin || '',
-      salesContact: customer?.salesContact || ''
+      salesContact: customer?.salesContact?.username || customer?.salesContact || ''
     });
     setErrors({});
     onOpenChange(false);

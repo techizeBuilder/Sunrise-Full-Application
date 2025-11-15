@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { salesApi } from '@/api/salesService';
 import { ActionButton, useActionPermissions } from '@/components/permissions/ActionButton';
 import { 
   Card, 
@@ -301,11 +303,11 @@ export default function MyInvoices() {
   // Permission hooks
   const permissions = useActionPermissions('sales', 'myInvoices');
   
-  const [invoices, setInvoices] = useState(dummyInvoices);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [paymentMethodFilter, setPaymentMethodFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
@@ -313,7 +315,34 @@ export default function MyInvoices() {
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [newStatus, setNewStatus] = useState('');
 
-  // Early return if no view permission
+  // Build query parameters for API call
+  const queryParams = {
+    page: currentPage,
+    limit: 10,
+    search: searchTerm
+  };
+  if (statusFilter !== 'all') queryParams.paymentStatus = statusFilter;
+
+  // Fetch invoices with company filtering via sales API
+  const { data: invoicesResponse, isLoading, refetch } = useQuery({
+    queryKey: ['/api/sales/my-invoices', queryParams],
+    queryFn: () => salesApi.getMyInvoices(queryParams),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  const invoices = invoicesResponse?.invoices || [];
+  const pagination = invoicesResponse?.pagination || {};
+
+  // Handle filter changes and reset to page 1
+  const handleSearchChange = (value) => {
+    setSearchTerm(value);
+    setCurrentPage(1);
+  };
+
+  const handleStatusFilterChange = (value) => {
+    setStatusFilter(value);
+    setCurrentPage(1);
+  };
   if (!permissions.canView) {
     return (
       <div className="p-6 flex items-center justify-center min-h-[400px]">
@@ -349,38 +378,8 @@ export default function MyInvoices() {
   // Searchable dropdown state
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
 
-  const filteredInvoices = invoices.filter(invoice => {
-    const matchesSearch = 
-      invoice.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      invoice.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      invoice.orderNo.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || invoice.status === statusFilter;
-    const matchesPaymentMethod = paymentMethodFilter === 'all' || invoice.paymentMethod === paymentMethodFilter;
-    
-    let matchesDate = true;
-    if (dateFilter !== 'all') {
-      const today = new Date();
-      const invoiceDate = new Date(invoice.invoiceDate);
-      
-      switch (dateFilter) {
-        case 'today':
-          matchesDate = invoiceDate.toDateString() === today.toDateString();
-          break;
-        case 'week':
-          const weekAgo = new Date(today);
-          weekAgo.setDate(today.getDate() - 7);
-          matchesDate = invoiceDate >= weekAgo && invoiceDate <= today;
-          break;
-        case 'month':
-          const monthAgo = new Date(today);
-          monthAgo.setMonth(today.getMonth() - 1);
-          matchesDate = invoiceDate >= monthAgo && invoiceDate <= today;
-          break;
-      }
-    }
-
-    return matchesSearch && matchesStatus && matchesPaymentMethod && matchesDate;
-  });
+  // Server-side filtering is handled by the API, so we use the data directly
+  const filteredInvoices = invoices;
 
   const getStatusVariant = (status) => {
     switch (status) {
@@ -839,14 +838,14 @@ ${invoice.notes ? `Notes: ${invoice.notes}` : ''}
         <Input
           placeholder="Search invoices..."
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={(e) => handleSearchChange(e.target.value)}
           className="pl-10 bg-white"
         />
       </div>
 
       {/* Status Filter */}
       <div className="w-full">
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
           <SelectTrigger className="bg-white">
             <SelectValue placeholder="All Status" />
           </SelectTrigger>
@@ -880,7 +879,22 @@ ${invoice.notes ? `Notes: ${invoice.notes}` : ''}
 
         {/* Invoice Items */}
         <div className="divide-y">
-          {filteredInvoices.map((invoice) => (
+          {isLoading ? (
+            <div className="px-4 py-8 text-center">
+              <div className="flex flex-col items-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-2"></div>
+                <p className="text-gray-500">Loading invoices...</p>
+              </div>
+            </div>
+          ) : filteredInvoices.length === 0 ? (
+            <div className="px-4 py-8 text-center">
+              <div className="flex flex-col items-center">
+                <p className="text-gray-500 text-lg font-medium">No invoices found</p>
+                <p className="text-gray-400 text-sm">Try adjusting your search or filters</p>
+              </div>
+            </div>
+          ) : (
+            filteredInvoices.map((invoice) => (
             <div key={invoice.id} className="px-4 py-4 hover:bg-gray-50">
               {/* Mobile Layout - List Format */}
               <div className="md:hidden">
@@ -1054,7 +1068,8 @@ ${invoice.notes ? `Notes: ${invoice.notes}` : ''}
                 </div>
               </div>
             </div>
-          ))}
+          ))
+          )}
         </div>
       </div>
 

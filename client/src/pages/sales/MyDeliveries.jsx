@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { salesApi } from '@/api/salesService';
 import { ActionButton, useActionPermissions } from '@/components/permissions/ActionButton';
 import { useAuth } from '@/hooks/useAuth';
 import { 
@@ -307,15 +309,33 @@ export default function MyDeliveries() {
     canView: originalPermissions.canView
   } : originalPermissions;
   
-  const [deliveries, setDeliveries] = useState(dummyDeliveries);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [selectedDelivery, setSelectedDelivery] = useState(null);
+
+  // Build query parameters for API call
+  const queryParams = {
+    page: currentPage,
+    limit: 10,
+    search: searchTerm
+  };
+  if (statusFilter !== 'all') queryParams.status = statusFilter;
+
+  // Fetch deliveries with company filtering via sales API
+  const { data: deliveriesResponse, isLoading, refetch } = useQuery({
+    queryKey: ['/api/sales/my-deliveries', queryParams],
+    queryFn: () => salesApi.getMyDeliveries(queryParams),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  const deliveries = deliveriesResponse?.deliveries || [];
+  const pagination = deliveriesResponse?.pagination || {};
 
   // Early return if no view permission
   if (!permissions.canView) {
@@ -354,39 +374,24 @@ export default function MyDeliveries() {
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
   const [orderSearchOpen, setOrderSearchOpen] = useState(false);
 
-  const filteredDeliveries = deliveries.filter(delivery => {
-    const matchesSearch = 
-      delivery.orderNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      delivery.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      delivery.driverName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      delivery.vehicleNo.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || delivery.status === statusFilter;
-    const matchesPriority = priorityFilter === 'all' || delivery.priority === priorityFilter;
-    
-    let matchesDate = true;
-    if (dateFilter !== 'all') {
-      const today = new Date();
-      const deliveryDate = new Date(delivery.deliveryDate);
-      
-      switch (dateFilter) {
-        case 'today':
-          matchesDate = deliveryDate.toDateString() === today.toDateString();
-          break;
-        case 'tomorrow':
-          const tomorrow = new Date(today);
-          tomorrow.setDate(today.getDate() + 1);
-          matchesDate = deliveryDate.toDateString() === tomorrow.toDateString();
-          break;
-        case 'week':
-          const weekFromNow = new Date(today);
-          weekFromNow.setDate(today.getDate() + 7);
-          matchesDate = deliveryDate >= today && deliveryDate <= weekFromNow;
-          break;
-      }
-    }
+  // Server-side filtering is handled by the API, so we use the data directly
+  const filteredDeliveries = deliveries;
 
-    return matchesSearch && matchesStatus && matchesPriority && matchesDate;
-  });
+  // Handle filter changes and reset to page 1
+  const handleSearchChange = (value) => {
+    setSearchTerm(value);
+    setCurrentPage(1);
+  };
+
+  const handleStatusFilterChange = (value) => {
+    setStatusFilter(value);
+    setCurrentPage(1);
+  };
+
+  const handlePriorityFilterChange = (value) => {
+    setPriorityFilter(value);
+    setCurrentPage(1);
+  };
 
   const getStatusVariant = (status) => {
     switch (status) {
@@ -857,12 +862,12 @@ export default function MyDeliveries() {
               <Input
                 placeholder="Search deliveries..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 className="pl-10"
               />
             </div>
           </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <Select value={statusFilter} onValueChange={handleStatusFilterChange}>
             <SelectTrigger className="w-full sm:w-48">
               <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
@@ -874,7 +879,7 @@ export default function MyDeliveries() {
               <SelectItem value="Cancelled">Cancelled</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+          <Select value={priorityFilter} onValueChange={handlePriorityFilterChange}>
             <SelectTrigger className="w-full sm:w-48">
               <SelectValue placeholder="Filter by priority" />
             </SelectTrigger>
@@ -906,7 +911,16 @@ export default function MyDeliveries() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredDeliveries.length === 0 ? (
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-8">
+                    <div className="flex flex-col items-center">
+                      <RefreshCw className="h-8 w-8 text-gray-400 mb-2 animate-spin" />
+                      <p className="text-gray-500">Loading deliveries...</p>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : filteredDeliveries.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center py-8">
                     <div className="flex flex-col items-center">

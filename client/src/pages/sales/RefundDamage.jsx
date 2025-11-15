@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useToast } from "@/hooks/use-toast";
+import { salesApi } from "@/api/salesService";
 import { customerApi } from "@/api/customerService";
 import { returnApi } from "@/api/returnService";
 import { Button } from "@/components/ui/button";
@@ -302,13 +303,14 @@ const CreateEntryForm = ({
   const [expandedBrands, setExpandedBrands] = useState({});
 
   // Fetch customers from API
+  // Fetch customers (sales-specific, company filtered)
   const {
     data: customersResponse,
     isLoading: customersLoading,
     error: customersError,
   } = useQuery({
-    queryKey: ["/api/customers"],
-    queryFn: () => customerApi.getAll(),
+    queryKey: ["/api/sales/my-customers"],
+    queryFn: () => salesApi.getMyCustomers(),
   });
 
   // Fetch inventory items (same as orders module)
@@ -765,21 +767,20 @@ const RefundDamage = () => {
 
   const [selectedEntry, setSelectedEntry] = useState(null);
 
-  // Fetch returns data from API
+  // Fetch returns data from API (sales-specific, company filtered)
   const {
     data: returnsResponse,
     isLoading: returnsLoading,
     error: returnsError,
     refetch: refetchReturns,
   } = useQuery({
-    queryKey: ["/api/returns", searchTerm, statusFilter, typeFilter],
+    queryKey: ["/api/sales/refund-return", searchTerm, statusFilter, typeFilter],
     queryFn: () =>
-      returnApi.getAll({
+      salesApi.getMyRefundReturns({
         page: 1,
         limit: 50,
         search: searchTerm || undefined,
         status: statusFilter !== "all" ? statusFilter : undefined,
-        type: typeFilter !== "all" ? typeFilter : undefined,
       }),
   });
 

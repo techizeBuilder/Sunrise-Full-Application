@@ -84,11 +84,6 @@ const companySchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
-  companyType: {
-    type: String,
-    enum: ['Main Branch', 'Branch', 'Manufacturing Unit', 'Distribution Center'],
-    default: 'Main Branch'
-  },
   // Location specific data for better organization
   location: {
     type: {
@@ -123,7 +118,6 @@ companySchema.index({ city: 1 });
 companySchema.index({ name: 1 });
 companySchema.index({ gst: 1 });
 companySchema.index({ isActive: 1 });
-companySchema.index({ companyType: 1 });
 companySchema.index({ 'location': '2dsphere' });
 
 // Compound indexes for common queries

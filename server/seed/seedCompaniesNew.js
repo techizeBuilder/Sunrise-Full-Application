@@ -15,7 +15,6 @@ const companiesData = [
     fssai: '12345678901234',
     orderCutoffTime: '18:00',
     isActive: true,
-    companyType: 'Main Branch',
     businessHours: {
       opening: '09:00',
       closing: '18:00'
@@ -35,7 +34,6 @@ const companiesData = [
     fssai: '23456789012345',
     orderCutoffTime: '17:30',
     isActive: true,
-    companyType: 'Manufacturing Unit',
     businessHours: {
       opening: '08:30',
       closing: '17:30'
@@ -55,7 +53,6 @@ const companiesData = [
     fssai: '34567890123456',
     orderCutoffTime: '18:30',
     isActive: true,
-    companyType: 'Branch',
     businessHours: {
       opening: '09:30',
       closing: '18:30'
@@ -75,7 +72,6 @@ const companiesData = [
     fssai: '45678901234567',
     orderCutoffTime: '19:00',
     isActive: true,
-    companyType: 'Distribution Center',
     businessHours: {
       opening: '10:00',
       closing: '19:00'
@@ -95,7 +91,6 @@ const companiesData = [
     fssai: '56789012345678',
     orderCutoffTime: '17:00',
     isActive: true,
-    companyType: 'Manufacturing Unit',
     businessHours: {
       opening: '08:00',
       closing: '17:00'
@@ -140,7 +135,7 @@ export const seedCompanyData = async () => {
       
       // Log the companies
       result.forEach((company, index) => {
-        console.log(`${index + 1}. ${company.name} - ${company.city} (${company.companyType})`);
+        console.log(`${index + 1}. ${company.name} - ${company.city}`);
       });
 
       return { 

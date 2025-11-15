@@ -49,7 +49,9 @@ export const getProfile = async (req, res) => {
       return res.status(401).json({ message: 'User not authenticated' });
     }
     
-    const user = await User.findById(userId).select('-password');
+    const user = await User.findById(userId)
+      .select('-password')
+      .populate('companyId', 'name location');
     console.log('Found user:', user ? 'Yes' : 'No');
     
     if (!user) {
@@ -67,6 +69,12 @@ export const getProfile = async (req, res) => {
       profilePicture: user.profilePicture ? `/uploads/profiles/${user.profilePicture}` : null,
       role: user.role,
       unit: user.unit,
+      companyId: user.companyId?._id,
+      company: user.companyId ? {
+        id: user.companyId._id,
+        name: user.companyId.name,
+        location: user.companyId.location
+      } : null,
       permissions: userModules, // Use simple module names instead of complex DB permissions
       profile: user.profile
     };

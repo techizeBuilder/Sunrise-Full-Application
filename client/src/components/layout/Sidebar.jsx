@@ -27,7 +27,10 @@ import {
   ChevronDown,
   ChevronRight,
   Building,
-  PieChart
+  PieChart,
+  ShoppingCart,
+  CreditCard,
+  RotateCcw
 } from 'lucide-react';
 
 // Separate menu items for each role
@@ -331,17 +334,39 @@ const salesMenuItems = [
     module: 'dashboard'
   },
   {
-    label: 'Sales',
-    path: '/sales',
-    icon: TrendingUp,
+    label: 'My Orders',
+    path: '/sales/orders',
+    icon: ShoppingCart,
     module: 'sales',
-    submodules: [
-      { label: 'My Orders', path: '/sales/orders', feature: 'orders' },
-      { label: 'My Customers', path: '/sales/my-customers', feature: 'myCustomers' },
-      { label: 'My Dispatches', path: '/sales/my-deliveries', feature: 'myDeliveries' },
-      { label: 'My Payments', path: '/sales/my-invoices', feature: 'myInvoices' },
-      { label: 'Return/Damage', path: '/sales/refund-return', feature: 'refundReturn' }
-    ]
+    feature: 'orders'
+  },
+  {
+    label: 'My Customers',
+    path: '/sales/my-customers',
+    icon: Users,
+    module: 'sales',
+    feature: 'myCustomers'
+  },
+  {
+    label: 'My Dispatches',
+    path: '/sales/my-deliveries',
+    icon: Truck,
+    module: 'sales',
+    feature: 'myDeliveries'
+  },
+  {
+    label: 'My Payments',
+    path: '/sales/my-invoices',
+    icon: CreditCard,
+    module: 'sales',
+    feature: 'myInvoices'
+  },
+  {
+    label: 'Return/Damage',
+    path: '/sales/refund-return',
+    icon: RotateCcw,
+    module: 'sales',
+    feature: 'refundReturn'
   },
   {
     label: 'Customers',
