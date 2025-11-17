@@ -3,6 +3,7 @@ import Order from '../models/Order.js';
 import Customer from '../models/Customer.js';
 import Sale from '../models/Sale.js';
 import { Item } from '../models/Inventory.js';
+import { Company } from '../models/Company.js';
 
 // Super Admin Dashboard
 export const getSuperAdminDashboard = async (req, res) => {
@@ -18,110 +19,70 @@ export const getSuperAdminDashboard = async (req, res) => {
 
     console.log('🔍 Fetching Super Admin dashboard data...');
 
-    // Get comprehensive system overview
-    const [userStats, orderStats, customerStats, inventoryStats] = await Promise.all([
-      // User statistics with role distribution
-      User.aggregate([
-        {
-          $facet: {
-            total: [{ $count: "count" }],
-            activeUsers: [{ $match: { isActive: true } }, { $count: "count" }],
-            byRole: [
-              { $group: { _id: "$role", count: { $sum: 1 } } }
-            ]
-          }
-        }
-      ]),
-      
-      // Order statistics with status distribution and revenue
+    // Get basic counts with proper error handling
+    const [
+      totalUsers,
+      totalOrders, 
+      totalCustomers,
+      totalItems,
+      totalRevenue,
+      recentOrders,
+      recentCustomers,
+      recentSalesPersons,
+      companies
+    ] = await Promise.all([
+      // Simple counts instead of complex aggregations
+      User.countDocuments(),
+      Order.countDocuments(),
+      Customer.countDocuments(),
+      Item.countDocuments(),
       Order.aggregate([
-        {
-          $facet: {
-            total: [{ $count: "count" }],
-            thisMonth: [
-              {
-                $match: {
-                  createdAt: {
-                    $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-                  }
-                }
-              },
-              { $count: "count" }
-            ],
-            statusDistribution: [
-              { $group: { _id: "$status", count: { $sum: 1 } } }
-            ],
-            totalRevenue: [
-              { $group: { _id: null, total: { $sum: "$totalAmount" } } }
-            ],
-            monthlyRevenue: [
-              {
-                $match: {
-                  createdAt: {
-                    $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-                  }
-                }
-              },
-              { $group: { _id: null, total: { $sum: "$totalAmount" } } }
-            ]
-          }
-        }
-      ]),
+        { $group: { _id: null, total: { $sum: "$totalAmount" } } }
+      ]).then(result => result[0]?.total || 0),
+
+      // Recent Orders
+      Order.find()
+        .populate('customer', 'name contactPerson')
+        .populate('salesPerson', 'fullName username')
+        .populate('companyId', 'name city')
+        .sort({ createdAt: -1 })
+        .limit(10)
+        .select('orderCode totalAmount status createdAt customer salesPerson companyId')
+        .lean(),
       
-      // Customer statistics
-      Customer.aggregate([
-        {
-          $facet: {
-            total: [{ $count: "count" }],
-            active: [{ $match: { active: true } }, { $count: "count" }]
-          }
-        }
-      ]),
+      // Recent Customers
+      Customer.find()
+        .populate('companyId', 'name city')
+        .populate('salesContact', 'fullName username')
+        .sort({ createdAt: -1 })
+        .limit(10)
+        .select('name contactPerson email mobile city active createdAt companyId salesContact')
+        .lean(),
       
-      // Inventory statistics
-      Item.aggregate([
-        {
-          $facet: {
-            total: [{ $count: "count" }],
-            lowStock: [{ $match: { qty: { $lt: 10 } } }, { $count: "count" }],
-            totalValue: [
-              { $group: { _id: null, total: { $sum: { $multiply: ["$qty", "$unitPrice"] } } } }
-            ]
-          }
-        }
-      ])
+      // Recent Sales Persons
+      User.find({ role: 'Sales' })
+        .populate('companyId', 'name city')
+        .sort({ createdAt: -1 })
+        .limit(10)
+        .select('fullName username email role companyId createdAt')
+        .lean(),
+      
+      // Companies list
+      Company.find()
+        .sort({ createdAt: -1 })
+        .select('name city address mobile email createdAt')
+        .lean()
     ]);
 
-    // Process and format the aggregated data
+    // Safe data processing
     const overview = {
-      totalOrders: orderStats[0].total[0]?.count || 0,
-      monthlyOrders: orderStats[0].thisMonth[0]?.count || 0,
-      totalRevenue: orderStats[0].totalRevenue[0]?.total || 0,
-      monthlyRevenue: orderStats[0].monthlyRevenue[0]?.total || 0,
-      totalUsers: userStats[0].total[0]?.count || 0,
-      activeUsers: userStats[0].activeUsers[0]?.count || 0,
-      totalCustomers: customerStats[0].total[0]?.count || 0,
-      activeCustomers: customerStats[0].active[0]?.count || 0,
-      totalItems: inventoryStats[0].total[0]?.count || 0,
-      lowStockItems: inventoryStats[0].lowStock[0]?.count || 0,
-      inventoryValue: inventoryStats[0].totalValue[0]?.total || 0
+      totalOrders: totalOrders || 0,
+      totalRevenue: totalRevenue || 0,
+      totalUsers: totalUsers || 0,
+      totalCustomers: totalCustomers || 0,
+      totalItems: totalItems || 0,
+      totalCompanies: companies?.length || 0
     };
-
-    // Process role distribution
-    const roleDistribution = {};
-    if (userStats[0].byRole) {
-      userStats[0].byRole.forEach(role => {
-        roleDistribution[role._id] = role.count;
-      });
-    }
-
-    // Process order status distribution
-    const statusDistribution = {};
-    if (orderStats[0].statusDistribution) {
-      orderStats[0].statusDistribution.forEach(status => {
-        statusDistribution[status._id] = status.count;
-      });
-    }
 
     console.log('✅ Super Admin Dashboard data compiled successfully');
 
@@ -129,8 +90,10 @@ export const getSuperAdminDashboard = async (req, res) => {
       success: true,
       data: {
         overview,
-        roleDistribution,
-        statusDistribution,
+        recentOrders: recentOrders || [],
+        recentCustomers: recentCustomers || [],
+        recentSalesPersons: recentSalesPersons || [],
+        companies: companies || [],
         timestamp: new Date().toISOString()
       }
     });

@@ -2,6 +2,8 @@ import Sale from '../models/Sale.js';
 import Order from '../models/Order.js';
 import Customer from '../models/Customer.js';
 import Return from '../models/Return.js';
+import { Item } from '../models/Inventory.js';
+import { Company } from '../models/Company.js';
 import { USER_ROLES } from '../../shared/schema.js';
 
 export const getSales = async (req, res) => {
@@ -613,5 +615,146 @@ export const getSalespersonRefundReturns = async (req, res) => {
   } catch (error) {
     console.error('Get salesperson refund returns error:', error);
     res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+// Get items for salesperson (filtered by company location)
+export const getSalespersonItems = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userRole = req.user.role;
+    const userCompanyId = req.user.companyId;
+
+    const { 
+      page = 1, 
+      limit = 20, 
+      search, 
+      type, 
+      category, 
+      subCategory, 
+      lowStock,
+      sortBy = 'name',
+      sortOrder = 'asc'
+    } = req.query;
+
+    const skip = (page - 1) * limit;
+    let query = {};
+
+    // Company location filtering - only show items from same company
+    if (userRole === 'Sales' || userRole === 'Unit Manager' || userRole === 'Unit Head') {
+      if (userCompanyId) {
+        query.store = userCompanyId;
+      } else {
+        // If no company assigned, return empty results
+        return res.json({
+          success: true,
+          items: [],
+          pagination: {
+            page: parseInt(page),
+            limit: parseInt(limit),
+            total: 0,
+            pages: 0
+          },
+          message: 'No company assigned to user'
+        });
+      }
+    }
+    // Super Admin can see all items (no filtering)
+
+    // Search filter
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { code: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Type filter
+    if (type) {
+      query.type = type;
+    }
+
+    // Category filter
+    if (category) {
+      query.category = category;
+    }
+
+    // Subcategory filter
+    if (subCategory) {
+      query.subCategory = subCategory;
+    }
+
+    // Low stock filter
+    if (lowStock === 'true') {
+      query.$expr = { $lte: ['$qty', '$minStock'] };
+    }
+
+    // Sort options
+    let sortOptions = { createdAt: -1 }; // Default: newest first
+    
+    if (sortBy && sortBy !== 'createdAt') {
+      if (sortBy === 'name') {
+        sortOptions.name = sortOrder === 'desc' ? -1 : 1;
+      } else if (sortBy === 'code') {
+        sortOptions.code = sortOrder === 'desc' ? -1 : 1;
+      } else if (sortBy === 'category') {
+        sortOptions.category = sortOrder === 'desc' ? -1 : 1;
+      } else if (sortBy === 'qty') {
+        sortOptions.qty = sortOrder === 'desc' ? -1 : 1;
+      }
+    }
+
+    const items = await Item.find(query)
+      .sort(sortOptions)
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    // Resolve company names for store locations
+    const itemsWithCompanyNames = await Promise.all(
+      items.map(async (item) => {
+        const itemObj = item.toObject();
+        
+        // If store field contains an ObjectId, resolve the company name
+        if (itemObj.store && itemObj.store.match(/^[0-9a-fA-F]{24}$/)) {
+          try {
+            const company = await Company.findById(itemObj.store).select('name city state');
+            if (company) {
+              itemObj.storeLocation = `${company.name} - ${company.city}, ${company.state}`;
+              itemObj.companyId = itemObj.store;
+            } else {
+              itemObj.storeLocation = 'Unknown Location';
+            }
+          } catch (error) {
+            console.error('Error resolving company for item:', item._id, error);
+            itemObj.storeLocation = itemObj.store;
+          }
+        } else {
+          // For backward compatibility with string store names
+          itemObj.storeLocation = itemObj.store || 'No Location';
+        }
+        
+        return itemObj;
+      })
+    );
+
+    const total = await Item.countDocuments(query);
+
+    res.json({
+      success: true,
+      items: itemsWithCompanyNames,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Get salesperson items error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Internal server error' 
+    });
   }
 };

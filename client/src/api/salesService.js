@@ -114,5 +114,24 @@ export const salesApi = {
         'Authorization': `Bearer ${token}`
       }
     });
+  },
+
+  // Get sales person items (company-filtered)
+  getMyItems: (params = {}) => {
+    const queryParams = new URLSearchParams();
+    
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') {
+        queryParams.append(key, value);
+      }
+    });
+
+    const queryString = queryParams.toString();
+    const token = localStorage.getItem('token');
+    return apiRequest(`/sales/items${queryString ? `?${queryString}` : ''}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
   }
 };

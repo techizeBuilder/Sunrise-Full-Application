@@ -1,11 +1,9 @@
-import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Table,
   TableBody,
@@ -15,47 +13,21 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
   Users,
-  Settings,
-  Shield,
-  Edit,
-  Search,
-  Filter,
-  UserCheck,
-  UserX,
-  Crown,
-  AlertCircle,
-  CheckCircle,
-  RefreshCw,
+  Building2,
+  Package,
+  ShoppingCart,
   TrendingUp,
-  Database
+  UserCheck,
+  Eye,
+  MapPin,
+  Phone,
+  Mail,
+  Calendar,
+  Activity
 } from 'lucide-react';
-import { showSmartToast } from '@/lib/toast-utils';
 
 export default function SuperAdminDashboard() {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedRole, setSelectedRole] = useState('all');
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [newRole, setNewRole] = useState('');
-
-  const queryClient = useQueryClient();
-
   // Fetch Super Admin dashboard data
   const { data: dashboardData, isLoading: dashboardLoading } = useQuery({
     queryKey: ['super-admin-dashboard'],
@@ -63,154 +35,84 @@ export default function SuperAdminDashboard() {
     retry: 1
   });
 
-  // Fetch all users
-  const { data: usersData, isLoading: usersLoading, error: usersError } = useQuery({
-    queryKey: ['super-admin-users', searchTerm, selectedRole],
-    queryFn: () => {
-      const params = new URLSearchParams();
-      if (searchTerm) params.append('search', searchTerm);
-      if (selectedRole !== 'all') params.append('role', selectedRole);
-      return apiRequest('GET', `/api/super-admin/users?${params.toString()}`);
-    },
-    retry: 1
-  });
-
-  // Fetch available roles
-  const { data: rolesData } = useQuery({
-    queryKey: ['super-admin-roles'],
-    queryFn: () => apiRequest('GET', '/api/super-admin/roles'),
-    retry: 1
-  });
-
-  // Update user role mutation
-  const updateUserRoleMutation = useMutation({
-    mutationFn: ({ userId, role, permissions }) =>
-      apiRequest('PUT', `/api/super-admin/users/${userId}/role`, { role, permissions }),
-    onSuccess: () => {
-      queryClient.invalidateQueries(['super-admin-users']);
-      setIsEditDialogOpen(false);
-      setSelectedUser(null);
-      showSmartToast('success', 'User role updated successfully');
-    },
-    onError: (error) => {
-      showSmartToast('error', `Failed to update user role: ${error.message}`);
-    }
-  });
-
   const dashboard = dashboardData?.data || {};
   const overview = dashboard.overview || {};
-  const roleDistribution = dashboard.roleDistribution || {};
-  const statusDistribution = dashboard.statusDistribution || {};
-
-  const users = usersData?.data?.users || [];
-  const pagination = usersData?.data?.pagination || {};
-  const roles = rolesData?.data || [];
-
-  const systemModules = [
-    'Dashboard', 'Orders', 'Purchases', 'Manufacturing', 'Production', 
-    'Dispatches', 'Sales', 'Accounts', 'Inventory', 'Customers', 
-    'Suppliers', 'Companies'
-  ];
-
-  const handleEditUser = (user) => {
-    setSelectedUser(user);
-    setNewRole(user.role);
-    setIsEditDialogOpen(true);
-  };
-
-  const handleUpdateRole = () => {
-    if (selectedUser && newRole) {
-      updateUserRoleMutation.mutate({
-        userId: selectedUser._id,
-        role: newRole,
-        permissions: selectedUser.permissions
-      });
-    }
-  };
-
-  const getRoleBadgeColor = (role) => {
-    const colorMap = {
-      'Super Admin': 'bg-red-100 text-red-800',
-      'Super User': 'bg-purple-100 text-purple-800',
-      'Unit Head': 'bg-blue-100 text-blue-800',
-      'Unit Manager': 'bg-green-100 text-green-800',
-      'Sales': 'bg-yellow-100 text-yellow-800',
-      'Production': 'bg-orange-100 text-orange-800',
-      'Accounts': 'bg-pink-100 text-pink-800',
-      'default': 'bg-gray-100 text-gray-800'
-    };
-    return colorMap[role] || colorMap['default'];
-  };
-
-  const getStatusBadge = (isActive) => {
-    return isActive !== false ? (
-      <Badge className="bg-green-100 text-green-800">
-        <CheckCircle className="h-3 w-3 mr-1" />
-        Active
-      </Badge>
-    ) : (
-      <Badge className="bg-red-100 text-red-800">
-        <UserX className="h-3 w-3 mr-1" />
-        Inactive
-      </Badge>
-    );
-  };
+  const recentOrders = dashboard.recentOrders || [];
+  const recentCustomers = dashboard.recentCustomers || [];
+  const recentSalesPersons = dashboard.recentSalesPersons || [];
+  const companies = dashboard.companies || [];
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
-      currency: 'INR',
-      maximumFractionDigits: 0
+      currency: 'INR'
     }).format(amount || 0);
   };
 
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-IN', {
-      day: 'numeric',
-      month: 'short',
+  const formatDate = (date) => {
+    return new Date(date).toLocaleDateString('en-IN', {
       year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+      month: 'short',
+      day: 'numeric'
     });
   };
 
-  if (usersError) {
+  const getStatusBadge = (status) => {
+    const statusConfig = {
+      pending: { variant: 'outline', color: 'text-yellow-600 border-yellow-200' },
+      approved: { variant: 'outline', color: 'text-green-600 border-green-200' },
+      in_production: { variant: 'outline', color: 'text-blue-600 border-blue-200' },
+      completed: { variant: 'outline', color: 'text-emerald-600 border-emerald-200' },
+      cancelled: { variant: 'outline', color: 'text-red-600 border-red-200' }
+    };
+    
+    const config = statusConfig[status] || statusConfig.pending;
+    
+    return (
+      <Badge variant={config.variant} className={config.color}>
+        {status?.replace('_', ' ').toUpperCase() || 'PENDING'}
+      </Badge>
+    );
+  };
+
+  if (dashboardLoading) {
     return (
       <div className="p-6">
-        <Card>
-          <CardContent className="p-6">
-            <div className="text-center">
-              <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-              <h2 className="text-xl font-semibold mb-2">Error Loading Super Admin Dashboard</h2>
-              <p className="text-gray-600">{usersError.message}</p>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+          {[...Array(5)].map((_, i) => (
+            <Card key={i} className="animate-pulse">
+              <CardContent className="p-6">
+                <div className="h-16 bg-gray-200 rounded"></div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="p-4 md:p-6 space-y-6">
       {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <Crown className="h-6 w-6 text-yellow-600" />
+          <div className="flex items-center gap-3 mb-2">
+            <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg">
+              <Activity className="h-6 w-6 text-white" />
+            </div>
             <h1 className="text-3xl font-bold">Super Admin Dashboard</h1>
           </div>
-          <p className="text-muted-foreground">Complete system overview and user management</p>
+          <p className="text-muted-foreground">System overview and recent activities</p>
         </div>
       </div>
 
       {/* System Overview Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {/* Total Orders */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center space-x-4">
               <div className="p-3 bg-blue-100 rounded-lg">
-                <Database className="h-6 w-6 text-blue-600" />
+                <ShoppingCart className="h-6 w-6 text-blue-600" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{overview.totalOrders || 0}</p>
@@ -220,7 +122,6 @@ export default function SuperAdminDashboard() {
           </CardContent>
         </Card>
 
-        {/* Total Revenue */}
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center space-x-4">
@@ -235,7 +136,6 @@ export default function SuperAdminDashboard() {
           </CardContent>
         </Card>
 
-        {/* Total Users */}
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center space-x-4">
@@ -250,7 +150,6 @@ export default function SuperAdminDashboard() {
           </CardContent>
         </Card>
 
-        {/* Total Customers */}
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center space-x-4">
@@ -264,253 +163,204 @@ export default function SuperAdminDashboard() {
             </div>
           </CardContent>
         </Card>
-      </div>
 
-      {/* Quick Navigation Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => window.location.href = '/super-admin/orders'}>
+        <Card>
           <CardContent className="p-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className="p-3 bg-pink-100 rounded-lg">
+                <Building2 className="h-6 w-6 text-pink-600" />
+              </div>
               <div>
-                <h3 className="text-lg font-semibold mb-2">Orders Management</h3>
-                <p className="text-sm text-muted-foreground">View and manage all orders across the system</p>
-              </div>
-              <div className="p-3 bg-blue-100 rounded-lg">
-                <Database className="h-6 w-6 text-blue-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => window.location.href = '/super-admin/sales'}>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold mb-2">Sales Management</h3>
-                <p className="text-sm text-muted-foreground">Monitor sales performance and revenue</p>
-              </div>
-              <div className="p-3 bg-green-100 rounded-lg">
-                <TrendingUp className="h-6 w-6 text-green-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => window.location.href = '/super-admin/customers'}>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold mb-2">Customer Management</h3>
-                <p className="text-sm text-muted-foreground">Manage customer data and relationships</p>
-              </div>
-              <div className="p-3 bg-orange-100 rounded-lg">
-                <Users className="h-6 w-6 text-orange-600" />
+                <p className="text-2xl font-bold">{overview.totalCompanies || 0}</p>
+                <p className="text-sm text-muted-foreground">Companies</p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* System Modules Overview */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <Settings className="h-5 w-5 mr-2" />
-            System Modules
-          </CardTitle>
-          <CardDescription>
-            Available modules for Super Admin access
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
-            {systemModules.map((module, index) => (
-              <div key={module} className="p-3 border rounded-lg text-center hover:bg-gray-50 cursor-pointer">
-                <div className="text-sm font-medium text-gray-900">{module}</div>
-                <div className="text-xs text-gray-500 mt-1">
-                  Full Access
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Role & Permission Management Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <Shield className="h-5 w-5 mr-2" />
-            Role & Permission Management
-          </CardTitle>
-          <CardDescription>
-            Manage user roles and system permissions
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col md:flex-row gap-4 mb-6">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Search users by name, email, or username..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            <div className="md:w-48">
-              <Select value={selectedRole} onValueChange={setSelectedRole}>
-                <SelectTrigger>
-                  <Filter className="h-4 w-4 mr-2" />
-                  <SelectValue placeholder="Filter by role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Roles</SelectItem>
-                  {roles.map((role) => (
-                    <SelectItem key={role} value={role}>
-                      {role}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Users Table */}
-          <div className="rounded-md border overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-gray-50">
-                  <TableHead>User Details</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="text-center">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {usersLoading || dashboardLoading ? (
-                  Array.from({ length: 5 }).map((_, index) => (
-                    <TableRow key={index}>
-                      <TableCell>
-                        <div className="space-y-2">
-                          <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
-                          <div className="h-3 w-24 bg-gray-200 rounded animate-pulse"></div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="h-6 w-20 bg-gray-200 rounded animate-pulse"></div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="h-6 w-16 bg-gray-200 rounded animate-pulse"></div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="h-8 w-16 bg-gray-200 rounded animate-pulse"></div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : users.length === 0 ? (
+      {/* Recent Data Sections */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Recent Orders */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ShoppingCart className="h-5 w-5" />
+              Recent Orders
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8">
-                      <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                      <p className="text-gray-500">No users found</p>
-                    </TableCell>
+                    <TableHead>Order Code</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Date</TableHead>
                   </TableRow>
-                ) : (
-                  users.map((user) => (
-                    <TableRow key={user._id} className="hover:bg-gray-50">
-                      <TableCell>
-                        <div>
-                          <div className="font-medium flex items-center">
-                            {user.role === 'Super Admin' && (
-                              <Crown className="h-4 w-4 text-yellow-500 mr-2" />
-                            )}
-                            {user.fullName || user.username}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            @{user.username} • {user.email}
-                          </div>
-                        </div>
+                </TableHeader>
+                <TableBody>
+                  {recentOrders.slice(0, 5).map((order) => (
+                    <TableRow key={order._id}>
+                      <TableCell className="font-medium">
+                        {order.orderCode || `ORD-${order._id.slice(-6)}`}
                       </TableCell>
                       <TableCell>
-                        <Badge className={getRoleBadgeColor(user.role)}>
-                          {user.role}
-                        </Badge>
+                        {order.customer?.name || 'Unknown'}
                       </TableCell>
                       <TableCell>
-                        {getStatusBadge(user.isActive)}
+                        {formatCurrency(order.totalAmount)}
                       </TableCell>
-                      <TableCell className="text-sm text-gray-500">
-                        {formatDate(user.createdAt)}
+                      <TableCell>
+                        {getStatusBadge(order.status)}
                       </TableCell>
-                      <TableCell className="text-center">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleEditUser(user)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
+                      <TableCell>
+                        {formatDate(order.createdAt)}
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Edit User Role Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit User Role</DialogTitle>
-            <DialogDescription>
-              Update the role for {selectedUser?.fullName || selectedUser?.username}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="role">Role</Label>
-              <Select value={newRole} onValueChange={setNewRole}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a role" />
-                </SelectTrigger>
-                <SelectContent>
-                  {roles.map((role) => (
-                    <SelectItem key={role} value={role}>
-                      {role}
-                    </SelectItem>
                   ))}
-                </SelectContent>
-              </Select>
+                </TableBody>
+              </Table>
             </div>
-            <div className="text-sm text-gray-500">
-              Current role: <strong>{selectedUser?.role}</strong>
+            {recentOrders.length === 0 && (
+              <p className="text-center text-muted-foreground py-4">No recent orders</p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Recent Customers */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <UserCheck className="h-5 w-5" />
+              Recent Customers
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {recentCustomers.slice(0, 5).map((customer) => (
+                <div key={customer._id} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div>
+                    <p className="font-semibold">{customer.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {customer.contactPerson || 'No contact person'}
+                    </p>
+                    <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Mail className="h-3 w-3" />
+                        {customer.email}
+                      </span>
+                      {customer.city && (
+                        <span className="flex items-center gap-1">
+                          <MapPin className="h-3 w-3" />
+                          {customer.city}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <Badge variant={customer.active === 'Yes' ? 'outline' : 'secondary'}>
+                      {customer.active === 'Yes' ? 'Active' : 'Inactive'}
+                    </Badge>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {formatDate(customer.createdAt)}
+                    </p>
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleUpdateRole}
-              disabled={updateUserRoleMutation.isPending}
-            >
-              {updateUserRoleMutation.isPending && (
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-              )}
-              Update Role
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            {recentCustomers.length === 0 && (
+              <p className="text-center text-muted-foreground py-4">No recent customers</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Recent Sales Persons & Companies */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Recent Sales Persons */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Recent Sales Persons
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {recentSalesPersons.slice(0, 5).map((person) => (
+                <div key={person._id} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div>
+                    <p className="font-semibold">{person.fullName || person.username}</p>
+                    <p className="text-sm text-muted-foreground">{person.email}</p>
+                    {person.companyId && (
+                      <p className="text-xs text-muted-foreground">
+                        {person.companyId.name} - {person.companyId.city}
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <Badge variant="outline">Sales</Badge>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {formatDate(person.createdAt)}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {recentSalesPersons.length === 0 && (
+              <p className="text-center text-muted-foreground py-4">No recent sales persons</p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Companies List */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5" />
+              Companies
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {companies.slice(0, 5).map((company) => (
+                <div key={company._id} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div>
+                    <p className="font-semibold">{company.name}</p>
+                    <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <MapPin className="h-3 w-3" />
+                        {company.city}
+                      </span>
+                      {company.email && (
+                        <span>{company.email}</span>
+                      )}
+                    </div>
+                    {company.mobile && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                        <Phone className="h-3 w-3" />
+                        {company.mobile}
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <Badge variant="outline">Active</Badge>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {formatDate(company.createdAt)}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {companies.length === 0 && (
+              <p className="text-center text-muted-foreground py-4">No companies found</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

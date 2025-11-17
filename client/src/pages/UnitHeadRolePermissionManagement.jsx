@@ -377,44 +377,7 @@ const UnitHeadRolePermissionManagement = () => {
         </Button>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Unit Managers</p>
-                <p className="text-2xl font-bold">{summary.total || 0}</p>
-              </div>
-              <Users className="w-8 h-8 text-blue-600" />
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Active Managers</p>
-                <p className="text-2xl font-bold text-green-600">{summary.active || 0}</p>
-              </div>
-              <CheckCircle2 className="w-8 h-8 text-green-600" />
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Inactive Managers</p>
-                <p className="text-2xl font-bold text-red-600">{summary.inactive || 0}</p>
-              </div>
-              <XCircle className="w-8 h-8 text-red-600" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+     
 
       {/* Search and Filter */}
       <Card>

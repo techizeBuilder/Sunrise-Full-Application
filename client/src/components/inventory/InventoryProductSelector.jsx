@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Search, Package, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
 import { useToast } from '../../hooks/use-toast';
+import { useAuthContext } from '../../contexts/AuthContext';
 
 const InventoryProductSelector = React.memo(({ 
   selectedProducts = [], 
@@ -18,11 +19,21 @@ const InventoryProductSelector = React.memo(({
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedCategories, setExpandedCategories] = useState({});
   const { toast } = useToast();
+  const { user } = useAuthContext();
 
-  // Fetch inventory items
+  // Determine which API endpoint to use based on user role
+  const getItemsEndpoint = () => {
+    const salesRoles = ['Sales', 'Unit Manager', 'Unit Head'];
+    if (user && salesRoles.includes(user.role)) {
+      return '/sales/items';
+    }
+    return '/items';
+  };
+
+  // Fetch inventory items using appropriate endpoint
   const { data: itemsResponse, isLoading: itemsLoading, error: itemsError } = useQuery({
-    queryKey: ['/api/items'],
-    queryFn: () => apiRequest('/api/items'),
+    queryKey: [getItemsEndpoint()],
+    queryFn: () => apiRequest('GET', getItemsEndpoint()),
     onError: (error) => {
       toast({
         title: "Error",

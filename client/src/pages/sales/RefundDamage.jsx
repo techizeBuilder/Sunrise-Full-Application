@@ -313,14 +313,14 @@ const CreateEntryForm = ({
     queryFn: () => salesApi.getMyCustomers(),
   });
 
-  // Fetch inventory items (same as orders module)
+  // Fetch inventory items (using sales-specific endpoint)
   const {
     data: itemsResponse,
     isLoading: itemsLoading,
     error: itemsError,
   } = useQuery({
-    queryKey: ["/api/items"],
-    queryFn: () => apiRequest("/api/items?limit=100"),
+    queryKey: ["/sales/items"],
+    queryFn: () => salesApi.getMyItems(),
   });
 
   // Fetch categories from inventory
@@ -861,68 +861,8 @@ const RefundDamage = () => {
     completed: 0,
   };
 
-  // Dummy fallback data for development
-  const [fallbackEntries] = useState([
-    {
-      id: "RD001",
-      customerName: "ABC Corporation",
-      invoiceNumber: "INV-2024-001",
-      productName: "Fresh Bread Loaf",
-      quantity: 5,
-      unitPrice: 45.0,
-      totalAmount: 225.0,
-      type: "refund",
-      status: "pending",
-      reason: "Quality issue",
-      date: "2024-01-15",
-      remarks: "Customer reported stale product",
-    },
-    {
-      id: "RD002",
-      customerName: "XYZ Bakery",
-      invoiceNumber: "INV-2024-002",
-      productName: "Chocolate Cake",
-      quantity: 2,
-      unitPrice: 350.0,
-      totalAmount: 700.0,
-      type: "damage",
-      status: "approved",
-      reason: "Transport damage",
-      date: "2024-01-14",
-      remarks: "Damaged during delivery",
-    },
-    {
-      id: "RD003",
-      customerName: "Fresh Foods Ltd",
-      invoiceNumber: "INV-2024-003",
-      productName: "Burger Buns",
-      quantity: 50,
-      unitPrice: 8.0,
-      totalAmount: 400.0,
-      type: "refund",
-      status: "completed",
-      reason: "Wrong specifications",
-      date: "2024-01-13",
-      remarks: "Delivered wrong size buns",
-    },
-    {
-      id: "RD004",
-      customerName: "City Restaurant",
-      invoiceNumber: "INV-2024-004",
-      productName: "Croissants",
-      quantity: 24,
-      unitPrice: 15.0,
-      totalAmount: 360.0,
-      type: "damage",
-      status: "rejected",
-      reason: "Manufacturing defect",
-      date: "2024-01-12",
-      remarks: "Claim rejected - no defect found",
-    },
-  ]);
-
-  // Use API data or fallback entries
-  const displayEntries = entries.length > 0 ? entries : fallbackEntries;
+  // Use API data directly - no dummy fallback
+  const displayEntries = entries;
 
   // Filter entries
   const filteredEntries = displayEntries.filter((entry) => {
@@ -935,18 +875,8 @@ const RefundDamage = () => {
     return matchesSearch && matchesStatus && matchesType;
   });
 
-  // Use API stats or calculate from entries
-  const stats =
-    statsData.total > 0
-      ? statsData
-      : {
-          total: displayEntries.length,
-          pending: displayEntries.filter((e) => e.status === "pending").length,
-          approved: displayEntries.filter((e) => e.status === "approved")
-            .length,
-          completed: displayEntries.filter((e) => e.status === "completed")
-            .length,
-        };
+  // Use real API stats only
+  const stats = statsData;
 
   // Badge variants
   const getStatusVariant = (status) => {

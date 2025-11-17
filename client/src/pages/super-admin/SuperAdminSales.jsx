@@ -200,21 +200,6 @@ export default function SuperAdminSales() {
         <div>
           <h1 className="text-3xl font-bold">Sales Persons List</h1>
           <p className="text-muted-foreground">Showing {salesPersons.length} to {Math.min((pagination.page || 1) * (pagination.limit || 20), pagination.total || salesPersons.length)} of {pagination.total || salesPersons.length} sales persons</p>
-          <p className="text-xs text-blue-600 mt-1">Super Admin View - {window.location.pathname}</p>
-          
-          {/* Debug Test Button */}
-          <Button 
-            onClick={() => {
-              console.log('🔍 Test button clicked');
-              setSelectedSalesPerson('test-id-123');
-              setIsDetailModalOpen(true);
-            }}
-            variant="outline" 
-            size="sm" 
-            className="mt-2"
-          >
-            Test Modal
-          </Button>
         </div>
       </div>
 
