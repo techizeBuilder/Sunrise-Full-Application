@@ -121,7 +121,8 @@ const MyCustomers = () => {
   const deleteMutation = useMutation({
     mutationFn: customerApi.delete,
     onSuccess: () => {
-      queryClient.invalidateQueries(['/api/customers']);
+      queryClient.invalidateQueries(['/api/sales/my-customers']);
+      queryClient.invalidateQueries(['/api/sales/customers']);
       toast({
         title: "Customer Deleted",
         description: "Customer has been deleted successfully",
@@ -255,7 +256,8 @@ const MyCustomers = () => {
               isOpen={isCreateModalOpen} 
               onOpenChange={setIsCreateModalOpen}
               onSuccess={() => {
-                queryClient.invalidateQueries(['/api/customers']);
+                queryClient.invalidateQueries(['/api/sales/my-customers']);
+                queryClient.invalidateQueries(['/api/sales/customers']);
                 toast({
                   title: "Customer Created",
                   description: "Customer has been created successfully",
@@ -553,7 +555,8 @@ const MyCustomers = () => {
           onOpenChange={setIsEditModalOpen}
           customer={selectedCustomer}
           onSuccess={() => {
-            queryClient.invalidateQueries(['/api/customers']);
+            queryClient.invalidateQueries(['/api/sales/my-customers']);
+            queryClient.invalidateQueries(['/api/sales/customers']);
             toast({
               title: "Customer Updated",
               description: "Customer has been updated successfully",

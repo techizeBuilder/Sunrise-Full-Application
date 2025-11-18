@@ -647,7 +647,27 @@ export const getUnitUsers = async (req, res) => {
       .sort(sort)
       .skip(skip)
       .limit(parseInt(limit))
-      .lean();
+      .populate('companyId', 'name city state unitName');
+
+    console.log('=== Unit Users Debug ===');
+    console.log('Total users found:', unitUsers.length);
+    console.log('Query used:', JSON.stringify(query, null, 2));
+    
+    if (unitUsers.length > 0) {
+      console.log('First user sample:', {
+        username: unitUsers[0].username,
+        companyId: unitUsers[0].companyId,
+        companyIdType: typeof unitUsers[0].companyId,
+        companyIdValue: JSON.stringify(unitUsers[0].companyId)
+      });
+    }
+
+    // Convert to JSON to ensure proper serialization
+    const formattedUsers = unitUsers.map(user => {
+      const userObj = user.toObject();
+      console.log('User company after toObject:', userObj.companyId);
+      return userObj;
+    });
 
     // Get total count for pagination
     const total = await User.countDocuments(query);
@@ -673,8 +693,8 @@ export const getUnitUsers = async (req, res) => {
 
     const summary = {
       totalUsers: total,
-      activeUsers: unitUsers.filter(u => u.isActive).length,
-      inactiveUsers: unitUsers.filter(u => !u.isActive).length,
+      activeUsers: formattedUsers.filter(u => u.isActive).length,
+      inactiveUsers: formattedUsers.filter(u => !u.isActive).length,
       byRole: stats.reduce((acc, stat) => {
         acc[stat._id] = {
           total: stat.total,
@@ -688,14 +708,14 @@ export const getUnitUsers = async (req, res) => {
     res.json({
       success: true,
       data: {
-        users: unitUsers,
+        users: formattedUsers,
         summary,
         unit: req.user.unit,
         pagination: {
           current: parseInt(page),
           total: Math.ceil(total / limit),
           count: total,
-          hasNext: skip + unitUsers.length < total,
+          hasNext: skip + formattedUsers.length < total,
           hasPrev: parseInt(page) > 1
         }
       }

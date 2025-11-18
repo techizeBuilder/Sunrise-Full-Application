@@ -27,16 +27,27 @@ const ProductSelector = React.memo(({
   const getItemsEndpoint = () => {
     const salesRoles = ['Sales', 'Unit Manager', 'Unit Head'];
     if (user && salesRoles.includes(user.role)) {
-      return '/sales/items';
+      return '/api/sales/items';
     }
-    return '/items';
+    return '/api/items';
   };
 
   // Fetch inventory items using appropriate endpoint
   const { data: itemsResponse, isLoading: itemsLoading, error: itemsError } = useQuery({
     queryKey: [getItemsEndpoint()],
-    queryFn: () => apiRequest('GET', getItemsEndpoint()),
+    queryFn: async () => {
+      console.log('🔍 ProductSelector: Fetching items from:', getItemsEndpoint());
+      try {
+        const response = await apiRequest('GET', getItemsEndpoint());
+        console.log('✅ ProductSelector: API Response:', response);
+        return response;
+      } catch (error) {
+        console.error('❌ ProductSelector: API Error:', error);
+        throw error;
+      }
+    },
     onError: (error) => {
+      console.error('❌ ProductSelector: Query Error:', error);
       toast({
         title: "Error",
         description: "Failed to load inventory items",
@@ -46,6 +57,17 @@ const ProductSelector = React.memo(({
   });
 
   const items = itemsResponse?.items || [];
+  
+  // Debug logging
+  React.useEffect(() => {
+    console.log('📦 ProductSelector Debug:', {
+      itemsResponse,
+      itemsArray: items,
+      itemsCount: items.length,
+      itemsError,
+      isLoading: itemsLoading
+    });
+  }, [itemsResponse, items, itemsError, itemsLoading]);
 
   // Group inventory items by category (treat as brands for UI consistency)
   const productsByBrand = React.useMemo(() => {

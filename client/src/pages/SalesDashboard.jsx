@@ -87,12 +87,18 @@ const SalesDashboard = () => {
     queryKey: ['/api/sales/summary'],
     queryFn: () => salesApi.getDashboardSummary(),
     staleTime: 30000, // 30 seconds
+    onSuccess: (data) => {
+      console.log('📊 Sales Summary API Response:', data);
+    }
   });
 
   const { data: recentOrdersData, isLoading: ordersLoading } = useQuery({
     queryKey: ['/api/sales/recent-orders'],
     queryFn: () => salesApi.getRecentOrders(5),
     staleTime: 30000, // 30 seconds
+    onSuccess: (data) => {
+      console.log('📦 Recent Orders API Response:', data);
+    }
   });
 
   // Transform API data to match UI expectations
@@ -102,10 +108,10 @@ const SalesDashboard = () => {
     inProgress: 0,
     preparation: 0
   } : {
-    totalOrders: salesSummary?.totalOrders || 0,
-    delivered: salesSummary?.delivered || 0,
-    inProgress: salesSummary?.inProgress || 0,
-    preparation: salesSummary?.preparation || 0
+    totalOrders: salesSummary?.data?.totalOrders || 0,
+    delivered: salesSummary?.data?.completedOrders || 0,
+    inProgress: (salesSummary?.data?.inProgressOrders || 0) + (salesSummary?.data?.approvedOrders || 0),
+    preparation: salesSummary?.data?.pendingOrders || 0
   };
 
   const recentOrders = ordersLoading ? [] : (recentOrdersData?.orders || []).map(order => ({
@@ -114,8 +120,9 @@ const SalesDashboard = () => {
     status: order.status || 'Created',
     statusColor: getStatusColor(order.status),
     customer: order.customerName || 'Unknown Customer',
-    items: Array.isArray(order.items) ? order.items.length : (order.totalItems || 0),
-    totalQuantity: order.totalQuantity || 0
+    items: Array.isArray(order.products) ? order.products.length : (order.totalItems || 0),
+    totalQuantity: order.totalQuantity || 0,
+    amount: order.totalAmount || order.amount || 0
   }));
 
   const handleViewOrder = (order) => {

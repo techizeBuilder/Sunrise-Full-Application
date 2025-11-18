@@ -171,7 +171,7 @@ export default function UnitHeadOrders() {
         <Card>
           <CardContent className="p-6">
             <div className="text-center text-red-600">
-              <p>Error loading orders: {error?.message || 'Unknown error'}</p>
+              <p>Error loading orders: {String(error?.message || 'Unknown error')}</p>
               <Button onClick={refetch} className="mt-4">
                 Retry
               </Button>
@@ -348,14 +348,14 @@ export default function UnitHeadOrders() {
             <>
               {/* Mobile Cards View */}
               <div className="block md:hidden space-y-4">
-                {orders.map((order) => (
+                {(orders || []).map((order) => (
                   <Card key={order._id} className="p-4">
                     <div className="space-y-2">
                       <div className="flex justify-between items-start">
                         <div>
                           <p className="font-semibold">{order.orderCode || order.orderNumber}</p>
                           <p className="text-sm text-muted-foreground">
-                            {order.customer?.name}
+                            {order.customer?.name || 'N/A'}
                           </p>
                         </div>
                         {getStatusBadge(order.status)}
@@ -363,7 +363,7 @@ export default function UnitHeadOrders() {
                       <div className="flex justify-between text-sm">
                         <span>{formatDate(order.orderDate)}</span>
                         <span className="font-semibold">
-                          {formatCurrency(order.products?.reduce((sum, p) => sum + (p.quantity * p.price), 0))}
+                          {formatCurrency((order.products || []).reduce((sum, p) => sum + (p.quantity * p.price), 0))}
                         </span>
                       </div>
                       <Button
@@ -394,14 +394,14 @@ export default function UnitHeadOrders() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {orders.map((order) => (
+                    {(orders || []).map((order) => (
                       <TableRow key={order._id} className="hover:bg-muted/50">
                         <TableCell className="font-medium">{order.orderCode || order.orderNumber}</TableCell>
                         <TableCell>
                           <div>
-                            <p className="font-medium">{order.customer?.name}</p>
+                            <p className="font-medium">{order.customer?.name || 'N/A'}</p>
                             <p className="text-sm text-muted-foreground">
-                              {order.customer?.contactPerson}
+                              {order.customer?.contactPerson || 'N/A'}
                             </p>
                           </div>
                         </TableCell>
@@ -409,11 +409,11 @@ export default function UnitHeadOrders() {
                         <TableCell>{getStatusBadge(order.status)}</TableCell>
                         <TableCell>
                           <span className="text-sm text-muted-foreground">
-                            {order.products?.length || 0} items
+                            {(order.products || []).length} items
                           </span>
                         </TableCell>
                         <TableCell className="text-right font-semibold">
-                          {formatCurrency(order.products?.reduce((sum, p) => sum + (p.quantity * p.price), 0))}
+                          {formatCurrency((order.products || []).reduce((sum, p) => sum + (p.quantity * p.price), 0))}
                         </TableCell>
                         <TableCell className="text-center">
                           <Button

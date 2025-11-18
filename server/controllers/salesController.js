@@ -5,6 +5,7 @@ import Return from '../models/Return.js';
 import { Item } from '../models/Inventory.js';
 import { Company } from '../models/Company.js';
 import { USER_ROLES } from '../../shared/schema.js';
+import User from '../models/User.js';
 
 export const getSales = async (req, res) => {
   try {
@@ -756,5 +757,291 @@ export const getSalespersonItems = async (req, res) => {
       success: false,
       message: 'Internal server error' 
     });
+  }
+};
+
+// Sales-specific order functions moved from orderController
+export const getSalesSummary = async (req, res) => {
+  try {
+    const salespersonId = req.user._id || req.user.id;
+    const userCompanyId = req.user.companyId;
+    
+    console.log('📊 getSalesSummary called:', {
+      userId: salespersonId,
+      role: req.user.role,
+      companyId: userCompanyId
+    });
+    
+    // Always filter by salesperson for sales users
+    const filter = {
+      salesPerson: salespersonId,
+      companyId: userCompanyId
+    };
+    
+    const [totalOrders, pendingOrders, completedOrders, approvedOrders, inProgressOrders] = await Promise.all([
+      Order.countDocuments(filter),
+      Order.countDocuments({ ...filter, status: { $in: ['pending', 'Pending'] } }),
+      Order.countDocuments({ ...filter, status: { $in: ['completed', 'Completed'] } }),
+      Order.countDocuments({ ...filter, status: { $in: ['approved', 'Approved'] } }),
+      Order.countDocuments({ ...filter, status: { $in: ['in_production', 'In_Production'] } })
+    ]);
+    
+    const revenueResult = await Order.aggregate([
+      { $match: { ...filter, status: { $in: ['completed', 'Completed', 'approved', 'Approved'] } } },
+      { $group: { _id: null, total: { $sum: '$totalAmount' } } }
+    ]);
+    
+    const totalRevenue = revenueResult[0]?.total || 0;
+    
+    console.log('📊 Sales Summary Results:', {
+      totalOrders,
+      pendingOrders, 
+      completedOrders,
+      approvedOrders,
+      inProgressOrders,
+      totalRevenue,
+      filter
+    });
+    
+    res.json({
+      success: true,
+      data: {
+        totalOrders,
+        pendingOrders,
+        completedOrders,
+        approvedOrders,
+        inProgressOrders,
+        totalRevenue
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error in getSalesSummary:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+export const getSalesRecentOrders = async (req, res) => {
+  try {
+    const { limit = 5 } = req.query;
+    const salespersonId = req.user._id || req.user.id;
+    const userCompanyId = req.user.companyId;
+    
+    console.log('📋 getSalesRecentOrders called:', {
+      userId: salespersonId,
+      role: req.user.role,
+      companyId: userCompanyId,
+      limit
+    });
+    
+    const filter = {
+      salesPerson: salespersonId,
+      companyId: userCompanyId
+    };
+    
+    const recentOrders = await Order.find(filter)
+      .populate('customer', 'name contactPerson email mobile')
+      .populate('salesPerson', 'fullName username')
+      .populate('products.product', 'name code category')
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit))
+      .lean();
+      
+    // Transform orders to ensure frontend compatibility
+    const transformedOrders = recentOrders.map(order => ({
+      _id: order._id,
+      orderCode: order.orderCode,
+      customer: order.customer ? {
+        _id: order.customer._id,
+        name: order.customer.name,
+        contactPerson: order.customer.contactPerson,
+        email: order.customer.email,
+        mobile: order.customer.mobile
+      } : null,
+      customerName: order.customer?.name || 'Unknown Customer',
+      salesPerson: order.salesPerson ? {
+        _id: order.salesPerson._id,
+        username: order.salesPerson.username,
+        fullName: order.salesPerson.fullName
+      } : null,
+      status: order.status || 'pending',
+      totalAmount: order.totalAmount || 0,
+      amount: order.totalAmount || 0,  // Frontend expects 'amount' field
+      orderDate: order.orderDate,
+      date: order.orderDate || order.createdAt,  // Frontend expects 'date' field  
+      createdAt: order.createdAt,
+      products: order.products || [],
+      items: Array.isArray(order.products) ? order.products.length : 0,  // Frontend expects 'items' count
+      totalQuantity: Array.isArray(order.products) ? 
+        order.products.reduce((sum, p) => sum + (p.quantity || 0), 0) : 0,
+      totalItems: Array.isArray(order.products) ? order.products.length : 0,
+      notes: order.notes
+    }));
+      
+    console.log('📋 Recent Orders Results:', {
+      count: transformedOrders.length,
+      orders: transformedOrders.map(order => ({
+        id: order._id,
+        orderCode: order.orderCode,
+        customer: order.customerName,
+        status: order.status,
+        totalAmount: order.totalAmount
+      }))
+    });
+    
+    res.json({ 
+      success: true, 
+      orders: transformedOrders,  // Changed from 'data' to 'orders' to match frontend expectation
+      count: transformedOrders.length
+    });
+    
+  } catch (error) {
+    console.error('Error in getSalesRecentOrders:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Internal server error',
+      error: error.message 
+    });
+  }
+};
+
+export const getSalesOrders = async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 10,
+      search = '',
+      status = '',
+      startDate = '',
+      endDate = '',
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query;
+
+    const salespersonId = req.user._id || req.user.id;
+    const userCompanyId = req.user.companyId;
+
+    console.log('📦 getSalesOrders called:', {
+      userId: salespersonId,
+      role: req.user.role,
+      companyId: userCompanyId,
+      params: { page, limit, search, status, startDate, endDate }
+    });
+
+    // Always filter by individual salesperson for sales API
+    const filter = {
+      salesPerson: salespersonId,
+      companyId: userCompanyId
+    };
+
+    if (search) {
+      filter.$or = [
+        { orderCode: { $regex: search, $options: 'i' } },
+        { notes: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    if (status) {
+      filter.status = status;
+    }
+
+    if (startDate || endDate) {
+      filter.orderDate = {};
+      if (startDate) {
+        filter.orderDate.$gte = new Date(startDate);
+      }
+      if (endDate) {
+        filter.orderDate.$lte = new Date(endDate);
+      }
+    }
+
+    const validSortFields = ['createdAt', 'orderDate', 'totalAmount', 'orderCode', 'status'];
+    const sortField = validSortFields.includes(sortBy) ? sortBy : 'createdAt';
+    const sortDirection = sortOrder === 'asc' ? 1 : -1;
+
+    const skip = (page - 1) * limit;
+    const limitNum = Math.min(parseInt(limit), 100);
+
+    console.log('📦 Sales Orders Filter:', filter);
+
+    const [orders, totalOrders] = await Promise.all([
+      Order.find(filter)
+        .populate('customer', 'name contactPerson email mobile address city state')
+        .populate('salesPerson', 'fullName username email role')
+        .populate('products.product', 'name code category salePrice brand')
+        .sort({ [sortField]: sortDirection })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      Order.countDocuments(filter)
+    ]);
+
+    // Transform orders for frontend compatibility
+    const transformedOrders = orders.map(order => ({
+      _id: order._id,
+      orderCode: order.orderCode,
+      customer: order.customer ? {
+        _id: order.customer._id,
+        name: order.customer.name,
+        contactPerson: order.customer.contactPerson,
+        email: order.customer.email,
+        mobile: order.customer.mobile,
+        address: order.customer.address,
+        city: order.customer.city,
+        state: order.customer.state
+      } : null,
+      customerName: order.customer?.name || 'Unknown Customer',
+      salesPerson: order.salesPerson ? {
+        _id: order.salesPerson._id,
+        username: order.salesPerson.username,
+        fullName: order.salesPerson.fullName,
+        email: order.salesPerson.email,
+        role: order.salesPerson.role
+      } : null,
+      status: order.status || 'pending',
+      totalAmount: order.totalAmount || 0,
+      orderDate: order.orderDate,
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+      products: order.products || [],
+      totalQuantity: Array.isArray(order.products) ? 
+        order.products.reduce((sum, p) => sum + (p.quantity || 0), 0) : 0,
+      totalItems: Array.isArray(order.products) ? order.products.length : 0,
+      notes: order.notes,
+      unit: order.unit,
+      companyId: order.companyId
+    }));
+
+    const totalPages = Math.ceil(totalOrders / limitNum);
+
+    console.log('📦 Sales Orders Results:', {
+      totalOrders,
+      currentPage: page,
+      totalPages,
+      ordersReturned: transformedOrders.length,
+      sampleOrder: transformedOrders[0] ? {
+        orderCode: transformedOrders[0].orderCode,
+        customer: transformedOrders[0].customerName,
+        totalAmount: transformedOrders[0].totalAmount
+      } : null
+    });
+
+    res.json({
+      success: true,
+      data: {
+        orders: transformedOrders,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages,
+          totalOrders,
+          hasNextPage: parseInt(page) < totalPages,
+          hasPrevPage: parseInt(page) > 1
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in getSalesOrders:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };

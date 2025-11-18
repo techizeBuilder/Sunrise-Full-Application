@@ -10,6 +10,9 @@ import {
   getAllOrders,
   getOrderById
 } from '../controllers/unitManagerController.js';
+// Import models for debug endpoint
+import User from '../models/User.js';
+import Order from '../models/Order.js';
 
 const router = express.Router();
 
@@ -28,6 +31,70 @@ router.get('/test', (req, res) => {
       role: req.user.role
     }
   });
+});
+
+// Debug endpoint to check users and orders
+router.get('/debug', async (req, res) => {
+  try {
+    const user = req.user;
+    
+    if (user.role !== 'Unit Manager') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied - Unit Manager role required'
+      });
+    }
+
+    // Check users in same company
+    const companyUsers = await User.find({ 
+      companyId: user.companyId 
+    }).select('_id username role fullName companyId').lean();
+    
+    // Check orders for these users
+    const userIds = companyUsers.map(u => u._id);
+    const orders = await Order.find({
+      salesPerson: { $in: userIds }
+    }).populate('salesPerson', 'username fullName role')
+      .populate('customer', 'name')
+      .select('orderCode customer salesPerson status orderDate')
+      .lean();
+
+    res.json({
+      success: true,
+      debug: {
+        currentUser: {
+          id: user._id,
+          username: user.username,
+          role: user.role,
+          companyId: user.companyId
+        },
+        companyUsers: companyUsers.map(u => ({
+          id: u._id,
+          username: u.username,
+          role: u.role,
+          fullName: u.fullName,
+          companyId: u.companyId
+        })),
+        ordersCount: orders.length,
+        ordersBySalesPerson: orders.reduce((acc, order) => {
+          const spName = order.salesPerson?.username || 'unassigned';
+          if (!acc[spName]) acc[spName] = [];
+          acc[spName].push({
+            orderCode: order.orderCode,
+            customer: order.customer?.name,
+            status: order.status
+          });
+          return acc;
+        }, {})
+      }
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
 });
 
 // Unit Manager specific routes

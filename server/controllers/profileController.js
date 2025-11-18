@@ -51,7 +51,7 @@ export const getProfile = async (req, res) => {
     
     const user = await User.findById(userId)
       .select('-password')
-      .populate('companyId', 'name location');
+      .populate('companyId', 'name city state');
     console.log('Found user:', user ? 'Yes' : 'No');
     
     if (!user) {

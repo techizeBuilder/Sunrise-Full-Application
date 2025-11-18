@@ -159,7 +159,7 @@ export default function UnitHeadCustomers() {
         <Card>
           <CardContent className="p-6">
             <div className="text-center text-red-600">
-              <p>Error loading customers: {error?.message || 'Unknown error'}</p>
+              <p>Error loading customers: {String(error?.message || 'Unknown error')}</p>
               <Button onClick={refetch} className="mt-4">
                 Retry
               </Button>

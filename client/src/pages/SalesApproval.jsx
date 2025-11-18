@@ -67,7 +67,14 @@ const SalesApproval = () => {
 
     if (order.salesPerson) {
       if (typeof order.salesPerson === 'object' && order.salesPerson._id) {
-        const name = order.salesPerson.fullName || order.salesPerson.username || 'Unknown';
+        // Check for duplicate names in productSalesData to determine if we need username
+        const duplicateNames = productSalesData?.data?.flatMap(p => p.salesPersons)
+          .filter(sp => sp.fullName === order.salesPerson.fullName) || [];
+        
+        const name = duplicateNames.length > 1 
+          ? `${order.salesPerson.fullName || order.salesPerson.username} (${order.salesPerson.username})`
+          : order.salesPerson.fullName || order.salesPerson.username || 'Unknown';
+        
         console.log('Extracted name from populated salesPerson:', name);
         return name;
       }
@@ -128,33 +135,61 @@ const SalesApproval = () => {
           
           // Extract products and sales persons from the comprehensive response
           const products = responseData.data.map(item => item.productName);
-          const allSalesPersons = new Set();
+          const allSalesPersons = new Map(); // Use Map to store unique salespeople with full info
           
           responseData.data.forEach(product => {
             product.salesPersons.forEach(sp => {
-              allSalesPersons.add(sp.fullName);
+              // Create unique key using ID to avoid duplicates
+              if (!allSalesPersons.has(sp._id)) {
+                allSalesPersons.set(sp._id, {
+                  id: sp._id,
+                  fullName: sp.fullName,
+                  username: sp.username
+                });
+              }
             });
           });
           
+          // Convert to array and create display names
+          const salesPersonsArray = Array.from(allSalesPersons.values());
+          const salesPersonsWithDisplayNames = salesPersonsArray.map(sp => {
+            // Check if there are multiple people with the same fullName
+            const duplicateNames = salesPersonsArray.filter(p => p.fullName === sp.fullName);
+            const displayName = duplicateNames.length > 1 
+              ? `${sp.fullName || sp.username} (${sp.username})`
+              : sp.fullName || sp.username || 'Unknown';
+            
+            return {
+              ...sp,
+              displayName
+            };
+          });
+          
           setProducts(products);
-          setSalesPersons(Array.from(allSalesPersons));
+          setSalesPersons(salesPersonsWithDisplayNames.map(sp => sp.displayName));
           
           console.log('Products found:', products);
-          console.log('Sales persons found:', Array.from(allSalesPersons));
+          console.log('Sales persons found:', salesPersonsWithDisplayNames.map(sp => sp.displayName));
           
           // Create grid data structure for frontend display
           const grid = {};
           responseData.data.forEach(product => {
             grid[product.productName] = {};
             
-            // Initialize all sales persons for this product
-            Array.from(allSalesPersons).forEach(salesPerson => {
-              grid[product.productName][salesPerson] = [];
+            // Initialize all sales persons for this product using display names
+            salesPersonsWithDisplayNames.forEach(salesPersonObj => {
+              grid[product.productName][salesPersonObj.displayName] = [];
             });
             
-            // Fill in actual data from the API response
+            // Fill in actual data from the API response using display names
             product.salesPersons.forEach(sp => {
-              grid[product.productName][sp.fullName] = sp.orders || [];
+              // Find the display name for this salesperson
+              const salesPersonObj = salesPersonsWithDisplayNames.find(spObj => spObj.id === sp._id);
+              const displayName = salesPersonObj ? salesPersonObj.displayName : sp.fullName;
+              
+              if (grid[product.productName][displayName]) {
+                grid[product.productName][displayName] = sp.orders || [];
+              }
             });
           });
           
@@ -374,7 +409,7 @@ const SalesApproval = () => {
         <CardContent className="p-0">
           {/* Responsive Table - Same UI for Mobile and Desktop */}
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[800px]">
+            <table className="w-full min-w-[1200px]">
               {/* Header Row with Sales Persons */}
               <thead>
                 <tr className="border-b bg-gray-50">
@@ -441,10 +476,10 @@ const SalesApproval = () => {
                     }).length;
 
                     return (
-                      <th key={salesPerson} className="p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[70px] lg:min-w-[90px]">
+                      <th key={salesPerson} className="p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[120px] lg:min-w-[150px]">
                         <div className="flex flex-col items-center gap-1">
                           <User className="h-3 w-3 lg:h-4 lg:w-4 text-gray-600" />
-                          <div className="text-xs font-semibold text-gray-900 truncate max-w-[60px] lg:max-w-[80px]" title={salesPerson}>
+                          <div className="text-xs font-semibold text-gray-900 text-center leading-tight" title={salesPerson}>
                             {salesPerson}
                           </div>
                         </div>

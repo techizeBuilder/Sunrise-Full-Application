@@ -173,6 +173,20 @@ export default function SalesOrderList() {
   const customers = customersResponse?.data || [];
   const salespersons = salespersonsResponse?.data || [];
 
+  // Helper function to generate unique salesperson display names
+  const getSalespersonDisplayName = (salesPerson) => {
+    if (!salesPerson) return 'N/A';
+    
+    // Check if there are multiple people with the same fullName
+    const duplicateNames = salespersons.filter(p => p.fullName === salesPerson.fullName);
+    
+    if (duplicateNames.length > 1) {
+      return `${salesPerson.fullName || salesPerson.username} (${salesPerson.username})`;
+    }
+    
+    return salesPerson.fullName || salesPerson.username || salesPerson.email || 'Unknown';
+  };
+
   const handleViewOrder = (orderId) => {
     setSelectedOrder(orderId);
     setIsDetailsOpen(true);
@@ -467,11 +481,19 @@ export default function SalesOrderList() {
                 <SelectContent>
                   <SelectItem value="all">All Salespersons</SelectItem>
                   {salespersons.length > 0 ? (
-                    salespersons.filter(person => person._id).map((person) => (
-                      <SelectItem key={person._id} value={person._id}>
-                        {person.fullName || person.username || person.email || 'Unknown'}
-                      </SelectItem>
-                    ))
+                    salespersons.filter(person => person._id).map((person) => {
+                      // Check if there are multiple people with the same fullName
+                      const duplicateNames = salespersons.filter(p => p.fullName === person.fullName);
+                      const displayName = duplicateNames.length > 1 
+                        ? `${person.fullName || person.username} (${person.username})`
+                        : person.fullName || person.username || person.email || 'Unknown';
+                      
+                      return (
+                        <SelectItem key={person._id} value={person._id}>
+                          {displayName}
+                        </SelectItem>
+                      );
+                    })
                   ) : (
                     <SelectItem value="no-salespersons" disabled>
                       No salespersons found
@@ -653,7 +675,7 @@ export default function SalesOrderList() {
                               {order.status?.replace('_', ' ').toUpperCase()}
                             </Badge>
                           </TableCell>
-                          <TableCell>{order.salesPerson?.fullName || 'N/A'}</TableCell>
+                          <TableCell>{getSalespersonDisplayName(order.salesPerson)}</TableCell>
                           <TableCell>
                             <div className="flex gap-2">
                               <Button
@@ -717,7 +739,7 @@ export default function SalesOrderList() {
                             </div>
                             <div className="col-span-2">
                               <p className="text-gray-600">Salesperson</p>
-                              <p className="font-medium">{order.salesPerson?.fullName || 'N/A'}</p>
+                              <p className="font-medium">{getSalespersonDisplayName(order.salesPerson)}</p>
                             </div>
                           </div>
                           

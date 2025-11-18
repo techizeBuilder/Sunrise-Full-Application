@@ -59,6 +59,25 @@ export const salesApi = {
     });
   },
 
+  // Get sales customers (unified endpoint for sales personnel)
+  getCustomers: (params = {}) => {
+    const queryParams = new URLSearchParams();
+    
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') {
+        queryParams.append(key, value);
+      }
+    });
+
+    const queryString = queryParams.toString();
+    const token = localStorage.getItem('token');
+    return apiRequest(`/sales/customers${queryString ? `?${queryString}` : ''}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+  },
+
   // Get sales person deliveries (company-filtered)
   getMyDeliveries: (params = {}) => {
     const queryParams = new URLSearchParams();
@@ -128,7 +147,7 @@ export const salesApi = {
 
     const queryString = queryParams.toString();
     const token = localStorage.getItem('token');
-    return apiRequest(`/sales/items${queryString ? `?${queryString}` : ''}`, {
+    return apiRequest(`/api/sales/items${queryString ? `?${queryString}` : ''}`, {
       headers: {
         'Authorization': `Bearer ${token}`
       }

@@ -319,7 +319,7 @@ const CreateEntryForm = ({
     isLoading: itemsLoading,
     error: itemsError,
   } = useQuery({
-    queryKey: ["/sales/items"],
+    queryKey: ["/api/sales/items"],
     queryFn: () => salesApi.getMyItems(),
   });
 

@@ -25,9 +25,9 @@ const InventoryProductSelector = React.memo(({
   const getItemsEndpoint = () => {
     const salesRoles = ['Sales', 'Unit Manager', 'Unit Head'];
     if (user && salesRoles.includes(user.role)) {
-      return '/sales/items';
+      return '/api/sales/items';
     }
-    return '/items';
+    return '/api/items';
   };
 
   // Fetch inventory items using appropriate endpoint

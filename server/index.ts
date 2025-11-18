@@ -184,6 +184,11 @@ app.use('/uploads', express.static('uploads'));
       app.use('/api/unit-manager', unitManagerRoutes);
       console.log('Unit Manager routes registered at /api/unit-manager');
 
+      // Sales diagnostic routes for troubleshooting
+      const salesDiagnosticRoutes = (await import('./routes/salesDiagnosticRoutes.js')).default;
+      app.use('/api/sales-diagnostic', salesDiagnosticRoutes);
+      console.log('Sales Diagnostic routes registered at /api/sales-diagnostic');
+
       const unitHeadRoutes = (await import('./routes/unitHeadRoutes.js')).default;
       app.use('/api/unit-head', unitHeadRoutes);
       console.log('Unit Head routes registered at /api/unit-head');

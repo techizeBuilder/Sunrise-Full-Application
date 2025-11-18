@@ -14,10 +14,14 @@ export async function apiRequest(
 ): Promise<any> {
   const token = localStorage.getItem('token');
   
-  console.log(`API Request: ${method} ${url}`, data || '(no data)');
+  // Add base URL if not already present
+  const baseURL = 'http://localhost:5000';
+  const fullUrl = url.startsWith('http') ? url : `${baseURL}${url}`;
+  
+  console.log(`API Request: ${method} ${fullUrl}`, data || '(no data)');
   console.log('Token available:', token ? 'Yes' : 'No');
 
-  const res = await fetch(url, {
+  const res = await fetch(fullUrl, {
     method,
     headers: { 
       "Content-Type": "application/json",
@@ -34,7 +38,7 @@ export async function apiRequest(
   const contentType = res.headers.get('content-type');
   if (contentType && contentType.includes('text/html')) {
     console.error('Received HTML instead of JSON - likely 404 or routing issue');
-    throw new Error(`404: ${method} ${url} - Route not found`);
+    throw new Error(`404: ${method} ${fullUrl} - Route not found`);
   }
 
   await throwIfResNotOk(res);

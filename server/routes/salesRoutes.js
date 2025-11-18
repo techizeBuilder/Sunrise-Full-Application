@@ -1,16 +1,14 @@
 import express from 'express';
 import { authenticateToken, authorizeRoles } from '../middleware/auth.js';
 import {
-  getSalesSummary,
-  getSalesRecentOrders,
-  getSalespersonOrders
-} from '../controllers/orderController.js';
-import {
   getSalespersonCustomers,
   getSalespersonDeliveries,
   getSalespersonInvoices,
   getSalespersonRefundReturns,
-  getSalespersonItems
+  getSalespersonItems,
+  getSalesSummary,
+  getSalesRecentOrders,
+  getSalesOrders
 } from '../controllers/salesController.js';
 
 const salesRouter = express.Router();
@@ -20,12 +18,17 @@ salesRouter.use(authenticateToken);
 // Apply role-based authorization for sales roles only
 salesRouter.use(authorizeRoles('Sales', 'Unit Manager', 'Super Admin'));
 
-// Existing routes
+// Sales-specific dashboard routes
 salesRouter.get('/summary', getSalesSummary);
 salesRouter.get('/recent-orders', getSalesRecentOrders);
 
-// New salesperson-specific routes
-salesRouter.get('/orders', getSalespersonOrders);
+// Sales-specific order routes (filtered by individual salesperson)
+salesRouter.get('/orders', getSalesOrders);
+
+// Sales-specific customer routes (filtered by salesperson assignment)
+salesRouter.get('/customers', getSalespersonCustomers);
+
+// Other salesperson-specific routes
 salesRouter.get('/my-customers', getSalespersonCustomers);
 salesRouter.get('/my-deliveries', getSalespersonDeliveries);
 salesRouter.get('/my-invoices', getSalespersonInvoices);

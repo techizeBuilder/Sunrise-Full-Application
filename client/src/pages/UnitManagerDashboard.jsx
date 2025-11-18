@@ -194,15 +194,15 @@ export default function UnitManagerDashboard() {
               <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
               <h2 className="text-xl font-semibold mb-2">Error Loading Dashboard</h2>
               <div className="space-y-2 mb-4">
-                <p className="text-gray-600">{error?.message || 'Unknown error'}</p>
+                <p className="text-gray-600">{String(error?.message || 'Unknown error')}</p>
                 {error?.response?.status && (
                   <p className="text-sm text-red-600">
-                    Status: {error.response.status} - {error.response.statusText || 'API Error'}
+                    Status: {error.response.status} - {String(error.response.statusText || 'API Error')}
                   </p>
                 )}
                 {error?.response?.data?.message && (
                   <p className="text-sm text-gray-500">
-                    Details: {error.response.data.message}
+                    Details: {String(error.response.data.message)}
                   </p>
                 )}
               </div>
@@ -259,14 +259,14 @@ export default function UnitManagerDashboard() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{overview.totalOrders || 0}</p>
-                <p className="text-sm text-muted-foreground flex items-center">
+                <p className="text-sm text-muted-foreground">
                   Total Orders
-                  {/* {overview.orderGrowth && (
-                    <span className={`ml-2 flex items-center ${getGrowthColor(overview.orderGrowth)}`}>
-                      {getGrowthIcon(overview.orderGrowth)}
-                      {Math.abs(overview.orderGrowth)}%
+                  {overview.orderGrowth !== undefined && (
+                    <span className={`ml-2 flex items-center ${getGrowthColor(overview.orderGrowth || 0)}`}>
+                      {getGrowthIcon(overview.orderGrowth || 0)}
+                      {Math.abs(overview.orderGrowth || 0)}%
                     </span>
-                  )} */}
+                  )}
                 </p>
               </div>
             </div>
@@ -285,14 +285,14 @@ export default function UnitManagerDashboard() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{customers.total || 0}</p>
-                <p className="text-sm text-muted-foreground flex items-center">
+                <p className="text-sm text-muted-foreground">
                   Active Customers
-                  {/* {customers.growth && (
-                    <span className={`ml-2 flex items-center ${getGrowthColor(customers.growth)}`}>
-                      {getGrowthIcon(customers.growth)}
-                      {Math.abs(customers.growth)}%
+                  {customers.growth !== undefined && (
+                    <span className={`ml-2 flex items-center ${getGrowthColor(customers.growth || 0)}`}>
+                      {getGrowthIcon(customers.growth || 0)}
+                      {Math.abs(customers.growth || 0)}%
                     </span>
-                  )} */}
+                  )}
                 </p>
               </div>
             </div>
@@ -310,9 +310,9 @@ export default function UnitManagerDashboard() {
                 <p className="text-2xl font-bold">{inventory.totalItems || 0}</p>
                 <p className="text-sm text-muted-foreground">
                   Inventory Items
-                  {inventory.lowStockCount > 0 && (
+                  {(inventory.lowStockCount || 0) > 0 && (
                     <span className="ml-2 text-red-600">
-                      ({inventory.lowStockCount} low stock)
+                      ({inventory.lowStockCount || 0} low stock)
                     </span>
                   )}
                 </p>
@@ -432,8 +432,8 @@ export default function UnitManagerDashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {salesPersons.slice(0, 5).map((person, index) => (
-                <div key={person._id} className="flex items-center justify-between">
+              {(salesPersons || []).slice(0, 5).map((person, index) => (
+                <div key={person._id || index} className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
                     <div className="flex-shrink-0">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
@@ -446,14 +446,14 @@ export default function UnitManagerDashboard() {
                       </div>
                     </div>
                     <div>
-                      <p className="font-medium">{person.name}</p>
+                      <p className="font-medium">{person.name || 'Unknown'}</p>
                       <p className="text-sm text-muted-foreground">
-                        {person.totalOrders} orders
+                        {person.totalOrders || 0} orders
                       </p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-medium">{formatCurrency(person.totalRevenue)}</p>
+                    <p className="font-medium">{formatCurrency(person.totalRevenue || 0)}</p>
                     <p className="text-sm text-muted-foreground">Revenue</p>
                   </div>
                 </div>
@@ -486,17 +486,17 @@ export default function UnitManagerDashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {monthlyTrends.map((trend, index) => (
+                  {(monthlyTrends || []).map((trend, index) => (
                     <TableRow key={index}>
                       <TableCell className="font-medium">
-                        {new Date(trend.year, trend.month - 1).toLocaleDateString('en-IN', { 
+                        {new Date(trend.year || 0, (trend.month || 1) - 1).toLocaleDateString('en-IN', { 
                           month: 'long', 
                           year: 'numeric' 
                         })}
                       </TableCell>
-                      <TableCell className="text-right">{trend.orderCount}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(trend.totalRevenue)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(trend.avgOrderValue)}</TableCell>
+                      <TableCell className="text-right">{trend.orderCount || 0}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(trend.totalRevenue || 0)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(trend.avgOrderValue || 0)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

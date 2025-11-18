@@ -196,10 +196,12 @@ const getOrders = async (req, res) => {
       });
       console.log('Sales Person IDs for filtering:', salesPersonIds);
     }
-    // Role-based filtering: Sales users only see their orders
+    // Role-based filtering: Sales users only see their OWN orders
     else if (userRole === 'Sales') {
       filter.salesPerson = salespersonId;
-      console.log('👤 SALES PERSON FILTERING - Own orders only');
+      filter.companyId = userCompanyId; // Additional company isolation
+      console.log('👤 SALES PERSON FILTERING - Own orders only from own company');
+      console.log('Filter applied:', { salesPerson: salespersonId, companyId: userCompanyId });
     }
     // Super Admin can see all orders
     else if (userRole === 'Super Admin') {
@@ -544,215 +546,11 @@ const updateOrderStatus = async (req, res) => {
   }
 };
 
-// Sales Dashboard API endpoints
-const getSalesSummary = async (req, res) => {
-  try {
-    const { unit } = req.query;
-    let query = {};
-
-    console.log('📊 getSalesSummary called:', {
-      user: req.user.username,
-      role: req.user.role,
-      companyId: req.user.companyId
-    });
-
-    // Apply company filter for data isolation
-    if (req.user.role !== 'Super Admin') {
-      query.companyId = req.user.companyId;
-      // Also add unit filter if it exists (backward compatibility)
-      if (req.user.unit) {
-        query.unit = req.user.unit;
-      }
-    } else if (unit) {
-      query.unit = unit;
-    }
-
-    // Get order counts by status
-    const [totalOrders, deliveredCount, inProgressCount, preparationCount] = await Promise.all([
-      Order.countDocuments(query),
-      Order.countDocuments({ ...query, status: { $in: ['completed', 'approved'] } }),
-      Order.countDocuments({ ...query, status: { $in: ['approved', 'in_production'] } }),
-      Order.countDocuments({ ...query, status: { $in: ['pending'] } })
-    ]);
-
-    res.json({
-      success: true,
-      totalOrders,
-      delivered: deliveredCount,
-      inProgress: inProgressCount,
-      preparation: preparationCount
-    });
-
-  } catch (error) {
-    console.error('Get sales summary error:', error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
-  }
-};
-
-const getSalesRecentOrders = async (req, res) => {
-  try {
-    const { unit, limit = 5 } = req.query;
-    let query = {};
-
-    console.log('📋 getSalesRecentOrders called:', {
-      user: req.user.username,
-      role: req.user.role,
-      companyId: req.user.companyId
-    });
-
-    // Apply company filter for data isolation
-    if (req.user.role !== 'Super Admin') {
-      query.companyId = req.user.companyId;
-      // Also add unit filter if it exists (backward compatibility)
-      if (req.user.unit) {
-        query.unit = req.user.unit;
-      }
-    } else if (unit) {
-      query.unit = unit;
-    }
-
-    const orders = await Order.find(query)
-      .populate('customer', 'customerName name')
-      .sort({ createdAt: -1 })
-      .limit(parseInt(limit))
-      .select('orderCode customer status totalAmount products createdAt orderDate');
-
-    // Transform the data to match frontend expectations
-    const transformedOrders = orders.map(order => ({
-      _id: order._id,
-      orderCode: order.orderCode,
-      customerName: order.customer?.customerName || order.customer?.name || 'Unknown Customer',
-      status: order.status || 'pending',
-      totalAmount: order.totalAmount || 0,
-      totalQuantity: Array.isArray(order.products) ? order.products.reduce((sum, p) => sum + p.quantity, 0) : 0,
-      totalItems: Array.isArray(order.products) ? order.products.length : 0,
-      items: order.products || [],
-      orderDate: order.orderDate || order.createdAt
-    }));
-
-    res.json({
-      success: true,
-      orders: transformedOrders
-    });
-
-  } catch (error) {
-    console.error('Get sales recent orders error:', error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
-  }
-};
-
-// Get orders for the authenticated salesperson
-const getSalespersonOrders = async (req, res) => {
-  try {
-    const {
-      page = 1,
-      limit = 10,
-      search = '',
-      status = '',
-      startDate = '',
-      endDate = '',
-      sortBy = 'createdAt',
-      sortOrder = 'desc'
-    } = req.query;
-
-    const salespersonId = req.user._id || req.user.id;
-    const userRole = req.user.role;
-    const userCompanyId = req.user.companyId;
-
-    console.log('📦 getSalespersonOrders called:', {
-      userId: salespersonId,
-      role: userRole,
-      companyId: userCompanyId
-    });
-
-    // Build filter query based on user role with company isolation
-    const filter = {};
-
-    // Always filter by company for data isolation
-    if (userCompanyId && userRole !== 'Super Admin') {
-      filter.companyId = userCompanyId;
-    }
-
-    // If user is Sales role, only show their orders from their company
-    if (userRole === 'Sales') {
-      filter.salesPerson = salespersonId;
-    }
-    // Unit Manager can see all orders from their company
-    // Super Admin can see all orders
-    else if (userRole !== 'Super Admin' && userRole !== 'Unit Manager') {
-      filter.salesPerson = salespersonId;
-    }
-
-    if (search) {
-      filter.$or = [
-        { orderCode: { $regex: search, $options: 'i' } },
-        { notes: { $regex: search, $options: 'i' } }
-      ];
-    }
-
-    if (status) {
-      filter.status = status;
-    }
-
-    if (startDate || endDate) {
-      filter.orderDate = {};
-      if (startDate) {
-        filter.orderDate.$gte = new Date(startDate);
-      }
-      if (endDate) {
-        filter.orderDate.$lte = new Date(endDate);
-      }
-    }
-
-    // Build sort query
-    const sort = {};
-    sort[sortBy] = sortOrder === 'desc' ? -1 : 1;
-
-    // Calculate pagination
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-
-    // Get orders with population
-    const orders = await Order.find(filter)
-      .populate('customer', 'name email mobile')
-      .populate('products.product', 'name salePrice purchaseCost mrp brand category subCategory image')
-      .sort(sort)
-      .skip(skip)
-      .limit(parseInt(limit));
-
-    // Get total count for pagination
-    const totalOrders = await Order.countDocuments(filter);
-    const totalPages = Math.ceil(totalOrders / parseInt(limit));
-
-    res.json({
-      success: true,
-      orders,
-      pagination: {
-        currentPage: parseInt(page),
-        totalPages,
-        totalOrders,
-        hasNextPage: parseInt(page) < totalPages,
-        hasPrevPage: parseInt(page) > 1
-      }
-    });
-
-  } catch (error) {
-    console.error('Error fetching salesperson orders:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error',
-      error: error.message
-    });
-  }
-};
-
 export {
   createOrder,
   getOrders,
   getOrderById,
   updateOrder,
   updateOrderStatus,
-  deleteOrder,
-  getSalesSummary,
-  getSalesRecentOrders,
-  getSalespersonOrders
+  deleteOrder
 };

@@ -169,7 +169,7 @@ export default function UnitHeadSales() {
         <Card>
           <CardContent className="p-6">
             <div className="text-center text-red-600">
-              <p>Error loading sales persons: {error?.message || 'Unknown error'}</p>
+              <p>Error loading sales persons: {String(error?.message || 'Unknown error')}</p>
               <Button onClick={refetch} className="mt-4">
                 Retry
               </Button>
@@ -457,21 +457,21 @@ export default function UnitHeadSales() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {orders.map((order) => (
+                    {(orders || []).map((order) => (
                       <TableRow key={order._id}>
                         <TableCell className="font-medium">{order.orderCode || order.orderNumber}</TableCell>
                         <TableCell>
                           <div>
-                            <p className="font-medium">{order.customer?.name}</p>
+                            <p className="font-medium">{order.customer?.name || 'N/A'}</p>
                             <p className="text-sm text-muted-foreground">
-                              {order.customer?.contactPerson}
+                              {order.customer?.contactPerson || 'N/A'}
                             </p>
                           </div>
                         </TableCell>
                         <TableCell>{formatDate(order.orderDate)}</TableCell>
                         <TableCell>{getStatusBadge(order.status)}</TableCell>
                         <TableCell className="text-right">
-                          {formatCurrency(order.products?.reduce((sum, p) => sum + (p.quantity * p.price), 0))}
+                          {formatCurrency((order.products || []).reduce((sum, p) => sum + (p.quantity * p.price), 0))}
                         </TableCell>
                       </TableRow>
                     ))}

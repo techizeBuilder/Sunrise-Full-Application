@@ -416,7 +416,7 @@ const UnitHeadRolePermissionManagement = () => {
 
   const handleDeleteUser = (user) => {
     const confirmDelete = window.confirm(
-      `Are you sure you want to delete user "${user.fullName}"? This action cannot be undone.`
+      `Are you sure you want to delete user "${String(user.fullName || user.username || '')}"? This action cannot be undone.`
     );
     
     if (confirmDelete) {
@@ -571,6 +571,7 @@ const UnitHeadRolePermissionManagement = () => {
               <TableRow>
                 <TableHead>User Details</TableHead>
                 <TableHead>Contact</TableHead>
+                <TableHead>Company</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Permissions</TableHead>
@@ -580,13 +581,13 @@ const UnitHeadRolePermissionManagement = () => {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8">
+                  <TableCell colSpan={7} className="text-center py-8">
                     Loading users...
                   </TableCell>
                 </TableRow>
               ) : unitUsers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                     No users found. Add your first user to get started.
                   </TableCell>
                 </TableRow>
@@ -599,13 +600,19 @@ const UnitHeadRolePermissionManagement = () => {
                           <UserCheck className="w-4 h-4 text-blue-600" />
                         </div>
                         <div>
-                          <p className="font-medium">{user.fullName}</p>
-                          <p className="text-sm text-gray-500">@{user.username}</p>
+                          <p className="font-medium">{String(user.fullName || '')}</p>
+                          <p className="text-sm text-gray-500">@{String(user.username || '')}</p>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <p className="text-sm">{user.email}</p>
+                      <p className="text-sm">{String(user.email || '')}</p>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm">
+                        <p className="font-medium">{String(user.companyId?.name || 'No Company')}</p>
+                        <p className="text-xs text-gray-500">{String(user.companyId?.city || '')}, {String(user.companyId?.state || '')}</p>
+                      </div>
                     </TableCell>
                     <TableCell>
                       <Badge variant={user.isActive ? "default" : "secondary"}>
@@ -614,7 +621,7 @@ const UnitHeadRolePermissionManagement = () => {
                     </TableCell>
                     <TableCell>
                       <Badge variant={user.role === 'Unit Manager' ? 'default' : 'secondary'}>
-                        {user.role}
+                        {String(user.role || '')}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -779,7 +786,7 @@ const UnitHeadRolePermissionManagement = () => {
                   id="companyLocation"
                   value={
                     unitHeadCompanyInfo 
-                      ? `${unitHeadCompanyInfo.name} - ${unitHeadCompanyInfo.location}` 
+                      ? `${String(unitHeadCompanyInfo.companyName || unitHeadCompanyInfo.name || '')} - ${String(unitHeadCompanyInfo.city || '')}, ${String(unitHeadCompanyInfo.state || '')}` 
                       : 'No company assigned'
                   }
                   readOnly
@@ -1026,7 +1033,7 @@ const UnitHeadRolePermissionManagement = () => {
           <DialogHeader>
             <DialogTitle>Change Password</DialogTitle>
             <DialogDescription>
-              Update password for {selectedUser?.fullName}
+              Update password for {String(selectedUser?.fullName || '')}
             </DialogDescription>
           </DialogHeader>
 

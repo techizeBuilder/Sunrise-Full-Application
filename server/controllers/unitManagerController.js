@@ -260,10 +260,52 @@ export const getOrders = async (req, res) => {
 
     // Get sales persons from the same company for filtering
     if (user.companyId) {
+      // Enhanced debugging - find all users with different filters
+      console.log('=== DEBUGGING USER FILTERING ===');
+      
+      // Check all users in the same company
+      const allCompanyUsers = await User.find({ 
+        companyId: user.companyId
+      }).select('_id username role fullName').lean();
+      
+      console.log('All users in company:', allCompanyUsers.map(u => ({
+        id: u._id,
+        username: u.username,
+        role: u.role,
+        fullName: u.fullName
+      })));
+      
+      // Check specifically for Sales role variations
+      const salesUsers = await User.find({ 
+        companyId: user.companyId,
+        role: { $regex: /sales/i }
+      }).select('_id username role fullName').lean();
+      
+      console.log('Sales users (case insensitive):', salesUsers.map(u => ({
+        id: u._id,
+        username: u.username,
+        role: u.role,
+        fullName: u.fullName
+      })));
+      
+      // Use broader role matching for sales
       const companySalesPersons = await User.find({ 
         companyId: user.companyId,
-        role: { $in: ['Sales', 'Unit Manager', 'Unit Head'] }
-      }).select('_id').lean();
+        $or: [
+          { role: 'Sales' },
+          { role: 'sales' },
+          { role: 'Unit Manager' },
+          { role: 'Unit Head' },
+          { role: { $regex: /sales/i } } // Case insensitive sales role
+        ]
+      }).select('_id username role fullName').lean();
+      
+      console.log('Found company sales persons:', companySalesPersons.map(u => ({
+        id: u._id,
+        username: u.username,
+        role: u.role,
+        fullName: u.fullName
+      })));
       
       const salesPersonIds = companySalesPersons.map(sp => sp._id);
       console.log('Company sales person IDs:', salesPersonIds);
@@ -289,6 +331,31 @@ export const getOrders = async (req, res) => {
 
     console.log('=== ENHANCED API PROCESSING ===');
     console.log('Total orders found:', orders.length);
+    
+    // Debug: Check which sales persons have orders
+    const ordersGroupedBySalesPerson = orders.reduce((acc, order) => {
+      const spId = order.salesPerson?._id?.toString() || 'unassigned';
+      const spName = order.salesPerson?.username || order.salesPerson?.fullName || 'unassigned';
+      if (!acc[spId]) {
+        acc[spId] = { name: spName, count: 0, orders: [] };
+      }
+      acc[spId].count++;
+      acc[spId].orders.push({
+        orderCode: order.orderCode,
+        customer: order.customer?.name,
+        status: order.status
+      });
+      return acc;
+    }, {});
+    
+    console.log('Orders grouped by sales person:');
+    Object.entries(ordersGroupedBySalesPerson).forEach(([spId, data]) => {
+      console.log(`  ${data.name} (${spId}): ${data.count} orders`);
+      data.orders.forEach(order => {
+        console.log(`    - ${order.orderCode} (${order.customer}) - ${order.status}`);
+      });
+    });
+    
     console.log('Processing product-salesperson-quantity grouping...');
 
     // Create product-based grouping with salesperson quantities

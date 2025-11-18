@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { orderApi } from '../../api/orderService';
+import { salesApi } from '../../api/salesService';
 import { customerApi } from '../../api/customerService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -167,8 +168,8 @@ const MyOrders = () => {
 
   // Fetch orders from API with pagination
   const { data: ordersResponse, isLoading: ordersLoading, refetch: refetchOrders } = useQuery({
-    queryKey: ['/api/orders', currentPage, itemsPerPage, searchTerm, statusFilter],
-    queryFn: () => orderApi.getAll({
+    queryKey: ['/api/sales/orders', currentPage, itemsPerPage, searchTerm, statusFilter],
+    queryFn: () => salesApi.getMyOrders({
       page: currentPage,
       limit: itemsPerPage,
       search: searchTerm,
@@ -178,13 +179,13 @@ const MyOrders = () => {
     })
   });
 
-  const orders = ordersResponse?.orders || [];
-  const pagination = ordersResponse?.pagination || {};
+  const orders = ordersResponse?.data?.orders || [];
+  const pagination = ordersResponse?.data?.pagination || {};
 
-  // Fetch customers from API
+  // Fetch customers from API (sales-specific endpoint)
   const { data: customersResponse, isLoading: customersLoading } = useQuery({
-    queryKey: ['/api/customers'],
-    queryFn: () => customerApi.getAll()
+    queryKey: ['/api/sales/customers'],
+    queryFn: () => salesApi.getCustomers()
   });
 
   const customersList = customersResponse?.customers || [];

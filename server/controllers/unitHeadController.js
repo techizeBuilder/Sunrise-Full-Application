@@ -288,7 +288,7 @@ export const getUnitHeadSalesPersons = async (req, res) => {
 
     // Get sales persons from the same company
     const salesPersons = await User.find(salesPersonQuery)
-      .populate('companyId', 'name city state location')
+      .populate('companyId', 'name city state')
       .select('username fullName email role active createdAt companyId')
       .sort({ [sortBy]: sortOrder === 'desc' ? -1 : 1 })
       .skip((page - 1) * limit)
@@ -513,7 +513,7 @@ export const getUnitHeadCustomers = async (req, res) => {
     }
 
     const customers = await Customer.find(query)
-      .populate('companyId', 'name location')
+      .populate('companyId', 'name')
       .populate('salesContact', 'fullName username')
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -577,7 +577,7 @@ export const getUnitHeadCustomerById = async (req, res) => {
     }
 
     const customer = await Customer.findOne(query)
-      .populate('companyId', 'name location')
+      .populate('companyId', 'name')
       .populate('salesContact', 'fullName username');
 
     if (!customer) {
