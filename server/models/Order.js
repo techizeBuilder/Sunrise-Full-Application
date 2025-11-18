@@ -116,7 +116,6 @@ const orderSchema = new mongoose.Schema({
 });
 
 // Index for better query performance
-orderSchema.index({ orderCode: 1 });
 orderSchema.index({ customer: 1 });
 orderSchema.index({ salesPerson: 1 });
 orderSchema.index({ companyId: 1 });
