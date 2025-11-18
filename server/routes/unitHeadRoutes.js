@@ -12,16 +12,23 @@ import {
   getUnitHeadDashboard
 } from '../controllers/unitHeadController.js';
 
-// Import Unit Manager management functions
+// Import Unit User management functions (all unit roles)
 import {
+  getUnitUsers,
+  createUnitUser,
+  updateUnitUser,
+  updateUnitUserPassword,
+  deleteUnitUser,
+  getUnitUserById,
+  getUnitHeadCompanyInfo,
+  // Keep existing functions for backward compatibility
   getUnitManagers,
   createUnitManager,
   updateUnitManager,
   updateUnitManagerPassword,
   deleteUnitManager,
   getUnitManagerById,
-  getUnitManagerModules,
-  getUnitHeadCompanyInfo
+  getUnitManagerModules
 } from '../controllers/unitHeadUserController.js';
 
 // Import inventory functions
@@ -151,7 +158,38 @@ router.get('/inventory/customer-categories/export',
 // Get Unit Head company information for form pre-population
 router.get('/company-info', getUnitHeadCompanyInfo);
 
-// Unit Manager Management Routes (Role & Permission Management for Unit Head)
+// Unit User Management Routes (All unit roles: Unit Manager, Sales, Production, Accounts, Dispatch, Packing)
+router.get('/unit-users', 
+  checkPermission('unitHead', 'userManagement', 'view'), 
+  getUnitUsers
+);
+
+router.get('/unit-users/:userId', 
+  checkPermission('unitHead', 'userManagement', 'view'), 
+  getUnitUserById
+);
+
+router.post('/unit-users', 
+  checkPermission('unitHead', 'userManagement', 'add'), 
+  createUnitUser
+);
+
+router.put('/unit-users/:userId', 
+  checkPermission('unitHead', 'userManagement', 'edit'), 
+  updateUnitUser
+);
+
+router.put('/unit-users/:userId/password', 
+  checkPermission('unitHead', 'userManagement', 'edit'), 
+  updateUnitUserPassword
+);
+
+router.delete('/unit-users/:userId', 
+  checkPermission('unitHead', 'userManagement', 'delete'), 
+  deleteUnitUser
+);
+
+// Unit Manager Management Routes (Legacy - for backward compatibility)
 router.get('/unit-managers', 
   checkPermission('unitHead', 'userManagement', 'view'), 
   getUnitManagers

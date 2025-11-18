@@ -13,7 +13,6 @@ import {
   Phone,
   Mail,
   FileText,
-  Clock,
   Calendar,
   Globe,
   Hash
@@ -48,9 +47,19 @@ export default function CompanyDetails({ isOpen, onClose, company }) {
             <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
               {company.name}
             </h2>
-            <Badge variant="outline" className="text-sm">
-              {company.unitName}
-            </Badge>
+            {company.legalName && (
+              <p className="text-gray-600 dark:text-gray-400">{company.legalName}</p>
+            )}
+            <div className="flex gap-2 justify-center">
+              <Badge variant="outline" className="text-sm">
+                {company.unitName}
+              </Badge>
+              {company.companyType && (
+                <Badge variant="secondary" className="text-sm">
+                  {company.companyType}
+                </Badge>
+              )}
+            </div>
           </div>
 
           <Separator />
@@ -81,13 +90,6 @@ export default function CompanyDetails({ isOpen, onClose, company }) {
                 </div>
               </div>
               <div className="space-y-4">
-                <div className="flex items-start gap-3">
-                  <Clock className="h-5 w-5 text-orange-600 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Order Cutoff Time</p>
-                    <p className="text-gray-900 dark:text-gray-100">{company.orderCutoffTime}</p>
-                  </div>
-                </div>
                 <div className="flex items-start gap-3">
                   <Calendar className="h-5 w-5 text-purple-600 mt-0.5" />
                   <div>
@@ -141,14 +143,6 @@ export default function CompanyDetails({ isOpen, onClose, company }) {
                   </div>
                 </div>
               </div>
-              
-              <div className="flex items-start gap-3">
-                <Globe className="h-5 w-5 text-blue-600 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Country</p>
-                  <p className="text-gray-900 dark:text-gray-100">{company.country}</p>
-                </div>
-              </div>
             </CardContent>
           </Card>
 
@@ -161,6 +155,15 @@ export default function CompanyDetails({ isOpen, onClose, company }) {
               </CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {company.pan && (
+                <div className="flex items-start gap-3">
+                  <FileText className="h-5 w-5 text-red-600 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">PAN Number</p>
+                    <p className="text-gray-900 dark:text-gray-100 font-mono">{company.pan}</p>
+                  </div>
+                </div>
+              )}
               <div className="flex items-start gap-3">
                 <FileText className="h-5 w-5 text-purple-600 mt-0.5" />
                 <div>
@@ -168,15 +171,6 @@ export default function CompanyDetails({ isOpen, onClose, company }) {
                   <p className="text-gray-900 dark:text-gray-100 font-mono">{company.gst}</p>
                 </div>
               </div>
-              {company.fssai && (
-                <div className="flex items-start gap-3">
-                  <FileText className="h-5 w-5 text-orange-600 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">FSSAI Number</p>
-                    <p className="text-gray-900 dark:text-gray-100 font-mono">{company.fssai}</p>
-                  </div>
-                </div>
-              )}
             </CardContent>
           </Card>
 

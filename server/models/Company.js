@@ -10,6 +10,18 @@ const companySchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  legalName: {
+    type: String,
+    trim: true
+  },
+  companyType: {
+    type: String,
+    trim: true,
+    enum: {
+      values: ['Private Limited', 'Public Limited', 'LLP', 'Partnership', 'Proprietorship', 'OPC', 'Other'],
+      message: 'Invalid company type'
+    }
+  },
   mobile: {
     type: String,
     trim: true,
@@ -58,21 +70,19 @@ const companySchema = new mongoose.Schema({
     required: true,
     trim: true
   },
-  country: {
+  pan: {
     type: String,
-    required: true,
     trim: true,
-    default: 'India'
-  },
-  fssai: {
-    type: String,
-    trim: true
+    uppercase: true,
+    validate: {
+      validator: function(v) {
+        if (!v) return true; // Allow empty values
+        return /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(v);
+      },
+      message: 'Invalid PAN format (should be ABCDE1234F)'
+    }
   },
   gst: {
-    type: String,
-    trim: true
-  },
-  orderCutoffTime: {
     type: String,
     trim: true
   },

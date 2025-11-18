@@ -8,6 +8,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Dialog,
   DialogContent,
@@ -46,14 +53,76 @@ import {
 } from 'lucide-react';
 import { showSuccessToast, showSmartToast } from '@/lib/toast-utils';
 
-// Unit Manager specific modules and permissions - Only the essential ones
-const UNIT_MANAGER_MODULES = [
+// Unit Head specific modules and permissions - All unit roles they can manage
+const UNIT_HEAD_MANAGEABLE_ROLES = [
+  { value: 'Unit Manager', label: 'Unit Manager' },
+  { value: 'Sales', label: 'Sales' },
+  { value: 'Production', label: 'Production' },
+  { value: 'Accounts', label: 'Accounts' },
+  { value: 'Dispatch', label: 'Dispatch' },
+  { value: 'Packing', label: 'Packing' }
+];
+
+const UNIT_HEAD_MODULES = [
   {
     name: 'unitManager',
     label: 'Unit Manager',
     features: [
       { key: 'salesApproval', label: 'Sales Approval' },
-      { key: 'salesOrderList', label: 'Sales Order List' }
+      { key: 'salesOrderList', label: 'Sales Order List' },
+      { key: 'inventory', label: 'Inventory Management' },
+      { key: 'reports', label: 'Reports' }
+    ]
+  },
+  {
+    name: 'sales',
+    label: 'Sales',
+    features: [
+      { key: 'orders', label: 'My Orders' },
+      { key: 'myCustomers', label: 'My Customers' },
+      { key: 'myDeliveries', label: 'My Dispatches' },
+      { key: 'myInvoices', label: 'My Payments' },
+      { key: 'refundReturn', label: 'Return/Damage' }
+    ]
+  },
+  {
+    name: 'production',
+    label: 'Production',
+    features: [
+      { key: 'todaysIndents', label: 'Today\'s Indents' },
+      { key: 'summaryPanel', label: 'Summary Panel' },
+      { key: 'submitData', label: 'Submit Production Data' },
+      { key: 'submissionHistory', label: 'Submission History' }
+    ]
+  },
+  {
+    name: 'accounts',
+    label: 'Accounts',
+    features: [
+      { key: 'transactions', label: 'Transactions' },
+      { key: 'balanceSheet', label: 'Balance Sheet' },
+      { key: 'reports', label: 'Financial Reports' },
+      { key: 'payments', label: 'Payment Processing' }
+    ]
+  },
+  {
+    name: 'dispatch',
+    label: 'Dispatch',
+    features: [
+      { key: 'allDispatches', label: 'All Dispatches' },
+      { key: 'createDispatch', label: 'Create Dispatch' },
+      { key: 'trackingInfo', label: 'Tracking Info' },
+      { key: 'deliveryStatus', label: 'Delivery Status' }
+    ]
+  },
+  {
+    name: 'packing',
+    label: 'Packing',
+    features: [
+      { key: 'packingOrders', label: 'Packing Orders' },
+      { key: 'packingList', label: 'Packing List' },
+      { key: 'qualityCheck', label: 'Quality Check' },
+      { key: 'packingReports', label: 'Packing Reports' }
     ]
   }
 ];
@@ -65,7 +134,7 @@ const convertDBPermissionsToUI = (dbPermissions) => {
   const uiPermissions = {};
   
   // Initialize the UI permission structure
-  UNIT_MANAGER_MODULES.forEach(module => {
+  UNIT_HEAD_MODULES.forEach(module => {
     uiPermissions[module.name] = {};
     module.features.forEach(feature => {
       uiPermissions[module.name][feature.key] = {
@@ -131,6 +200,84 @@ const convertUIPermissionsToDB = (uiPermissions) => {
   };
 };
 
+// Get default permissions for each role type
+const getDefaultPermissionsForRole = (role) => {
+  const defaultPermissions = convertDBPermissionsToUI({});
+  
+  // Enable certain modules based on role
+  switch (role) {
+    case 'Sales':
+      // Enable all sales features by default
+      Object.keys(defaultPermissions.sales).forEach(featureKey => {
+        defaultPermissions.sales[featureKey] = {
+          view: true,
+          add: true,
+          edit: true,
+          delete: true
+        };
+      });
+      break;
+    case 'Production':
+      // Enable all production features by default
+      Object.keys(defaultPermissions.production).forEach(featureKey => {
+        defaultPermissions.production[featureKey] = {
+          view: true,
+          add: true,
+          edit: true,
+          delete: true
+        };
+      });
+      break;
+    case 'Accounts':
+      // Enable all accounts features by default
+      Object.keys(defaultPermissions.accounts).forEach(featureKey => {
+        defaultPermissions.accounts[featureKey] = {
+          view: true,
+          add: true,
+          edit: true,
+          delete: true
+        };
+      });
+      break;
+    case 'Dispatch':
+      // Enable all dispatch features by default
+      Object.keys(defaultPermissions.dispatch).forEach(featureKey => {
+        defaultPermissions.dispatch[featureKey] = {
+          view: true,
+          add: true,
+          edit: true,
+          delete: true
+        };
+      });
+      break;
+    case 'Packing':
+      // Enable all packing features by default
+      Object.keys(defaultPermissions.packing).forEach(featureKey => {
+        defaultPermissions.packing[featureKey] = {
+          view: true,
+          add: true,
+          edit: true,
+          delete: true
+        };
+      });
+      break;
+    case 'Unit Manager':
+    default:
+      // Unit Manager gets limited access by default
+      Object.keys(defaultPermissions.unitManager).forEach(featureKey => {
+        defaultPermissions.unitManager[featureKey] = {
+          view: true,
+          add: false,
+          edit: false,
+          delete: false
+        };
+      });
+      break;
+  }
+  
+  return defaultPermissions;
+};
+
 const UnitHeadRolePermissionManagement = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [isAddingUser, setIsAddingUser] = useState(false);
@@ -143,6 +290,7 @@ const UnitHeadRolePermissionManagement = () => {
     username: '',
     email: '',
     fullName: '',
+    role: 'Unit Manager', // Default role
     password: '',
     confirmPassword: '',
     permissions: convertDBPermissionsToUI({}),
@@ -154,9 +302,9 @@ const UnitHeadRolePermissionManagement = () => {
 
   const queryClient = useQueryClient();
 
-  // Get Unit Managers under this Unit Head
-  const { data: unitManagersData, isLoading, error } = useQuery({
-    queryKey: ['unit-managers', searchTerm, statusFilter],
+  // Get all unit users under this Unit Head (Unit Managers, Sales, Production, etc.)
+  const { data: unitUsersData, isLoading, error } = useQuery({
+    queryKey: ['unit-users', searchTerm, statusFilter],
     queryFn: async () => {
       const params = new URLSearchParams({
         search: searchTerm,
@@ -164,7 +312,7 @@ const UnitHeadRolePermissionManagement = () => {
         limit: 100
       });
       
-      const response = await apiRequest('GET', `/api/unit-head/unit-managers?${params}`);
+      const response = await apiRequest('GET', `/api/unit-head/unit-users?${params}`);
       return response;
     }
   });
@@ -185,36 +333,36 @@ const UnitHeadRolePermissionManagement = () => {
 
   // Create Unit Manager mutation
   const createUserMutation = useMutation({
-    mutationFn: (userData) => apiRequest('POST', '/api/unit-head/unit-managers', userData),
+    mutationFn: (userData) => apiRequest('POST', '/api/unit-head/unit-users', userData),
     onSuccess: () => {
-      queryClient.invalidateQueries(['unit-managers']);
-      showSuccessToast('Unit Manager created successfully!');
+      queryClient.invalidateQueries(['unit-users']);
+      showSuccessToast('User created successfully!');
       setIsAddingUser(false);
       resetForm();
     },
     onError: (error) => {
-      showSmartToast(error.message || 'Failed to create Unit Manager', 'error');
+      showSmartToast(error.message || 'Failed to create user', 'error');
     }
   });
 
-  // Update Unit Manager mutation
+  // Update User mutation
   const updateUserMutation = useMutation({
-    mutationFn: ({ userId, userData }) => apiRequest('PUT', `/api/unit-head/unit-managers/${userId}`, userData),
+    mutationFn: ({ userId, userData }) => apiRequest('PUT', `/api/unit-head/unit-users/${userId}`, userData),
     onSuccess: () => {
-      queryClient.invalidateQueries(['unit-managers']);
-      showSuccessToast('Unit Manager updated successfully!');
+      queryClient.invalidateQueries(['unit-users']);
+      showSuccessToast('User updated successfully!');
       setIsEditingUser(false);
       setSelectedUser(null);
       resetForm();
     },
     onError: (error) => {
-      showSmartToast(error.message || 'Failed to update Unit Manager', 'error');
+      showSmartToast(error.message || 'Failed to update user', 'error');
     }
   });
 
   // Update password mutation
   const updatePasswordMutation = useMutation({
-    mutationFn: ({ userId, newPassword }) => apiRequest('PUT', `/api/unit-head/unit-managers/${userId}/password`, { newPassword }),
+    mutationFn: ({ userId, newPassword }) => apiRequest('PUT', `/api/unit-head/unit-users/${userId}/password`, { newPassword }),
     onSuccess: () => {
       showSuccessToast('Password updated successfully!');
       setIsChangingPassword(false);
@@ -226,15 +374,15 @@ const UnitHeadRolePermissionManagement = () => {
     }
   });
 
-  // Delete Unit Manager mutation
+  // Delete User mutation
   const deleteUserMutation = useMutation({
-    mutationFn: (userId) => apiRequest('DELETE', `/api/unit-head/unit-managers/${userId}`),
+    mutationFn: (userId) => apiRequest('DELETE', `/api/unit-head/unit-users/${userId}`),
     onSuccess: () => {
-      queryClient.invalidateQueries(['unit-managers']);
-      showSuccessToast('Unit Manager deleted successfully!');
+      queryClient.invalidateQueries(['unit-users']);
+      showSuccessToast('User deleted successfully!');
     },
     onError: (error) => {
-      showSmartToast(error.message || 'Failed to delete Unit Manager', 'error');
+      showSmartToast(error.message || 'Failed to delete user', 'error');
     }
   });
 
@@ -243,6 +391,7 @@ const UnitHeadRolePermissionManagement = () => {
       username: '',
       email: '',
       fullName: '',
+      role: 'Unit Manager', // Default role
       password: '',
       confirmPassword: '',
       permissions: convertDBPermissionsToUI({}),
@@ -256,6 +405,7 @@ const UnitHeadRolePermissionManagement = () => {
       username: user.username,
       email: user.email,
       fullName: user.fullName,
+      role: user.role, // Add this missing role field
       permissions: convertDBPermissionsToUI(user.permissions || {}),
       isActive: user.isActive,
       password: '',
@@ -266,7 +416,7 @@ const UnitHeadRolePermissionManagement = () => {
 
   const handleDeleteUser = (user) => {
     const confirmDelete = window.confirm(
-      `Are you sure you want to delete Unit Manager "${user.fullName}"? This action cannot be undone.`
+      `Are you sure you want to delete user "${user.fullName}"? This action cannot be undone.`
     );
     
     if (confirmDelete) {
@@ -299,7 +449,7 @@ const UnitHeadRolePermissionManagement = () => {
     
     // Validate Unit Head company assignment for Unit Manager creation
     if (isAddingUser && !unitHeadCompanyInfo) {
-      showSmartToast('Unit Head must have a company assigned to create Unit Managers', 'error');
+      showSmartToast('Unit Head must have a company assigned to create users', 'error');
       return;
     }
     
@@ -341,9 +491,9 @@ const UnitHeadRolePermissionManagement = () => {
     });
   };
 
-  const unitManagers = unitManagersData?.data?.users || [];
-  const summary = unitManagersData?.data?.summary || {};
-  const currentUnit = unitManagersData?.data?.unit || '';
+  const unitUsers = unitUsersData?.data?.users || [];
+  const summary = unitUsersData?.data?.summary || {};
+  const currentUnit = unitUsersData?.data?.unit || '';
 
   if (error) {
     return (
@@ -362,8 +512,8 @@ const UnitHeadRolePermissionManagement = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Unit Manager Management</h1>
-          <p className="text-gray-600">Manage Unit Managers and their permissions for {currentUnit}</p>
+          <h1 className="text-3xl font-bold tracking-tight">User Management</h1>
+          <p className="text-gray-600">Manage unit personnel and their permissions for {currentUnit}</p>
         </div>
         <Button
           onClick={() => {
@@ -373,7 +523,7 @@ const UnitHeadRolePermissionManagement = () => {
           className="flex items-center gap-2"
         >
           <UserPlus className="w-4 h-4" />
-          Add Unit Manager
+          Add User
         </Button>
       </div>
 
@@ -413,7 +563,7 @@ const UnitHeadRolePermissionManagement = () => {
         </CardContent>
       </Card>
 
-      {/* Unit Managers Table */}
+      {/* Users Table */}
       <Card>
         <CardContent className="pt-6">
           <Table>
@@ -422,6 +572,7 @@ const UnitHeadRolePermissionManagement = () => {
                 <TableHead>User Details</TableHead>
                 <TableHead>Contact</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Role</TableHead>
                 <TableHead>Permissions</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
@@ -430,17 +581,17 @@ const UnitHeadRolePermissionManagement = () => {
               {isLoading ? (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center py-8">
-                    Loading unit managers...
+                    Loading users...
                   </TableCell>
                 </TableRow>
-              ) : unitManagers.length === 0 ? (
+              ) : unitUsers.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center py-8 text-gray-500">
-                    No unit managers found. Add your first unit manager to get started.
+                    No users found. Add your first user to get started.
                   </TableCell>
                 </TableRow>
               ) : (
-                unitManagers.map((user) => (
+                unitUsers.map((user) => (
                   <TableRow key={user._id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
@@ -462,13 +613,16 @@ const UnitHeadRolePermissionManagement = () => {
                       </Badge>
                     </TableCell>
                     <TableCell>
+                      <Badge variant={user.role === 'Unit Manager' ? 'default' : 'secondary'}>
+                        {user.role}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
                       <div className="flex flex-wrap gap-1">
-                        {user.permissions?.modules?.length > 0 ? (
-                          user.permissions.modules.map((module) => {
-                            const moduleInfo = UNIT_MANAGER_MODULES.find(m => m.name === module.name);
-                            const enabledFeatures = module.features?.filter(f => f.view || f.add || f.edit || f.delete);
-                            
-                            return enabledFeatures?.map((feature) => {
+                          {user.permissions?.modules?.length > 0 ? (
+                            user.permissions.modules.map((module) => {
+                              const moduleInfo = UNIT_HEAD_MODULES.find(m => m.name === module.name);
+                              const enabledFeatures = module.features?.filter(f => f.view || f.add || f.edit || f.delete);                            return enabledFeatures?.map((feature) => {
                               const featureInfo = moduleInfo?.features.find(f => f.key === feature.key);
                               const permissions = [];
                               if (feature.view) permissions.push('View');
@@ -530,7 +684,7 @@ const UnitHeadRolePermissionManagement = () => {
         </CardContent>
       </Card>
 
-      {/* Add/Edit Unit Manager Dialog */}
+      {/* Add/Edit User Dialog */}
       <Dialog open={isAddingUser || isEditingUser} onOpenChange={(open) => {
         if (!open) {
           setIsAddingUser(false);
@@ -542,12 +696,12 @@ const UnitHeadRolePermissionManagement = () => {
         <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {isAddingUser ? 'Add Unit Manager' : 'Edit Unit Manager'}
+              {isAddingUser ? 'Add New User' : 'Edit User'}
             </DialogTitle>
             <DialogDescription>
               {isAddingUser 
-                ? 'Create a new Unit Manager and set their permissions'
-                : 'Update Unit Manager details and permissions'
+                ? 'Create a new user and set their role and permissions'
+                : 'Update user details, role and permissions'
               }
             </DialogDescription>
           </DialogHeader>
@@ -580,16 +734,42 @@ const UnitHeadRolePermissionManagement = () => {
                 </div>
               </div>
 
-              <div>
-                <Label htmlFor="email">Email *</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({...formData, email: e.target.value})}
-                  placeholder="Enter email address"
-                  required
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="email">Email *</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({...formData, email: e.target.value})}
+                    placeholder="Enter email address"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="role">Role *</Label>
+                  <select
+                    id="role"
+                    value={formData.role}
+                    onChange={(e) => {
+                      const newRole = e.target.value;
+                      const defaultPermissions = getDefaultPermissionsForRole(newRole);
+                      setFormData({
+                        ...formData, 
+                        role: newRole,
+                        permissions: defaultPermissions
+                      });
+                    }}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    required
+                  >
+                    {UNIT_HEAD_MANAGEABLE_ROLES.map(role => (
+                      <option key={role.value} value={role.value}>
+                        {role.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               {/* Company/Location field - read-only for Unit Head */}
@@ -610,13 +790,13 @@ const UnitHeadRolePermissionManagement = () => {
                 />
                 {!unitHeadCompanyInfo && (
                   <p className="text-sm text-red-600 mt-1">
-                    Unit Head must have a company assigned to create Unit Managers
+                    Unit Head must have a company assigned to create users
                   </p>
                 )}
               </div>
 
               {isAddingUser && (
-                <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="password">Password *</Label>
                     <Input
@@ -639,16 +819,72 @@ const UnitHeadRolePermissionManagement = () => {
                       required
                     />
                   </div>
-                </>
+                </div>
               )}
             </div>
 
             {/* Module Permissions */}
             <div className="space-y-4">
-              <h3 className="text-lg font-medium flex items-center gap-2">
-                <Shield className="w-5 h-5" />
-                Module Permissions
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-medium flex items-center gap-2">
+                  <Shield className="w-5 h-5" />
+                  Module Permissions
+                </h3>
+                <div className="flex gap-2">
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      const allEnabled = {};
+                      UNIT_HEAD_MODULES.forEach(module => {
+                        allEnabled[module.name] = {};
+                        module.features.forEach(feature => {
+                          allEnabled[module.name][feature.key] = {
+                            view: true,
+                            add: true,
+                            edit: true,
+                            delete: true
+                          };
+                        });
+                      });
+                      setFormData(prev => ({
+                        ...prev,
+                        permissions: allEnabled
+                      }));
+                    }}
+                    className="text-green-600 border-green-600 hover:bg-green-50"
+                  >
+                    Enable All
+                  </Button>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      const allDisabled = {};
+                      UNIT_HEAD_MODULES.forEach(module => {
+                        allDisabled[module.name] = {};
+                        module.features.forEach(feature => {
+                          allDisabled[module.name][feature.key] = {
+                            view: false,
+                            add: false,
+                            edit: false,
+                            delete: false
+                          };
+                        });
+                      });
+                      setFormData(prev => ({
+                        ...prev,
+                        permissions: allDisabled
+                      }));
+                    }}
+                    className="text-red-600 border-red-600 hover:bg-red-50"
+                  >
+                    Disable All
+                  </Button>
+                </div>
+              </div>
               
               <div className="bg-white border rounded-lg">
                 <div className="p-4">
@@ -673,7 +909,18 @@ const UnitHeadRolePermissionManagement = () => {
                   </div>
                   
                   <div className="space-y-3 max-h-64 overflow-y-auto">
-                    {UNIT_MANAGER_MODULES.flatMap(module => 
+                    {UNIT_HEAD_MODULES
+                      .filter(module => {
+                        // Show relevant modules based on selected role
+                        if (formData.role === 'Unit Manager') return module.name === 'unitManager';
+                        if (formData.role === 'Sales') return module.name === 'sales';
+                        if (formData.role === 'Production') return module.name === 'production';
+                        if (formData.role === 'Accounts') return module.name === 'accounts';
+                        if (formData.role === 'Dispatch') return module.name === 'dispatch';
+                        if (formData.role === 'Packing') return module.name === 'packing';
+                        return true; // Show all by default
+                      })
+                      .flatMap(module => 
                       module.features.map(feature => (
                         <div key={`${module.name}-${feature.key}`} className="grid grid-cols-5 gap-4 items-center py-2 hover:bg-gray-50 rounded">
                           <div className="font-medium text-sm">{feature.label}</div>
@@ -759,7 +1006,7 @@ const UnitHeadRolePermissionManagement = () => {
               >
                 {createUserMutation.isPending || updateUserMutation.isPending 
                   ? 'Processing...' 
-                  : (isAddingUser ? 'Create Unit Manager' : 'Update Unit Manager')
+                  : (isAddingUser ? 'Create User' : 'Update User')
                 }
               </Button>
             </div>

@@ -246,20 +246,19 @@ export default function Companies() {
                   <TableHead>Unit & Location</TableHead>
                   <TableHead>Contact Info</TableHead>
                   <TableHead>Legal Info</TableHead>
-                  <TableHead>Cutoff Time</TableHead>
                   <TableHead className="w-[100px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8">
+                    <TableCell colSpan={5} className="text-center py-8">
                       Loading companies...
                     </TableCell>
                   </TableRow>
                 ) : companies.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                       No companies found. Add your first company to get started.
                     </TableCell>
                   </TableRow>
@@ -271,10 +270,20 @@ export default function Companies() {
                           <div className="font-medium text-gray-900 dark:text-gray-100">
                             {company.name}
                           </div>
+                          {company.legalName && (
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                              Legal: {company.legalName}
+                            </div>
+                          )}
                           <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
                             <MapPin className="h-3 w-3" />
                             {company.address}
                           </div>
+                          {company.companyType && (
+                            <Badge variant="outline" className="text-xs mt-1">
+                              {company.companyType}
+                            </Badge>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -304,20 +313,15 @@ export default function Companies() {
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1">
+                          {company.pan && (
+                            <div className="text-sm font-medium">
+                              PAN: {company.pan}
+                            </div>
+                          )}
                           <div className="text-sm font-medium">
                             GST: {company.gst}
                           </div>
-                          {company.fssai && (
-                            <div className="text-xs text-gray-500">
-                              FSSAI: {company.fssai}
-                            </div>
-                          )}
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">
-                          {company.orderCutoffTime}
-                        </Badge>
                       </TableCell>
                       <TableCell>
                         <DropdownMenu>

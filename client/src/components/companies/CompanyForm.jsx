@@ -19,22 +19,32 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { 
+  Select,
+  SelectContent, 
+  SelectItem,
+  SelectTrigger,
+  SelectValue 
+} from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Building2, MapPin, FileText, Clock } from 'lucide-react';
+import { Building2, MapPin, FileText } from 'lucide-react';
 
 const companySchema = z.object({
   unitName: z.string().min(1, 'Unit name is required'),
   name: z.string().min(1, 'Company name is required'),
+  legalName: z.string().optional(),
+  companyType: z.string().optional(),
   mobile: z.string().min(10, 'Valid mobile number is required'),
   email: z.string().email('Valid email is required'),
   address: z.string().min(1, 'Address is required'),
   locationPin: z.string().min(6, 'Valid PIN code is required'),
   city: z.string().min(1, 'City is required'),
   state: z.string().min(1, 'State is required'),
-  country: z.string().min(1, 'Country is required'),
+  pan: z.string()
+    .regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, 'PAN must be in format ABCDE1234F')
+    .optional()
+    .or(z.literal('')),
   gst: z.string().min(15, 'Valid GST number is required'),
-  fssai: z.string().optional(),
-  orderCutoffTime: z.string().min(1, 'Order cutoff time is required'),
 });
 
 export default function CompanyForm({ isOpen, onClose, company, onSubmit, isLoading }) {
@@ -43,16 +53,16 @@ export default function CompanyForm({ isOpen, onClose, company, onSubmit, isLoad
     defaultValues: {
       unitName: '',
       name: '',
+      legalName: '',
+      companyType: '',
       mobile: '',
       email: '',
       address: '',
       locationPin: '',
       city: '',
       state: '',
-      country: 'India',
+      pan: '',
       gst: '',
-      fssai: '',
-      orderCutoffTime: '18:00',
     },
   });
 
@@ -63,16 +73,16 @@ export default function CompanyForm({ isOpen, onClose, company, onSubmit, isLoad
       form.reset({
         unitName: '',
         name: '',
+        legalName: '',
+        companyType: '',
         mobile: '',
         email: '',
         address: '',
         locationPin: '',
         city: '',
         state: '',
-        country: 'India',
+        pan: '',
         gst: '',
-        fssai: '',
-        orderCutoffTime: '18:00',
       });
     }
   }, [company, form]);
@@ -131,6 +141,45 @@ export default function CompanyForm({ isOpen, onClose, company, onSubmit, isLoad
                       <FormControl>
                         <Input placeholder="e.g., TechCorp Industries" {...field} />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="legalName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Legal Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., TechCorp Industries Private Limited" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="companyType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Company Type</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select company type" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="Private Limited">Private Limited</SelectItem>
+                          <SelectItem value="Public Limited">Public Limited</SelectItem>
+                          <SelectItem value="LLP">LLP</SelectItem>
+                          <SelectItem value="Partnership">Partnership</SelectItem>
+                          <SelectItem value="Proprietorship">Proprietorship</SelectItem>
+                          <SelectItem value="OPC">OPC (One Person Company)</SelectItem>
+                          <SelectItem value="Other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -230,20 +279,8 @@ export default function CompanyForm({ isOpen, onClose, company, onSubmit, isLoad
                       </FormItem>
                     )}
                   />
+
                 </div>
-                <FormField
-                  control={form.control}
-                  name="country"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Country *</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
               </CardContent>
             </Card>
 
@@ -258,13 +295,13 @@ export default function CompanyForm({ isOpen, onClose, company, onSubmit, isLoad
               <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
-                  name="gst"
+                  name="pan"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>GST Number *</FormLabel>
+                      <FormLabel>PAN Number</FormLabel>
                       <FormControl>
                         <Input 
-                          placeholder="07AABCT1234H1Z5" 
+                          placeholder="ABCDE1234F" 
                           {...field}
                           onChange={(e) => field.onChange(e.target.value.toUpperCase())}
                         />
@@ -275,37 +312,16 @@ export default function CompanyForm({ isOpen, onClose, company, onSubmit, isLoad
                 />
                 <FormField
                   control={form.control}
-                  name="fssai"
+                  name="gst"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>FSSAI Number</FormLabel>
+                      <FormLabel>GST Number *</FormLabel>
                       <FormControl>
-                        <Input placeholder="10019022000135" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </CardContent>
-            </Card>
-
-            {/* Timing Information */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <Clock className="h-5 w-5 text-orange-600" />
-                  Timing Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <FormField
-                  control={form.control}
-                  name="orderCutoffTime"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Order Cutoff Time *</FormLabel>
-                      <FormControl>
-                        <Input type="time" {...field} />
+                        <Input 
+                          placeholder="07AABCT1234H1Z5" 
+                          {...field}
+                          onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

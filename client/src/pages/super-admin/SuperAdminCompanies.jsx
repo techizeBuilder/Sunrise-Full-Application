@@ -628,13 +628,17 @@ const SuperAdminCompanies = () => {
 const CompanyForm = ({ company, onSubmit, isLoading, onCancel }) => {
   const [formData, setFormData] = useState({
     unitName: company?.unitName || '',
+    name: company?.name || '',
+    legalName: company?.legalName || '',
+    companyType: company?.companyType || '',
     mobile: company?.mobile || '',
     email: company?.email || '',
     address: company?.address || '',
     locationPin: company?.locationPin || '',
     city: company?.city || '',
     state: company?.state || '',
-    country: company?.country || 'India',
+    pan: company?.pan || '',
+    gst: company?.gst || '',
     isActive: true // Always active, not editable
   });
 
@@ -645,13 +649,23 @@ const CompanyForm = ({ company, onSubmit, isLoading, onCancel }) => {
     
     // Basic validation
     const newErrors = {};
-    const requiredFields = ['unitName', 'locationPin', 'city', 'state'];
+    const requiredFields = ['unitName', 'name', 'locationPin', 'city', 'state', 'gst'];
     
     requiredFields.forEach(field => {
-      if (!formData[field].trim()) {
-        newErrors[field] = `${field} is required`;
+      if (!formData[field]?.trim()) {
+        newErrors[field] = `${field.charAt(0).toUpperCase() + field.slice(1)} is required`;
       }
     });
+
+    // PAN validation (if provided)
+    if (formData.pan && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(formData.pan)) {
+      newErrors.pan = 'PAN must be in format ABCDE1234F';
+    }
+
+    // GST validation (if provided)
+    if (formData.gst && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}[Z]{1}[0-9A-Z]{1}$/.test(formData.gst)) {
+      newErrors.gst = 'Please provide a valid GST number';
+    }
 
     // Email validation (if provided)
     if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
@@ -689,94 +703,178 @@ const CompanyForm = ({ company, onSubmit, isLoading, onCancel }) => {
       </DialogHeader>
       
       <div className="grid gap-4 py-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="unitName">Unit Name *</Label>
-            <Input
-              id="unitName"
-              value={formData.unitName}
-              onChange={(e) => handleChange('unitName', e.target.value)}
-              placeholder="Enter unit name"
-              className={errors.unitName ? 'border-red-500' : ''}
-            />
-            {errors.unitName && <p className="text-sm text-red-500">{errors.unitName}</p>}
+        {/* Company Information Section */}
+        <div className="space-y-4">
+          <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">Company Information</h4>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="unitName">Unit Name *</Label>
+              <Input
+                id="unitName"
+                value={formData.unitName}
+                onChange={(e) => handleChange('unitName', e.target.value)}
+                placeholder="Enter unit name"
+                className={errors.unitName ? 'border-red-500' : ''}
+              />
+              {errors.unitName && <p className="text-sm text-red-500">{errors.unitName}</p>}
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="name">Company Name *</Label>
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={(e) => handleChange('name', e.target.value)}
+                placeholder="Enter company name"
+                className={errors.name ? 'border-red-500' : ''}
+              />
+              {errors.name && <p className="text-sm text-red-500">{errors.name}</p>}
+            </div>
           </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="mobile">Mobile</Label>
-            <Input
-              id="mobile"
-              value={formData.mobile}
-              onChange={(e) => handleChange('mobile', e.target.value)}
-              placeholder="+91-9876543210"
-              className={errors.mobile ? 'border-red-500' : ''}
-            />
-            {errors.mobile && <p className="text-sm text-red-500">{errors.mobile}</p>}
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="legalName">Legal Name</Label>
+              <Input
+                id="legalName"
+                value={formData.legalName}
+                onChange={(e) => handleChange('legalName', e.target.value)}
+                placeholder="Enter legal name"
+                className={errors.legalName ? 'border-red-500' : ''}
+              />
+              {errors.legalName && <p className="text-sm text-red-500">{errors.legalName}</p>}
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="companyType">Company Type</Label>
+              <select
+                id="companyType"
+                value={formData.companyType}
+                onChange={(e) => handleChange('companyType', e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="">Select company type</option>
+                <option value="Private Limited">Private Limited</option>
+                <option value="Public Limited">Public Limited</option>
+                <option value="LLP">LLP</option>
+                <option value="Partnership">Partnership</option>
+                <option value="Proprietorship">Proprietorship</option>
+                <option value="OPC">OPC (One Person Company)</option>
+                <option value="Other">Other</option>
+              </select>
+              {errors.companyType && <p className="text-sm text-red-500">{errors.companyType}</p>}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="mobile">Mobile</Label>
+              <Input
+                id="mobile"
+                value={formData.mobile}
+                onChange={(e) => handleChange('mobile', e.target.value)}
+                placeholder="+91-9876543210"
+                className={errors.mobile ? 'border-red-500' : ''}
+              />
+              {errors.mobile && <p className="text-sm text-red-500">{errors.mobile}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={formData.email}
+                onChange={(e) => handleChange('email', e.target.value)}
+                placeholder="company@example.com"
+                className={errors.email ? 'border-red-500' : ''}
+              />
+              {errors.email && <p className="text-sm text-red-500">{errors.email}</p>}
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        {/* Location Information Section */}
+        <div className="space-y-4">
+          <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">Location Information</h4>
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="address">Address</Label>
             <Input
-              id="email"
-              type="email"
-              value={formData.email}
-              onChange={(e) => handleChange('email', e.target.value)}
-              placeholder="company@example.com"
-              className={errors.email ? 'border-red-500' : ''}
+              id="address"
+              value={formData.address}
+              onChange={(e) => handleChange('address', e.target.value)}
+              placeholder="Enter complete address"
+              className={errors.address ? 'border-red-500' : ''}
             />
-            {errors.email && <p className="text-sm text-red-500">{errors.email}</p>}
+            {errors.address && <p className="text-sm text-red-500">{errors.address}</p>}
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="city">City *</Label>
+              <Input
+                id="city"
+                value={formData.city}
+                onChange={(e) => handleChange('city', e.target.value)}
+                placeholder="Enter city"
+                className={errors.city ? 'border-red-500' : ''}
+              />
+              {errors.city && <p className="text-sm text-red-500">{errors.city}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="state">State *</Label>
+              <Input
+                id="state"
+                value={formData.state}
+                onChange={(e) => handleChange('state', e.target.value)}
+                placeholder="Enter state"
+                className={errors.state ? 'border-red-500' : ''}
+              />
+              {errors.state && <p className="text-sm text-red-500">{errors.state}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="locationPin">PIN Code *</Label>
+              <Input
+                id="locationPin"
+                value={formData.locationPin}
+                onChange={(e) => handleChange('locationPin', e.target.value)}
+                placeholder="123456"
+                className={errors.locationPin ? 'border-red-500' : ''}
+              />
+              {errors.locationPin && <p className="text-sm text-red-500">{errors.locationPin}</p>}
+            </div>
           </div>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="address">Address</Label>
-          <Input
-            id="address"
-            value={formData.address}
-            onChange={(e) => handleChange('address', e.target.value)}
-            placeholder="Enter complete address"
-            className={errors.address ? 'border-red-500' : ''}
-          />
-          {errors.address && <p className="text-sm text-red-500">{errors.address}</p>}
-        </div>
+        {/* Legal Information Section */}
+        <div className="space-y-4">
+          <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">Legal Information</h4>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="pan">PAN Number</Label>
+              <Input
+                id="pan"
+                value={formData.pan}
+                onChange={(e) => handleChange('pan', e.target.value.toUpperCase())}
+                placeholder="ABCDE1234F"
+                className={errors.pan ? 'border-red-500' : ''}
+              />
+              {errors.pan && <p className="text-sm text-red-500">{errors.pan}</p>}
+            </div>
 
-        <div className="grid grid-cols-3 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="city">City *</Label>
-            <Input
-              id="city"
-              value={formData.city}
-              onChange={(e) => handleChange('city', e.target.value)}
-              placeholder="Enter city"
-              className={errors.city ? 'border-red-500' : ''}
-            />
-            {errors.city && <p className="text-sm text-red-500">{errors.city}</p>}
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="state">State *</Label>
-            <Input
-              id="state"
-              value={formData.state}
-              onChange={(e) => handleChange('state', e.target.value)}
-              placeholder="Enter state"
-              className={errors.state ? 'border-red-500' : ''}
-            />
-            {errors.state && <p className="text-sm text-red-500">{errors.state}</p>}
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="locationPin">PIN Code *</Label>
-            <Input
-              id="locationPin"
-              value={formData.locationPin}
-              onChange={(e) => handleChange('locationPin', e.target.value)}
-              placeholder="123456"
-              className={errors.locationPin ? 'border-red-500' : ''}
-            />
-            {errors.locationPin && <p className="text-sm text-red-500">{errors.locationPin}</p>}
+            <div className="space-y-2">
+              <Label htmlFor="gst">GST Number *</Label>
+              <Input
+                id="gst"
+                value={formData.gst}
+                onChange={(e) => handleChange('gst', e.target.value.toUpperCase())}
+                placeholder="07AABCT1234H1Z5"
+                className={errors.gst ? 'border-red-500' : ''}
+              />
+              {errors.gst && <p className="text-sm text-red-500">{errors.gst}</p>}
+            </div>
           </div>
         </div>
       </div>

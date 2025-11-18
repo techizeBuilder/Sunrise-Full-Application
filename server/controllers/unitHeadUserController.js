@@ -182,14 +182,11 @@ export const createUnitManager = async (req, res) => {
       });
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 12);
-
     // Create new unit manager under the same unit and company as the Unit Head
     const newUser = new User({
       username,
       email,
-      password: hashedPassword,
+      password,
       fullName,
       role: 'Unit Manager', // Fixed role
       unit: req.user.unit, // Same unit as the Unit Head
@@ -348,46 +345,21 @@ export const updateUnitManagerPassword = async (req, res) => {
 
     console.log('Found Unit Manager:', user.username, 'Email:', user.email);
 
-    // Hash the new password with bcrypt for encryption (same as admin API)
-    const hashedPassword = await bcrypt.hash(newPassword, 12);
-    console.log('Password hashed successfully with bcrypt');
-    console.log('Hash length:', hashedPassword.length);
-    
-    // Verify the hash works before saving (important validation step)
-    const hashTest = await bcrypt.compare(newPassword, hashedPassword);
-    console.log('Hash verification test:', hashTest);
-    
-    if (!hashTest) {
-      throw new Error('Password hash verification failed');
-    }
-    
-    // Update password using findByIdAndUpdate for consistency with admin API
-    const updatedUser = await User.findByIdAndUpdate(
-      userId,
-      { 
-        password: hashedPassword,
-        updatedAt: new Date()
-      },
-      { new: true }
-    ).select('-password');
-
-    if (!updatedUser) {
-      return res.status(404).json({
-        success: false,
-        message: 'Failed to update password'
-      });
-    }
+    // Update password (using .save() to trigger User model's pre-save middleware for hashing)
+    user.password = newPassword;
+    user.updatedAt = new Date();
+    await user.save();
 
     console.log('=== Unit Manager password updated successfully ===');
-    console.log('Updated user:', updatedUser.username);
+    console.log('Updated user:', user.username);
 
     res.json({
       success: true,
       message: 'Password updated successfully',
       data: {
-        _id: updatedUser._id,
-        username: updatedUser.username,
-        email: updatedUser.email
+        _id: user._id,
+        username: user.username,
+        email: user.email
       }
     });
   } catch (error) {
@@ -602,6 +574,402 @@ export const getUnitHeadCompanyInfo = async (req, res) => {
     res.status(500).json({ 
       success: false, 
       message: 'Failed to fetch company information', 
+      error: error.message 
+    });
+  }
+};
+
+// ============ NEW FUNCTIONS FOR ALL UNIT USERS ============
+
+// Unit Head manageable roles
+const UNIT_HEAD_MANAGEABLE_ROLES = [
+  'Unit Manager', 
+  'Sales', 
+  'Production', 
+  'Accounts', 
+  'Dispatch', 
+  'Packing'
+];
+
+// Get all unit users (Unit Manager, Sales, Production, Accounts, Dispatch, Packing)
+export const getUnitUsers = async (req, res) => {
+  try {
+    console.log('=== getUnitUsers API called ===');
+    console.log('Unit Head user:', req.user?.username, 'Unit:', req.user?.unit, 'CompanyId:', req.user?.companyId);
+    
+    if (!req.user?.companyId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Unit Head must be assigned to a company. Please contact administrator.',
+      });
+    }
+    
+    const { 
+      page = 1, 
+      limit = 100,
+      search,
+      sortBy = 'createdAt',
+      sortOrder = 'desc',
+      status = 'all'
+    } = req.query;
+    
+    const skip = (page - 1) * limit;
+
+    // Unit Head can only see users from their unit, company, and manageable roles
+    let query = {
+      role: { $in: UNIT_HEAD_MANAGEABLE_ROLES },
+      unit: req.user.unit,
+      companyId: req.user.companyId
+    };
+
+    // Filter by status
+    if (status !== 'all') {
+      query.isActive = status === 'active';
+    }
+
+    // Search functionality
+    if (search) {
+      query.$or = [
+        { fullName: { $regex: search, $options: 'i' } },
+        { username: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+        { role: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Sorting
+    const sort = {};
+    sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
+
+    // Fetch unit users with pagination
+    const unitUsers = await User.find(query)
+      .select('-password')
+      .sort(sort)
+      .skip(skip)
+      .limit(parseInt(limit))
+      .lean();
+
+    // Get total count for pagination
+    const total = await User.countDocuments(query);
+
+    // Get summary statistics by role
+    const stats = await User.aggregate([
+      { 
+        $match: { 
+          unit: req.user.unit, 
+          role: { $in: UNIT_HEAD_MANAGEABLE_ROLES },
+          companyId: req.user.companyId
+        } 
+      },
+      {
+        $group: {
+          _id: '$role',
+          total: { $sum: 1 },
+          active: { $sum: { $cond: [{ $eq: ['$isActive', true] }, 1, 0] } },
+          inactive: { $sum: { $cond: [{ $eq: ['$isActive', false] }, 1, 0] } }
+        }
+      }
+    ]);
+
+    const summary = {
+      totalUsers: total,
+      activeUsers: unitUsers.filter(u => u.isActive).length,
+      inactiveUsers: unitUsers.filter(u => !u.isActive).length,
+      byRole: stats.reduce((acc, stat) => {
+        acc[stat._id] = {
+          total: stat.total,
+          active: stat.active,
+          inactive: stat.inactive
+        };
+        return acc;
+      }, {})
+    };
+
+    res.json({
+      success: true,
+      data: {
+        users: unitUsers,
+        summary,
+        unit: req.user.unit,
+        pagination: {
+          current: parseInt(page),
+          total: Math.ceil(total / limit),
+          count: total,
+          hasNext: skip + unitUsers.length < total,
+          hasPrev: parseInt(page) > 1
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Get unit users error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch unit users', 
+      error: error.message 
+    });
+  }
+};
+
+// Get unit user by ID
+export const getUnitUserById = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    const user = await User.findOne({
+      _id: userId,
+      role: { $in: UNIT_HEAD_MANAGEABLE_ROLES },
+      unit: req.user.unit,
+      companyId: req.user.companyId
+    }).select('-password');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found or access denied'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: user
+    });
+  } catch (error) {
+    console.error('Get unit user by ID error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to fetch user', 
+      error: error.message 
+    });
+  }
+};
+
+// Create new unit user
+export const createUnitUser = async (req, res) => {
+  try {
+    const { username, email, fullName, role, password, permissions } = req.body;
+
+    // Validate required fields
+    if (!username || !email || !fullName || !role || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'All required fields must be provided'
+      });
+    }
+
+    // Validate role
+    if (!UNIT_HEAD_MANAGEABLE_ROLES.includes(role)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid role. Must be one of: ${UNIT_HEAD_MANAGEABLE_ROLES.join(', ')}`
+      });
+    }
+
+    // Check if username or email already exists
+    const existingUser = await User.findOne({
+      $or: [{ username }, { email }]
+    });
+
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: existingUser.username === username 
+          ? 'Username already exists' 
+          : 'Email already exists'
+      });
+    }
+
+    // Create user with Unit Head's company and unit info (User model will handle password hashing automatically)
+    const newUser = new User({
+      username,
+      email,
+      fullName,
+      role,
+      password,
+      unit: req.user.unit,
+      companyId: req.user.companyId,
+      permissions: permissions || {},
+      isActive: true
+    });
+
+    await newUser.save();
+
+    // Return user without password
+    const { password: _, ...userResponse } = newUser.toObject();
+
+    res.status(201).json({
+      success: true,
+      message: `${role} created successfully`,
+      data: userResponse
+    });
+  } catch (error) {
+    console.error('Create unit user error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to create user', 
+      error: error.message 
+    });
+  }
+};
+
+// Update unit user
+export const updateUnitUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { username, email, fullName, role, permissions, isActive } = req.body;
+
+    // Find user and verify access
+    const user = await User.findOne({
+      _id: userId,
+      role: { $in: UNIT_HEAD_MANAGEABLE_ROLES },
+      unit: req.user.unit,
+      companyId: req.user.companyId
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found or access denied'
+      });
+    }
+
+    // Validate role if provided
+    if (role && !UNIT_HEAD_MANAGEABLE_ROLES.includes(role)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid role. Must be one of: ${UNIT_HEAD_MANAGEABLE_ROLES.join(', ')}`
+      });
+    }
+
+    // Check for duplicate username/email (excluding current user)
+    if (username || email) {
+      const duplicateQuery = { _id: { $ne: userId } };
+      if (username) duplicateQuery.username = username;
+      if (email) duplicateQuery.email = email;
+      
+      const existingUser = await User.findOne({
+        $or: [
+          ...(username ? [{ username, _id: { $ne: userId } }] : []),
+          ...(email ? [{ email, _id: { $ne: userId } }] : [])
+        ]
+      });
+
+      if (existingUser) {
+        return res.status(400).json({
+          success: false,
+          message: existingUser.username === username 
+            ? 'Username already exists' 
+            : 'Email already exists'
+        });
+      }
+    }
+
+    // Update user fields
+    const updateData = {};
+    if (username) updateData.username = username;
+    if (email) updateData.email = email;
+    if (fullName) updateData.fullName = fullName;
+    if (role) updateData.role = role;
+    if (permissions !== undefined) updateData.permissions = permissions;
+    if (isActive !== undefined) updateData.isActive = isActive;
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      updateData,
+      { new: true, runValidators: true }
+    ).select('-password');
+
+    res.json({
+      success: true,
+      message: 'User updated successfully',
+      data: updatedUser
+    });
+  } catch (error) {
+    console.error('Update unit user error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to update user', 
+      error: error.message 
+    });
+  }
+};
+
+// Update unit user password
+export const updateUnitUserPassword = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { newPassword } = req.body;
+
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 6 characters long'
+      });
+    }
+
+    // Find user and verify access
+    const user = await User.findOne({
+      _id: userId,
+      role: { $in: UNIT_HEAD_MANAGEABLE_ROLES },
+      unit: req.user.unit,
+      companyId: req.user.companyId
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found or access denied'
+      });
+    }
+
+    // Update password (using .save() to trigger User model's pre-save middleware for hashing)
+    user.password = newPassword;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Password updated successfully'
+    });
+  } catch (error) {
+    console.error('Update unit user password error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to update password', 
+      error: error.message 
+    });
+  }
+};
+
+// Delete unit user
+export const deleteUnitUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Find user and verify access
+    const user = await User.findOne({
+      _id: userId,
+      role: { $in: UNIT_HEAD_MANAGEABLE_ROLES },
+      unit: req.user.unit,
+      companyId: req.user.companyId
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found or access denied'
+      });
+    }
+
+    await User.findByIdAndDelete(userId);
+
+    res.json({
+      success: true,
+      message: `${user.role} deleted successfully`
+    });
+  } catch (error) {
+    console.error('Delete unit user error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to delete user', 
       error: error.message 
     });
   }

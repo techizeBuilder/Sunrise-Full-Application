@@ -181,6 +181,22 @@ export const createCompany = async (req, res) => {
       });
     }
 
+    if (companyData.pan && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(companyData.pan)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid PAN format',
+        errors: { pan: 'Please provide a valid PAN (format: ABCDE1234F)' }
+      });
+    }
+
+    if (companyData.gst && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}[Z]{1}[0-9A-Z]{1}$/.test(companyData.gst)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid GST format',
+        errors: { gst: 'Please provide a valid GST number (15 characters)' }
+      });
+    }
+
     // Create company
     const company = await Company.create(companyData);
 

@@ -17,7 +17,7 @@ export async function apiRequest(
   console.log(`API Request: ${method} ${url}`, data || '(no data)');
   console.log('Token available:', token ? 'Yes' : 'No');
 
-  const res = await fetch(`/api${url}`, {
+  const res = await fetch(url, {
     method,
     headers: { 
       "Content-Type": "application/json",
