@@ -1,5 +1,8 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { createServer } from "http";
+// Load environment variables
+import dotenv from "dotenv";
+dotenv.config();
 // Removed cookieParser - using JWT Bearer tokens only
 import cors from "cors";
 import path from "path";
@@ -331,10 +334,10 @@ app.use('/uploads', express.static('uploads'));
       res.status(status).json({ message });
     });
 
-    // ALWAYS serve the app on port 5000
+    // ALWAYS serve the app on port from env or default 5000
     // this serves both the API and the client.
     // It is the only port that is not firewalled.
-    const port = 5000;
+    const port = process.env.PORT || 5000;
     server.listen({
       port,
       host: "0.0.0.0",
