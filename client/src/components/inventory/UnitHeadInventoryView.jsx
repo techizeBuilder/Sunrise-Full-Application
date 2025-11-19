@@ -47,11 +47,16 @@ function UnitHeadStats({ stats, isLoading }) {
   // Extract stats values with proper fallbacks and debug logging
   console.log('=== STATS COMPONENT ===');
   console.log('Stats received:', stats);
+  console.log('Stats structure:', JSON.stringify(stats, null, 2));
   
-  const totalItems = stats?.overview?.totalItems || 0;
-  const totalValue = stats?.overview?.totalValue || 0;
-  const lowStockItems = stats?.overview?.lowStockCount || stats?.overview?.lowStockItems || 0; // Handle both field names
-  const totalCategories = stats?.categoryStats?.length || 0;
+  // Handle different possible API response structures
+  const statsData = stats?.data || stats;
+  const apiStats = statsData?.stats || statsData?.overview || statsData;
+  
+  const totalItems = apiStats?.totalItems || statsData?.totalItems || 0;
+  const totalValue = apiStats?.totalValue || statsData?.totalValue || 0;
+  const lowStockItems = apiStats?.lowStockCount || apiStats?.lowStockItems || statsData?.lowStockItems || 0;
+  const totalCategories = statsData?.categoryStats?.length || statsData?.categories?.length || 0;
   
   console.log('Extracted values:', {
     totalItems,
@@ -93,7 +98,7 @@ function UnitHeadStats({ stats, isLoading }) {
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4 gap-4 lg:gap-6 xl:gap-8 mb-6 sm:mb-8">
         {[...Array(4)].map((_, i) => (
           <Card key={i} className="animate-pulse">
             <CardContent className="p-4 sm:p-6">
@@ -104,33 +109,6 @@ function UnitHeadStats({ stats, isLoading }) {
       </div>
     );
   }
-
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
-      {statsCards.map((stat, index) => {
-        const IconComponent = stat.icon;
-        return (
-          <Card key={index} className="border-0 shadow-sm hover:shadow-md transition-all duration-300 bg-gradient-to-br from-white to-gray-50/50 dark:from-gray-900 dark:to-gray-800/50">
-            <CardContent className="p-4 sm:p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 mb-1 truncate">
-                    {stat.title}
-                  </p>
-                  <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-gray-100 truncate">
-                    {typeof stat.value === 'object' ? String(stat.value || 0) : stat.value}
-                  </p>
-                </div>
-                <div className={`p-2 sm:p-3 rounded-xl ${stat.bgColor} flex-shrink-0 ml-2`}>
-                  <IconComponent className={`h-4 w-4 sm:h-6 sm:w-6 ${stat.color}`} />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        );
-      })}
-    </div>
-  );
 }
 
 export default function UnitHeadInventoryView() {
@@ -317,7 +295,7 @@ export default function UnitHeadInventoryView() {
 
   return (
     <div className="w-full min-h-screen bg-gray-50/50 dark:bg-gray-900/50">
-      <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 space-y-6">
         {/* Header */}
         <div className="flex flex-col space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
