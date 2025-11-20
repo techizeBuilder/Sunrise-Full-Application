@@ -79,7 +79,7 @@ function getInventoryApiPath(user) {
 
 // Helper function to check if user has read-only access
 function isReadOnlyRole(user) {
-  return user?.role === 'Unit Head';
+  return false; // Unit Head now has full CRUD access
 }
 
 // Modern Stats Component
@@ -369,10 +369,10 @@ export default function ModernInventoryUI() {
 
   return (
     <div className="space-y-6">
-      <ModernStats stats={stats} isLoading={statsLoading} />
+      {/* <ModernStats stats={stats} isLoading={statsLoading} /> */}
       
       {/* Modern Action Bar */}
-      <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-blue-200 dark:border-blue-800">
+      {/* <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-blue-200 dark:border-blue-800">
         <CardContent className="p-6">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
             <div className="flex flex-col">
@@ -425,7 +425,7 @@ export default function ModernInventoryUI() {
             </div>
           </div>
         </CardContent>
-      </Card>
+      </Card> */}
 
       {/* Main Content Area */}
       <Card className="shadow-sm border-gray-200 dark:border-gray-700">

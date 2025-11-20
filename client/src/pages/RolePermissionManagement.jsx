@@ -537,18 +537,18 @@ export default function RolePermissionManagement() {
             name: 'unitHead',
             dashboard: true,
             features: [
-              { key: 'dashboard', view: true, add: false, edit: false, delete: false, alter: false },
-              { key: 'orders', view: true, add: false, edit: false, delete: false, alter: false },
-              { key: 'sales', view: true, add: false, edit: false, delete: false, alter: false },
-              { key: 'dispatches', view: true, add: false, edit: false, delete: false, alter: false },
-              { key: 'accounts', view: true, add: false, edit: false, delete: false, alter: false },
-              { key: 'inventory', view: true, add: false, edit: false, delete: false, alter: false },
-              { key: 'customers', view: true, add: false, edit: false, delete: false, alter: false },
-              { key: 'suppliers', view: true, add: false, edit: false, delete: false, alter: false },
-              { key: 'purchases', view: true, add: false, edit: false, delete: false, alter: false },
-              { key: 'manufacturing', view: true, add: false, edit: false, delete: false, alter: false },
-              { key: 'production', view: true, add: false, edit: false, delete: false, alter: false },
-              { key: 'settings', view: true, add: false, edit: false, delete: false, alter: false }
+              { key: 'dashboard', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'orders', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'sales', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'dispatches', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'accounts', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'inventory', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'customers', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'suppliers', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'purchases', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'manufacturing', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'production', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'userManagement', view: true, add: true, edit: true, delete: true, alter: true }
             ]
           }
         ];

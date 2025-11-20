@@ -140,6 +140,11 @@ export const createCompany = async (req, res) => {
       companyData.name = companyData.unitName;
     }
 
+    // Clean up empty companyType to prevent validation errors
+    if (companyData.companyType === '') {
+      delete companyData.companyType;
+    }
+
     // Validate required fields (name is now optional as it can be auto-generated)
     const requiredFields = ['unitName', 'locationPin', 'city', 'state'];
     const missingFields = requiredFields.filter(field => !companyData[field]);
@@ -234,6 +239,11 @@ export const updateCompany = async (req, res) => {
     // Auto-generate name from unitName if name is not provided but unitName is
     if (!updateData.name && updateData.unitName) {
       updateData.name = updateData.unitName;
+    }
+
+    // Clean up empty companyType to prevent validation errors
+    if (updateData.companyType === '') {
+      delete updateData.companyType;
     }
 
     const company = await Company.findByIdAndUpdate(

@@ -246,8 +246,44 @@ class APIService {
     return this.request('/customer-categories');
   }
 
-  async getCustomers() {
-    return this.request('/customers');
+  async getCustomers(params = {}) {
+    const queryParams = new URLSearchParams();
+    Object.keys(params).forEach(key => {
+      if (params[key] !== undefined && params[key] !== '' && params[key] !== 'all') {
+        queryParams.append(key, params[key]);
+      }
+    });
+    const queryString = queryParams.toString();
+    
+    // Use role-based customer endpoint
+    const userStr = localStorage.getItem('user');
+    let endpoint = '/customers';
+    
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        switch (user.role) {
+          case 'Super Admin':
+            endpoint = '/super-admin/customers';
+            break;
+          case 'Unit Head':
+            endpoint = '/unit-head/customers';
+            break;
+          case 'Unit Manager':
+            endpoint = '/unit-manager/customers';
+            break;
+          case 'Sales':
+            endpoint = '/sales/customers';
+            break;
+          default:
+            endpoint = '/customers';
+        }
+      } catch (e) {
+        // fallback to default
+      }
+    }
+    
+    return this.get(`${endpoint}${queryString ? `?${queryString}` : ''}`);
   }
 
   async getSuppliers() {
@@ -378,6 +414,141 @@ class APIService {
     return this.post(`${inventoryPath}/items/${id}/adjust-stock`, data);
   }
 
+  // Export/Import methods for inventory
+  async exportItems() {
+    const inventoryPath = this.getInventoryApiPath();
+    const response = await fetch(`${this.baseURL}${inventoryPath}/items/export`, {
+      method: 'GET',
+      headers: this.getAuthHeaders()
+    });
+    if (!response.ok) throw new Error('Export failed');
+    return response.blob();
+  }
+
+  async exportCategories() {
+    const inventoryPath = this.getInventoryApiPath();
+    const response = await fetch(`${this.baseURL}${inventoryPath}/categories/export`, {
+      method: 'GET',
+      headers: this.getAuthHeaders()
+    });
+    if (!response.ok) throw new Error('Export failed');
+    return response.blob();
+  }
+
+  async exportCustomerCategories() {
+    const inventoryPath = this.getInventoryApiPath();
+    const response = await fetch(`${this.baseURL}${inventoryPath}/customer-categories/export`, {
+      method: 'GET',
+      headers: this.getAuthHeaders()
+    });
+    if (!response.ok) throw new Error('Export failed');
+    return response.blob();
+  }
+
+  async importItems(file) {
+    const inventoryPath = this.getInventoryApiPath();
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const headers = { ...this.getAuthHeaders() };
+    delete headers['Content-Type'];
+    
+    return this.request(`${inventoryPath}/items/import`, {
+      method: 'POST',
+      body: formData,
+      headers
+    });
+  }
+
+  // Helper method to get role-based orders API path
+  getOrdersApiPath() {
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return '/orders';
+    
+    try {
+      const user = JSON.parse(userStr);
+      switch (user.role) {
+        case 'Super Admin':
+          return '/super-admin/orders';
+        case 'Unit Head':
+          return '/unit-head/orders';
+        case 'Unit Manager':
+          return '/unit-manager/orders';
+        case 'Sales':
+          return '/sales/orders';
+        default:
+          return '/orders';
+      }
+    } catch (e) {
+      return '/orders';
+    }
+  }
+
+  // Orders CRUD methods using role-based paths
+  async getOrders(params = {}) {
+    const ordersPath = this.getOrdersApiPath();
+    const queryParams = new URLSearchParams();
+    Object.keys(params).forEach(key => {
+      if (params[key] !== undefined && params[key] !== '' && params[key] !== 'all') {
+        queryParams.append(key, params[key]);
+      }
+    });
+    const queryString = queryParams.toString();
+    return this.get(`${ordersPath}${queryString ? `?${queryString}` : ''}`);
+  }
+
+  async getOrderById(id) {
+    const ordersPath = this.getOrdersApiPath();
+    return this.get(`${ordersPath}/${id}`);
+  }
+
+  async createOrder(data) {
+    const ordersPath = this.getOrdersApiPath();
+    return this.post(ordersPath, data);
+  }
+
+  async updateOrder(id, data) {
+    const ordersPath = this.getOrdersApiPath();
+    return this.put(`${ordersPath}/${id}`, data);
+  }
+
+  async updateOrderStatus(id, data) {
+    const ordersPath = this.getOrdersApiPath();
+    return this.request(`${ordersPath}/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify(data)
+    });
+  }
+
+  async deleteOrder(id) {
+    const ordersPath = this.getOrdersApiPath();
+    return this.delete(`${ordersPath}/${id}`);
+  }
+
+  // Get customers for order creation (role-based)
+  async getOrderCustomers() {
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return this.get('/api/customers');
+    
+    try {
+      const user = JSON.parse(userStr);
+      switch (user.role) {
+        case 'Super Admin':
+          return this.get('/api/super-admin/customers');
+        case 'Unit Head':
+          return this.get('/api/unit-head/customers');
+        case 'Unit Manager':
+          return this.get('/api/unit-manager/customers');
+        case 'Sales':
+          return this.get('/api/sales/customers');
+        default:
+          return this.get('/api/customers');
+      }
+    } catch (e) {
+      return this.get('/api/customers');
+    }
+  }
+
   // Company Management APIs
   async getCompanies(params = {}) {
     const queryParams = new URLSearchParams();
@@ -424,3 +595,15 @@ class APIService {
 
 export const api = new APIService();
 export default api;
+
+// Export individual methods for easier importing
+export const getOrders = (params) => api.getOrders(params);
+export const getOrder = (id) => api.getOrderById(id);
+export const createOrder = (data) => api.createOrder(data);
+export const updateOrder = (id, data) => api.updateOrder(id, data);
+export const updateOrderStatus = (id, data) => api.updateOrderStatus(id, data);
+export const deleteOrder = (id) => api.deleteOrder(id);
+export const getCustomers = (params) => api.getCustomers(params);
+export const getInventoryItems = (params) => api.getItems(params);
+export const getItems = (params) => api.getItems(params);
+export const getOrderById = (id) => api.getOrderById(id);

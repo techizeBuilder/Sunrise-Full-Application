@@ -604,9 +604,24 @@ export const getUnitHeadCustomerById = async (req, res) => {
 // Get Unit Head dashboard stats
 export const getUnitHeadDashboard = async (req, res) => {
   try {
+    const { period = 'current-month' } = req.query;
     let matchQuery = {};
+    let dateFilter = {};
 
-    // COMPANY FILTERING for dashboard stats
+    // Set date range based on period
+    const now = new Date();
+    if (period === 'current-month') {
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      dateFilter = {
+        createdAt: {
+          $gte: startOfMonth,
+          $lte: endOfMonth
+        }
+      };
+    }
+
+    // COMPANY FILTERING for dashboard stats - Only show data from same unit/location
     if (req.user.companyId) {
       const companySalesPersons = await User.find({ 
         companyId: req.user.companyId,
@@ -617,23 +632,59 @@ export const getUnitHeadDashboard = async (req, res) => {
       matchQuery.salesPerson = { $in: salesPersonIds };
     }
 
-    // Get basic counts
-    const totalOrders = await Order.countDocuments(matchQuery);
-    const pendingOrders = await Order.countDocuments({ ...matchQuery, status: 'pending' });
-    const salesPersonsCount = req.user.companyId 
-      ? await User.countDocuments({ companyId: req.user.companyId, role: 'Sales' })
-      : 0;
-    const customersCount = req.user.companyId 
+    // Combine date filter with company filter
+    const fullQuery = { ...matchQuery, ...dateFilter };
+
+    // Get recent orders (last 10 orders from this unit)
+    const recentOrders = await Order.find(matchQuery)
+      .populate('customer', 'name email phone')
+      .populate('salesPerson', 'username email')
+      .populate('products.product', 'name code')
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .lean();
+
+    // Calculate monthly metrics
+    const monthlyOrders = await Order.countDocuments(fullQuery);
+    const monthlyRevenue = await Order.aggregate([
+      { $match: fullQuery },
+      { $group: { _id: null, total: { $sum: '$totalAmount' } } }
+    ]);
+
+    // Get basic counts for this unit only
+    const totalCustomers = req.user.companyId 
       ? await Customer.countDocuments({ active: true, companyId: req.user.companyId })
       : await Customer.countDocuments({ active: true });
+    
+    const activeSalesPersons = req.user.companyId 
+      ? await User.countDocuments({ companyId: req.user.companyId, role: 'Sales', isActive: true })
+      : 0;
 
     res.json({
       success: true,
       data: {
-        totalOrders,
-        pendingOrders,
-        salesPersonsCount,
-        customersCount
+        // Monthly metrics
+        monthlyOrders,
+        monthlyRevenue: monthlyRevenue[0]?.total || 0,
+        totalCustomers,
+        activeSalesPersons,
+        
+        // Recent orders from this unit only
+        recentOrders: recentOrders.map(order => ({
+          _id: order._id,
+          orderCode: order.orderCode,
+          customer: order.customer,
+          salesPerson: order.salesPerson,
+          status: order.status,
+          totalAmount: order.totalAmount,
+          itemsCount: order.products?.length || 0,
+          createdAt: order.createdAt,
+          orderDate: order.orderDate
+        })),
+        
+        // Unit location info
+        unitLocation: req.user.companyLocation,
+        period: period
       }
     });
   } catch (error) {
@@ -641,6 +692,360 @@ export const getUnitHeadDashboard = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch dashboard statistics',
+      error: error.message
+    });
+  }
+};
+
+// Unit Head Orders CRUD Operations
+
+// Create new order
+export const createUnitHeadOrder = async (req, res) => {
+  try {
+    const { customerId, orderDate, products, notes } = req.body;
+    const unitHead = req.user;
+
+    console.log('🆕 Creating new order by Unit Head:', unitHead.username);
+
+    // Validation
+    const errors = {};
+
+    if (!customerId) {
+      errors.customerId = 'Customer ID is required';
+    } else {
+      // Check if customer exists and belongs to same company
+      const customer = await Customer.findOne({ 
+        _id: customerId,
+        ...(unitHead.companyId && { companyId: unitHead.companyId })
+      });
+      if (!customer) {
+        errors.customerId = 'Customer not found or not accessible';
+      }
+    }
+
+    if (!orderDate) {
+      errors.orderDate = 'Order date is required';
+    } else if (new Date(orderDate).toString() === 'Invalid Date') {
+      errors.orderDate = 'Order date must be a valid date';
+    }
+
+    if (!products || !Array.isArray(products) || products.length === 0) {
+      errors.products = 'At least one product is required';
+    } else {
+      // Validate each product
+      for (let i = 0; i < products.length; i++) {
+        const product = products[i];
+        if (!product.product) {
+          errors[`products[${i}].product`] = 'Product ID is required';
+        } else {
+          const productExists = await Item.findById(product.product);
+          if (!productExists) {
+            errors[`products[${i}].product`] = 'Product not found';
+          }
+        }
+        if (!product.quantity || product.quantity <= 0) {
+          errors[`products[${i}].quantity`] = 'Product quantity must be greater than 0';
+        }
+        if (!product.unitPrice || product.unitPrice <= 0) {
+          errors[`products[${i}].unitPrice`] = 'Product unit price must be greater than 0';
+        }
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors
+      });
+    }
+
+    // Generate order code
+    const orderCount = await Order.countDocuments();
+    const orderCode = `ORD-${(orderCount + 1).toString().padStart(6, '0')}`;
+
+    // Calculate total amount
+    let totalAmount = 0;
+    const orderProducts = [];
+    
+    for (const productData of products) {
+      const productItem = await Item.findById(productData.product);
+      const productTotal = productData.quantity * productData.unitPrice;
+      totalAmount += productTotal;
+      
+      orderProducts.push({
+        product: productData.product,
+        quantity: productData.quantity,
+        price: productData.unitPrice,
+        total: productTotal
+      });
+    }
+
+    // Create order
+    const orderData = {
+      orderCode,
+      customer: customerId,
+      orderDate: new Date(orderDate),
+      products: orderProducts,
+      totalAmount,
+      notes,
+      status: 'pending',
+      salesPerson: unitHead._id, // Unit Head as creator
+      companyId: unitHead.companyId,
+      createdBy: unitHead._id
+    };
+
+    const order = await Order.create(orderData);
+
+    // Populate the order for response
+    const populatedOrder = await Order.findById(order._id)
+      .populate('customer', 'name email mobile address city state')
+      .populate('products.product', 'name salePrice category subCategory image')
+      .populate('salesPerson', 'username fullName');
+
+    res.status(201).json({
+      success: true,
+      message: 'Order created successfully',
+      orderId: order._id,
+      order: populatedOrder
+    });
+
+  } catch (error) {
+    console.error('Error creating Unit Head order:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+// Update order
+export const updateUnitHeadOrder = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { customerId, orderDate, products, notes } = req.body;
+    const unitHead = req.user;
+
+    console.log('📝 Updating order by Unit Head:', unitHead.username);
+
+    // Find order and check if it belongs to the same company
+    const order = await Order.findOne({
+      _id: id,
+      ...(unitHead.companyId && { companyId: unitHead.companyId })
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found or not accessible'
+      });
+    }
+
+    // Validation
+    const errors = {};
+
+    if (customerId) {
+      const customer = await Customer.findOne({ 
+        _id: customerId,
+        ...(unitHead.companyId && { companyId: unitHead.companyId })
+      });
+      if (!customer) {
+        errors.customerId = 'Customer not found or not accessible';
+      }
+    }
+
+    if (orderDate && new Date(orderDate).toString() === 'Invalid Date') {
+      errors.orderDate = 'Order date must be a valid date';
+    }
+
+    if (products && Array.isArray(products)) {
+      for (let i = 0; i < products.length; i++) {
+        const product = products[i];
+        if (product.product) {
+          const productExists = await Item.findById(product.product);
+          if (!productExists) {
+            errors[`products[${i}].product`] = 'Product not found';
+          }
+        }
+        if (product.quantity && product.quantity <= 0) {
+          errors[`products[${i}].quantity`] = 'Product quantity must be greater than 0';
+        }
+        if (product.unitPrice && product.unitPrice <= 0) {
+          errors[`products[${i}].unitPrice`] = 'Product unit price must be greater than 0';
+        }
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors
+      });
+    }
+
+    // Update order fields
+    if (customerId) order.customer = customerId;
+    if (orderDate) order.orderDate = new Date(orderDate);
+    if (notes !== undefined) order.notes = notes;
+
+    // Update products and recalculate total
+    if (products && Array.isArray(products)) {
+      let totalAmount = 0;
+      const orderProducts = [];
+      
+      for (const productData of products) {
+        const productTotal = productData.quantity * productData.unitPrice;
+        totalAmount += productTotal;
+        
+        orderProducts.push({
+          product: productData.product,
+          quantity: productData.quantity,
+          price: productData.unitPrice,
+          total: productTotal
+        });
+      }
+
+      order.products = orderProducts;
+      order.totalAmount = totalAmount;
+    }
+
+    await order.save();
+
+    // Populate the updated order
+    const updatedOrder = await Order.findById(id)
+      .populate('customer', 'name email mobile address city state')
+      .populate('products.product', 'name salePrice category subCategory image')
+      .populate('salesPerson', 'username fullName');
+
+    res.json({
+      success: true,
+      message: 'Order updated successfully',
+      order: updatedOrder
+    });
+
+  } catch (error) {
+    console.error('Error updating Unit Head order:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+// Update order status
+export const updateUnitHeadOrderStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, notes } = req.body;
+    const unitHead = req.user;
+
+    console.log('🔄 Updating order status by Unit Head:', unitHead.username);
+
+    // Validate status
+    const validStatuses = ['pending', 'confirmed', 'processing', 'completed', 'cancelled'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid order status'
+      });
+    }
+
+    // Find order and check if it belongs to the same company
+    const order = await Order.findOne({
+      _id: id,
+      ...(unitHead.companyId && { companyId: unitHead.companyId })
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found or not accessible'
+      });
+    }
+
+    const oldStatus = order.status;
+    order.status = status;
+    if (notes) order.notes = notes;
+    
+    // Set context for status updates
+    if (status === 'confirmed' && !order.confirmedBy) {
+      order.confirmedBy = unitHead._id;
+      order.confirmedAt = new Date();
+    }
+    if (status === 'completed' && !order.completedBy) {
+      order.completedBy = unitHead._id;
+      order.completedAt = new Date();
+    }
+
+    await order.save();
+
+    // Populate the updated order
+    const updatedOrder = await Order.findById(id)
+      .populate('customer', 'name email mobile address')
+      .populate('salesPerson', 'username fullName')
+      .populate('confirmedBy', 'username fullName')
+      .populate('completedBy', 'username fullName');
+
+    res.json({
+      success: true,
+      message: `Order status updated from ${oldStatus} to ${status}`,
+      order: updatedOrder
+    });
+
+  } catch (error) {
+    console.error('Error updating Unit Head order status:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+// Delete order
+export const deleteUnitHeadOrder = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const unitHead = req.user;
+
+    console.log('🗑️ Deleting order by Unit Head:', unitHead.username);
+
+    // Find order and check if it belongs to the same company
+    const order = await Order.findOne({
+      _id: id,
+      ...(unitHead.companyId && { companyId: unitHead.companyId })
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found or not accessible'
+      });
+    }
+
+    // Check if order can be deleted (only pending or cancelled orders)
+    if (order.status === 'completed' || order.status === 'processing') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot delete completed or processing orders'
+      });
+    }
+
+    await Order.findByIdAndDelete(id);
+
+    res.json({
+      success: true,
+      message: 'Order deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Error deleting Unit Head order:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
       error: error.message
     });
   }

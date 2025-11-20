@@ -4,6 +4,10 @@ import { checkPermission } from '../middleware/permissions.js';
 import {
   getUnitHeadOrders,
   getUnitHeadOrderById,
+  createUnitHeadOrder,
+  updateUnitHeadOrder,
+  updateUnitHeadOrderStatus,
+  deleteUnitHeadOrder,
   getUnitHeadSales,
   getUnitHeadSalesPersons,
   getUnitHeadSalesPersonOrders,
@@ -66,7 +70,7 @@ router.get('/dashboard',
   getUnitHeadDashboard
 );
 
-// Unit Head Orders Routes
+// Unit Head Orders Routes (Full CRUD access)
 router.get('/orders', 
   checkPermission('unitHead', 'orders', 'view'), 
   getUnitHeadOrders
@@ -75,6 +79,26 @@ router.get('/orders',
 router.get('/orders/:id', 
   checkPermission('unitHead', 'orders', 'view'), 
   getUnitHeadOrderById
+);
+
+router.post('/orders', 
+  checkPermission('unitHead', 'orders', 'add'), 
+  createUnitHeadOrder
+);
+
+router.put('/orders/:id', 
+  checkPermission('unitHead', 'orders', 'edit'), 
+  updateUnitHeadOrder
+);
+
+router.patch('/orders/:id/status', 
+  checkPermission('unitHead', 'orders', 'edit'), 
+  updateUnitHeadOrderStatus
+);
+
+router.delete('/orders/:id', 
+  checkPermission('unitHead', 'orders', 'delete'), 
+  deleteUnitHeadOrder
 );
 
 // Unit Head Sales Routes
@@ -105,7 +129,8 @@ router.get('/customers/:id',
   getUnitHeadCustomerById
 );
 
-// Unit Head Inventory Routes (Read-only access for monitoring)
+// Unit Head Inventory Routes (Full CRUD access)
+// Item routes
 router.get('/inventory/items', 
   checkPermission('unitHead', 'inventory', 'view'), 
   getItems
@@ -116,16 +141,66 @@ router.get('/inventory/items/:id',
   getItemById
 );
 
-// Category routes (Read-only)
+router.post('/inventory/items', 
+  checkPermission('unitHead', 'inventory', 'add'), 
+  createItem
+);
+
+router.put('/inventory/items/:id', 
+  checkPermission('unitHead', 'inventory', 'edit'), 
+  updateItem
+);
+
+router.delete('/inventory/items/:id', 
+  checkPermission('unitHead', 'inventory', 'delete'), 
+  deleteItem
+);
+
+router.post('/inventory/items/:id/adjust-stock', 
+  checkPermission('unitHead', 'inventory', 'edit'), 
+  adjustStock
+);
+
+// Category routes (Full CRUD access)
 router.get('/inventory/categories', 
   checkPermission('unitHead', 'inventory', 'view'), 
   getCategories
 );
 
-// Customer category routes (Read-only)
+router.post('/inventory/categories', 
+  checkPermission('unitHead', 'inventory', 'add'), 
+  createCategory
+);
+
+router.put('/inventory/categories/:id', 
+  checkPermission('unitHead', 'inventory', 'edit'), 
+  updateCategory
+);
+
+router.delete('/inventory/categories/:id', 
+  checkPermission('unitHead', 'inventory', 'delete'), 
+  deleteCategory
+);
+
+// Customer category routes (Full CRUD access)
 router.get('/inventory/customer-categories', 
   checkPermission('unitHead', 'inventory', 'view'), 
   getCustomerCategories
+);
+
+router.post('/inventory/customer-categories', 
+  checkPermission('unitHead', 'inventory', 'add'), 
+  createCustomerCategory
+);
+
+router.put('/inventory/customer-categories/:id', 
+  checkPermission('unitHead', 'inventory', 'edit'), 
+  updateCustomerCategory
+);
+
+router.delete('/inventory/customer-categories/:id', 
+  checkPermission('unitHead', 'inventory', 'delete'), 
+  deleteCustomerCategory
 );
 
 // Utility routes (Read-only)
@@ -139,10 +214,15 @@ router.get('/inventory/stats',
   getInventoryStats
 );
 
-// Excel export routes (Read-only)
+// Excel import/export routes
 router.get('/inventory/items/export', 
   checkPermission('unitHead', 'inventory', 'view'), 
   exportItemsToExcel
+);
+
+router.post('/inventory/items/import', 
+  checkPermission('unitHead', 'inventory', 'add'), 
+  importItemsFromExcel
 );
 
 router.get('/inventory/categories/export', 

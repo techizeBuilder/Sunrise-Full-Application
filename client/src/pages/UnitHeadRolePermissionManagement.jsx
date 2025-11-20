@@ -290,7 +290,7 @@ const UnitHeadRolePermissionManagement = () => {
     username: '',
     email: '',
     fullName: '',
-    role: 'Unit Manager', // Default role
+    role: '', // No default role - user must select
     password: '',
     confirmPassword: '',
     permissions: convertDBPermissionsToUI({}),
@@ -341,7 +341,10 @@ const UnitHeadRolePermissionManagement = () => {
       resetForm();
     },
     onError: (error) => {
-      showSmartToast(error.message || 'Failed to create user', 'error');
+      console.error('Create user error:', error);
+      // Show clean error message without status code
+      const errorMessage = error.message || 'Failed to create user';
+      showSmartToast(errorMessage, 'error');
     }
   });
 
@@ -356,7 +359,10 @@ const UnitHeadRolePermissionManagement = () => {
       resetForm();
     },
     onError: (error) => {
-      showSmartToast(error.message || 'Failed to update user', 'error');
+      console.error('Update user error:', error);
+      // Show clean error message without status code
+      const errorMessage = error.message || 'Failed to update user';
+      showSmartToast(errorMessage, 'error');
     }
   });
 
@@ -370,7 +376,10 @@ const UnitHeadRolePermissionManagement = () => {
       resetForm();
     },
     onError: (error) => {
-      showSmartToast(error.message || 'Failed to update password', 'error');
+      console.error('Update password error:', error);
+      // Show clean error message without status code
+      const errorMessage = error.message || 'Failed to update password';
+      showSmartToast(errorMessage, 'error');
     }
   });
 
@@ -382,7 +391,10 @@ const UnitHeadRolePermissionManagement = () => {
       showSuccessToast('User deleted successfully!');
     },
     onError: (error) => {
-      showSmartToast(error.message || 'Failed to delete user', 'error');
+      console.error('Delete user error:', error);
+      // Show clean error message without status code
+      const errorMessage = error.message || 'Failed to delete user';
+      showSmartToast(errorMessage, 'error');
     }
   });
 
@@ -391,7 +403,7 @@ const UnitHeadRolePermissionManagement = () => {
       username: '',
       email: '',
       fullName: '',
-      role: 'Unit Manager', // Default role
+      role: '', // No default role - user must select
       password: '',
       confirmPassword: '',
       permissions: convertDBPermissionsToUI({}),
@@ -447,14 +459,35 @@ const UnitHeadRolePermissionManagement = () => {
   const handleSubmit = (e) => {
     e.preventDefault();
     
+    // Validate required fields
+    if (!formData.role) {
+      showSmartToast({ message: 'Please select a role' }, 'Validation Error');
+      return;
+    }
+    
+    if (!formData.username.trim()) {
+      showSmartToast({ message: 'Username is required' }, 'Validation Error');
+      return;
+    }
+    
+    if (!formData.email.trim()) {
+      showSmartToast({ message: 'Email is required' }, 'Validation Error');
+      return;
+    }
+    
+    if (!formData.fullName.trim()) {
+      showSmartToast({ message: 'Full Name is required' }, 'Validation Error');
+      return;
+    }
+    
     // Validate Unit Head company assignment for Unit Manager creation
     if (isAddingUser && !unitHeadCompanyInfo) {
-      showSmartToast('Unit Head must have a company assigned to create users', 'error');
+      showSmartToast({ message: 'Unit Head must have a company assigned to create users' }, 'Company Assignment Required');
       return;
     }
     
     if (formData.password && formData.password !== formData.confirmPassword) {
-      showSmartToast('Passwords do not match', 'error');
+      showSmartToast({ message: 'Passwords do not match' }, 'Password Validation Error');
       return;
     }
 
@@ -760,16 +793,25 @@ const UnitHeadRolePermissionManagement = () => {
                     value={formData.role}
                     onChange={(e) => {
                       const newRole = e.target.value;
-                      const defaultPermissions = getDefaultPermissionsForRole(newRole);
-                      setFormData({
-                        ...formData, 
-                        role: newRole,
-                        permissions: defaultPermissions
-                      });
+                      if (newRole) {
+                        const defaultPermissions = getDefaultPermissionsForRole(newRole);
+                        setFormData({
+                          ...formData, 
+                          role: newRole,
+                          permissions: defaultPermissions
+                        });
+                      } else {
+                        setFormData({
+                          ...formData, 
+                          role: '',
+                          permissions: convertDBPermissionsToUI({})
+                        });
+                      }
                     }}
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     required
                   >
+                    <option value="">Please select role</option>
                     {UNIT_HEAD_MANAGEABLE_ROLES.map(role => (
                       <option key={role.value} value={role.value}>
                         {role.label}

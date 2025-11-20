@@ -17,8 +17,11 @@ const companySchema = new mongoose.Schema({
   companyType: {
     type: String,
     trim: true,
-    enum: {
-      values: ['Private Limited', 'Public Limited', 'LLP', 'Partnership', 'Proprietorship', 'OPC', 'Other'],
+    validate: {
+      validator: function(v) {
+        if (!v) return true; // Allow empty values
+        return ['Private Limited', 'Public Limited', 'LLP', 'Partnership', 'Proprietorship', 'OPC', 'Other'].includes(v);
+      },
       message: 'Invalid company type'
     }
   },

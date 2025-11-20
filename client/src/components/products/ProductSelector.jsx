@@ -25,11 +25,20 @@ const ProductSelector = React.memo(({
 
   // Determine which API endpoint to use based on user role
   const getItemsEndpoint = () => {
-    const salesRoles = ['Sales', 'Unit Manager', 'Unit Head'];
-    if (user && salesRoles.includes(user.role)) {
-      return '/api/sales/items';
+    if (!user) return '/api/items';
+    
+    switch (user.role) {
+      case 'Super Admin':
+        return '/api/super-admin/inventory/items';
+      case 'Unit Head':
+        return '/api/unit-head/inventory/items';
+      case 'Unit Manager':
+        return '/api/unit-manager/inventory/items';
+      case 'Sales':
+        return '/api/sales/items';
+      default:
+        return '/api/items';
     }
-    return '/api/items';
   };
 
   // Fetch inventory items using appropriate endpoint
@@ -158,8 +167,7 @@ const ProductSelector = React.memo(({
     } else {
       onProductSelect({
         ...product,
-        quantity: 1,
-        totalPrice: product.price
+        quantity: 1
       });
     }
   };
@@ -185,8 +193,7 @@ const ProductSelector = React.memo(({
         if (foundProduct) {
           onProductSelect({
             ...foundProduct,
-            quantity: numQuantity,
-            totalPrice: foundProduct.price * numQuantity
+            quantity: numQuantity
           });
         }
       }
@@ -422,13 +429,13 @@ const ProductSelector = React.memo(({
                 <div key={product._id} className="flex items-center justify-between text-sm">
                   <span>{product.name}</span>
                   <span className="font-medium">
-                    {product.quantity}x ₹{product.price} = ₹{product.totalPrice}
+                    {product.quantity}x ₹{product.price || 0} = ₹{(product.quantity * (product.price || 0)).toFixed(2)}
                   </span>
                 </div>
               ))}
               <div className="flex justify-between font-semibold text-base pt-2 border-t">
                 <span>Total Amount:</span>
-                <span>₹{selectedProducts.reduce((sum, p) => sum + p.totalPrice, 0)}</span>
+                <span>₹{selectedProducts.reduce((sum, p) => sum + ((p.quantity || 0) * (p.price || 0)), 0).toFixed(2)}</span>
               </div>
             </div>
           </div>

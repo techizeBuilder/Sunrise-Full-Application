@@ -230,12 +230,6 @@ const unitManagerMenuItems = [
     module: 'orders'
   },
   {
-    label: 'Accounts',
-    path: '/accounts',
-    icon: Calculator,
-    module: 'accounts'
-  },
-  {
     label: 'Inventory',
     path: '/inventory',
     icon: Package,

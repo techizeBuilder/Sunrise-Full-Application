@@ -14,7 +14,7 @@ import Dispatches from "@/pages/Dispatches";
 import Sales from "@/pages/Sales";
 import Accounts from "@/pages/Accounts";
 import ModernInventoryUI from "@/components/inventory/ModernInventoryUI";
-import UnitHeadInventoryView from "@/components/inventory/UnitHeadInventoryView";
+import UnitHeadInventoryManagement from "@/components/inventory/UnitHeadInventoryManagement";
 import Customers from "@/pages/Customers";
 import Suppliers from "@/pages/Suppliers";
 import Purchases from "@/pages/Purchases";
@@ -37,7 +37,7 @@ import ProductionHistoryPage from "@/pages/ProductionHistoryPage";
 import RoleBasedDashboard from "@/components/layout/RoleBasedDashboard";
 import NotificationsPage from "@/pages/NotificationsPage";
 import UnitHeadDashboard from "@/pages/UnitHeadDashboard";
-import UnitHeadOrders from "@/pages/UnitHeadOrders";
+import UnitHeadOrdersManagement from "@/components/orders/UnitHeadOrdersManagement";
 import UnitHeadSales from "@/pages/UnitHeadSales";
 import UnitHeadCustomers from "@/pages/UnitHeadCustomers";
 import UnitManagerDashboard from "@/pages/UnitManagerDashboard";
@@ -318,7 +318,7 @@ function Router() {
       {/* Unit Head specific routes */}
       <Route path="/unit-head/orders">
         <ProtectedRoute requiredRole="Unit Head">
-          <UnitHeadOrders />
+          <UnitHeadOrdersManagement />
         </ProtectedRoute>
       </Route>
       <Route path="/unit-head/sales">
@@ -333,7 +333,7 @@ function Router() {
       </Route>
       <Route path="/unit-head/inventory">
         <ProtectedRoute requiredRole="Unit Head">
-          <UnitHeadInventoryView />
+          <UnitHeadInventoryManagement />
         </ProtectedRoute>
       </Route>
       <Route path="/unit-head/role-permission-management">
