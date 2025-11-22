@@ -1050,3 +1050,611 @@ export const deleteUnitHeadOrder = async (req, res) => {
     });
   }
 };
+
+// Create Unit Head customer
+export const createUnitHeadCustomer = async (req, res) => {
+  try {
+    // Unit Head can only create customers for their own company
+    if (req.user.role !== 'Unit Head' || !req.user.companyId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Unauthorized access'
+      });
+    }
+
+    // Prepare customer data with auto-assigned fields
+    const customerData = {
+      ...req.body,
+      companyId: req.user.companyId, // Force company assignment to Unit Head's company
+    };
+
+    // Check for duplicate mobile number within the company
+    const existingCustomer = await Customer.findOne({ 
+      mobile: req.body.mobile,
+      companyId: req.user.companyId
+    });
+    
+    if (existingCustomer) {
+      return res.status(400).json({
+        success: false,
+        message: 'Customer with this mobile number already exists in your company'
+      });
+    }
+
+    // Check for duplicate email if provided
+    if (req.body.email) {
+      const existingEmail = await Customer.findOne({ 
+        email: req.body.email,
+        companyId: req.user.companyId
+      });
+      if (existingEmail) {
+        return res.status(400).json({
+          success: false,
+          message: 'Customer with this email already exists in your company'
+        });
+      }
+    }
+
+    // If salesContact is provided, validate it belongs to same company and is Sales role
+    if (customerData.salesContact) {
+      const salesPerson = await User.findById(customerData.salesContact);
+      if (!salesPerson || salesPerson.companyId.toString() !== req.user.companyId.toString() || salesPerson.role !== 'Sales') {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid sales contact selected'
+        });
+      }
+    }
+
+    const customer = new Customer(customerData);
+    await customer.save();
+
+    // Populate the response
+    await customer.populate([
+      { path: 'companyId', select: 'name' },
+      { path: 'salesContact', select: 'username email fullName' }
+    ]);
+
+    res.status(201).json({
+      success: true,
+      message: 'Customer created successfully',
+      customer
+    });
+
+  } catch (error) {
+    console.error('Error creating Unit Head customer:', error);
+    
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => ({
+        field: err.path,
+        message: err.message
+      }));
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Error creating customer',
+      error: error.message
+    });
+  }
+};
+
+// Update Unit Head customer
+export const updateUnitHeadCustomer = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Unit Head can only update customers from their own company
+    if (req.user.role !== 'Unit Head' || !req.user.companyId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Unauthorized access'
+      });
+    }
+
+    // Validate ObjectId format
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid customer ID format'
+      });
+    }
+
+    // Check if customer exists and belongs to Unit Head's company
+    const existingCustomer = await Customer.findOne({ 
+      _id: id, 
+      companyId: req.user.companyId 
+    });
+    
+    if (!existingCustomer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Customer not found or access denied'
+      });
+    }
+
+    // Check for duplicate mobile number (excluding current customer)
+    if (req.body.mobile) {
+      const duplicateMobile = await Customer.findOne({ 
+        mobile: req.body.mobile,
+        companyId: req.user.companyId,
+        _id: { $ne: id }
+      });
+      if (duplicateMobile) {
+        return res.status(400).json({
+          success: false,
+          message: 'Customer with this mobile number already exists in your company'
+        });
+      }
+    }
+
+    // Check for duplicate email if provided (excluding current customer)
+    if (req.body.email) {
+      const duplicateEmail = await Customer.findOne({ 
+        email: req.body.email,
+        companyId: req.user.companyId,
+        _id: { $ne: id }
+      });
+      if (duplicateEmail) {
+        return res.status(400).json({
+          success: false,
+          message: 'Customer with this email already exists in your company'
+        });
+      }
+    }
+
+    // If salesContact is provided, validate it belongs to same company and is Sales role
+    if (req.body.salesContact) {
+      const salesPerson = await User.findById(req.body.salesContact);
+      if (!salesPerson || salesPerson.companyId.toString() !== req.user.companyId.toString() || salesPerson.role !== 'Sales') {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid sales contact selected'
+        });
+      }
+    }
+
+    // Ensure companyId cannot be changed
+    const updateData = { ...req.body };
+    delete updateData.companyId;
+
+    const customer = await Customer.findByIdAndUpdate(
+      id, 
+      updateData, 
+      { 
+        new: true, 
+        runValidators: true 
+      }
+    ).populate([
+      { path: 'companyId', select: 'name' },
+      { path: 'salesContact', select: 'username email fullName' }
+    ]);
+
+    res.json({
+      success: true,
+      message: 'Customer updated successfully',
+      customer
+    });
+
+  } catch (error) {
+    console.error('Error updating Unit Head customer:', error);
+    
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => ({
+        field: err.path,
+        message: err.message
+      }));
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Error updating customer',
+      error: error.message
+    });
+  }
+};
+
+// Delete Unit Head customer
+export const deleteUnitHeadCustomer = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Unit Head can only delete customers from their own company
+    if (req.user.role !== 'Unit Head' || !req.user.companyId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Unauthorized access'
+      });
+    }
+
+    // Validate ObjectId format
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid customer ID format'
+      });
+    }
+
+    // Check if customer exists and belongs to Unit Head's company
+    const existingCustomer = await Customer.findOne({ 
+      _id: id, 
+      companyId: req.user.companyId 
+    });
+    
+    if (!existingCustomer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Customer not found or access denied'
+      });
+    }
+
+    // TODO: Add business logic check if customer has active orders/invoices
+    // For now, we'll allow deletion
+
+    await Customer.findByIdAndDelete(id);
+
+    res.json({
+      success: true,
+      message: 'Customer deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Error deleting Unit Head customer:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting customer',
+      error: error.message
+    });
+  }
+};
+
+// Get sales persons list for customer assignment
+export const getUnitHeadSalesPersonsList = async (req, res) => {
+  try {
+    // Unit Head can only see sales persons from their own company
+    if (req.user.role !== 'Unit Head' || !req.user.companyId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Unauthorized access'
+      });
+    }
+
+    const salesPersons = await User.find({
+      role: 'Sales',
+      companyId: req.user.companyId
+    })
+    .select('_id username email fullName')
+    .sort({ fullName: 1, username: 1 });
+
+    res.json({
+      success: true,
+      salesPersons
+    });
+
+  } catch (error) {
+    console.error('Error fetching sales persons list:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching sales persons',
+      error: error.message
+    });
+  }
+};
+
+// Get specific sales person by ID for Unit Head
+export const getUnitHeadSalesPersonById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Unit Head can only view sales persons from their own company
+    if (req.user.role !== 'Unit Head' || !req.user.companyId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Unauthorized access'
+      });
+    }
+
+    // Validate ObjectId format
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid sales person ID format'
+      });
+    }
+
+    const salesPerson = await User.findOne({
+      _id: id,
+      companyId: req.user.companyId,
+      role: 'Sales'
+    }).populate('companyId', 'name city state')
+      .select('-password -__v');
+
+    if (!salesPerson) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sales person not found or access denied'
+      });
+    }
+
+    res.json({
+      success: true,
+      salesPerson
+    });
+
+  } catch (error) {
+    console.error('Error fetching sales person:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching sales person',
+      error: error.message
+    });
+  }
+};
+
+// Create new sales person for Unit Head
+export const createUnitHeadSalesPerson = async (req, res) => {
+  try {
+    // Unit Head can only create sales persons for their own company
+    if (req.user.role !== 'Unit Head' || !req.user.companyId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Unauthorized access'
+      });
+    }
+
+    // Check for duplicate username
+    const existingUsername = await User.findOne({ username: req.body.username });
+    if (existingUsername) {
+      return res.status(400).json({
+        success: false,
+        message: 'Username already exists'
+      });
+    }
+
+    // Check for duplicate email
+    if (req.body.email) {
+      const existingEmail = await User.findOne({ email: req.body.email });
+      if (existingEmail) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email already exists'
+        });
+      }
+    }
+
+    // Prepare user data with company assignment
+    const userData = {
+      ...req.body,
+      role: 'Sales', // Force role to Sales
+      companyId: req.user.companyId, // Force company assignment to Unit Head's company
+      active: req.body.active || 'Yes'
+    };
+
+    const newUser = new User(userData);
+    await newUser.save();
+
+    // Populate the response
+    await newUser.populate('companyId', 'name city state');
+
+    res.status(201).json({
+      success: true,
+      message: 'Sales person created successfully',
+      salesPerson: {
+        ...newUser.toObject(),
+        password: undefined // Remove password from response
+      }
+    });
+
+  } catch (error) {
+    console.error('Error creating sales person:', error);
+    
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => ({
+        field: err.path,
+        message: err.message
+      }));
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Error creating sales person',
+      error: error.message
+    });
+  }
+};
+
+// Update sales person for Unit Head
+export const updateUnitHeadSalesPerson = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Unit Head can only update sales persons from their own company
+    if (req.user.role !== 'Unit Head' || !req.user.companyId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Unauthorized access'
+      });
+    }
+
+    // Validate ObjectId format
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid sales person ID format'
+      });
+    }
+
+    // Check if sales person exists and belongs to Unit Head's company
+    const existingSalesPerson = await User.findOne({ 
+      _id: id, 
+      companyId: req.user.companyId,
+      role: 'Sales'
+    });
+    
+    if (!existingSalesPerson) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sales person not found or access denied'
+      });
+    }
+
+    // Check for duplicate username (excluding current user)
+    if (req.body.username) {
+      const duplicateUsername = await User.findOne({ 
+        username: req.body.username,
+        _id: { $ne: id }
+      });
+      if (duplicateUsername) {
+        return res.status(400).json({
+          success: false,
+          message: 'Username already exists'
+        });
+      }
+    }
+
+    // Check for duplicate email if provided (excluding current user)
+    if (req.body.email) {
+      const duplicateEmail = await User.findOne({ 
+        email: req.body.email,
+        _id: { $ne: id }
+      });
+      if (duplicateEmail) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email already exists'
+        });
+      }
+    }
+
+    // Ensure critical fields cannot be changed
+    const updateData = { ...req.body };
+    delete updateData.companyId; // Cannot change company
+    delete updateData.role; // Cannot change role
+    delete updateData.password; // Use separate endpoint for password updates
+
+    const updatedSalesPerson = await User.findByIdAndUpdate(
+      id, 
+      updateData, 
+      { 
+        new: true, 
+        runValidators: true 
+      }
+    ).populate('companyId', 'name city state')
+     .select('-password -__v');
+
+    res.json({
+      success: true,
+      message: 'Sales person updated successfully',
+      salesPerson: updatedSalesPerson
+    });
+
+  } catch (error) {
+    console.error('Error updating sales person:', error);
+    
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => ({
+        field: err.path,
+        message: err.message
+      }));
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Error updating sales person',
+      error: error.message
+    });
+  }
+};
+
+// Delete sales person for Unit Head
+export const deleteUnitHeadSalesPerson = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Unit Head can only delete sales persons from their own company
+    if (req.user.role !== 'Unit Head' || !req.user.companyId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Unauthorized access'
+      });
+    }
+
+    // Validate ObjectId format
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid sales person ID format'
+      });
+    }
+
+    // Check if sales person exists and belongs to Unit Head's company
+    const salesPerson = await User.findOne({ 
+      _id: id, 
+      companyId: req.user.companyId,
+      role: 'Sales'
+    });
+    
+    if (!salesPerson) {
+      return res.status(404).json({
+        success: false,
+        message: 'Sales person not found or access denied'
+      });
+    }
+
+    // Check if sales person has any active customers assigned
+    const assignedCustomers = await Customer.find({ salesContact: id });
+    if (assignedCustomers.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete sales person. They have ${assignedCustomers.length} customer(s) assigned. Please reassign customers first.`
+      });
+    }
+
+    // Check if sales person has any active orders
+    const activeOrders = await Order.find({ 
+      salesPerson: id,
+      status: { $nin: ['Cancelled', 'Completed'] }
+    });
+    if (activeOrders.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete sales person. They have ${activeOrders.length} active order(s). Please complete or reassign orders first.`
+      });
+    }
+
+    await User.findByIdAndDelete(id);
+
+    res.json({
+      success: true,
+      message: 'Sales person deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Error deleting sales person:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting sales person',
+      error: error.message
+    });
+  }
+};

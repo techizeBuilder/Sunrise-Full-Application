@@ -1,8 +1,11 @@
-const API_BASE_URL = '/api';
+import { config } from '../config/environment.js';
+
+const API_BASE_URL = config.apiURL;
 
 class APIService {
   constructor() {
     this.baseURL = API_BASE_URL;
+    console.log(`API Service initialized with base URL: ${this.baseURL} (${config.isDevelopment ? 'development' : 'production'} mode)`);
   }
 
   // Helper method to get role-based inventory API path
@@ -585,7 +588,7 @@ class APIService {
       }
     });
     const queryString = queryParams.toString();
-    return this.get(`/super-admin/companies/dropdown${queryString ? `?${queryString}` : ''}`);
+    return this.get(`/companies/dropdown${queryString ? `?${queryString}` : ''}`);
   }
 
   async getCompanyStats() {

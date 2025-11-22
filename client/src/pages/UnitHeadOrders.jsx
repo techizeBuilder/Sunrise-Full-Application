@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   Card,
   CardContent,
@@ -34,6 +35,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   Search,
   Filter,
   Eye,
@@ -42,7 +49,11 @@ import {
   TrendingUp,
   Users,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Edit,
+  Trash2,
+  MoreHorizontal,
+  Plus
 } from 'lucide-react';
 import { showSmartToast } from '@/lib/toast-utils';
 
@@ -63,6 +74,14 @@ const SORT_OPTIONS = [
 ];
 
 export default function UnitHeadOrders() {
+  const { hasPermission } = usePermissions();
+  
+  // Permission checks for Unit Head orders module
+  const canView = hasPermission('unitHead', 'orders', 'view');
+  const canAdd = hasPermission('unitHead', 'orders', 'add');
+  const canEdit = hasPermission('unitHead', 'orders', 'edit');
+  const canDelete = hasPermission('unitHead', 'orders', 'delete');
+
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [filters, setFilters] = useState({
@@ -122,6 +141,36 @@ export default function UnitHeadOrders() {
   const handleCloseDetail = () => {
     setSelectedOrder(null);
     setIsDetailOpen(false);
+  };
+
+  const handleEditOrder = (order) => {
+    if (!canEdit) {
+      showSmartToast({ message: 'You do not have permission to edit orders' }, 'Edit Order');
+      return;
+    }
+    // TODO: Implement edit order functionality
+    console.log('Edit order:', order);
+    showSmartToast({ message: 'Edit order functionality coming soon' }, 'Edit Order');
+  };
+
+  const handleDeleteOrder = (order) => {
+    if (!canDelete) {
+      showSmartToast({ message: 'You do not have permission to delete orders' }, 'Delete Order');
+      return;
+    }
+    // TODO: Implement delete order functionality
+    console.log('Delete order:', order);
+    showSmartToast({ message: 'Delete order functionality coming soon' }, 'Delete Order');
+  };
+
+  const handleCreateOrder = () => {
+    if (!canAdd) {
+      showSmartToast({ message: 'You do not have permission to create orders' }, 'Create Order');
+      return;
+    }
+    // TODO: Implement create order functionality
+    console.log('Create new order');
+    showSmartToast({ message: 'Create order functionality coming soon' }, 'Create Order');
   };
 
   const getStatusBadge = (status) => {
@@ -192,6 +241,12 @@ export default function UnitHeadOrders() {
             Manage and track all orders under your unit
           </p>
         </div>
+        {canAdd && (
+          <Button onClick={() => handleCreateOrder()}>
+            <Plus className="h-4 w-4 mr-2" />
+            Create Order
+          </Button>
+        )}
       </div>
 
       {/* Summary Cards */}
@@ -416,13 +471,38 @@ export default function UnitHeadOrders() {
                           {formatCurrency((order.products || []).reduce((sum, p) => sum + (p.quantity * p.price), 0))}
                         </TableCell>
                         <TableCell className="text-center">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleViewOrder(order._id)}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center justify-center gap-2">
+                            {canView && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleViewOrder(order._id)}
+                                title="View Details"
+                              >
+                                <Eye className="h-4 w-4 text-blue-600" />
+                              </Button>
+                            )}
+                            {canEdit && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEditOrder(order)}
+                                title="Edit Order"
+                              >
+                                <Edit className="h-4 w-4 text-orange-600" />
+                              </Button>
+                            )}
+                            {canDelete && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteOrder(order)}
+                                title="Delete"
+                              >
+                                <Trash2 className="h-4 w-4 text-red-600" />
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}

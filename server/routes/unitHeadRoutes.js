@@ -11,8 +11,16 @@ import {
   getUnitHeadSales,
   getUnitHeadSalesPersons,
   getUnitHeadSalesPersonOrders,
+  createUnitHeadSalesPerson,
+  updateUnitHeadSalesPerson,
+  deleteUnitHeadSalesPerson,
+  getUnitHeadSalesPersonById,
   getUnitHeadCustomers,
   getUnitHeadCustomerById,
+  createUnitHeadCustomer,
+  updateUnitHeadCustomer,
+  deleteUnitHeadCustomer,
+  getUnitHeadSalesPersonsList,
   getUnitHeadDashboard
 } from '../controllers/unitHeadController.js';
 
@@ -118,6 +126,27 @@ router.get('/sales-persons/:salesPersonId/orders',
   getUnitHeadSalesPersonOrders
 );
 
+// Unit Head Sales Person CRUD Routes
+router.get('/sales-persons/:id', 
+  checkPermission('unitHead', 'sales', 'view'), 
+  getUnitHeadSalesPersonById
+);
+
+router.post('/sales-persons', 
+  checkPermission('unitHead', 'sales', 'add'), 
+  createUnitHeadSalesPerson
+);
+
+router.put('/sales-persons/:id', 
+  checkPermission('unitHead', 'sales', 'edit'), 
+  updateUnitHeadSalesPerson
+);
+
+router.delete('/sales-persons/:id', 
+  checkPermission('unitHead', 'sales', 'delete'), 
+  deleteUnitHeadSalesPerson
+);
+
 // Unit Head Customers Routes
 router.get('/customers', 
   checkPermission('unitHead', 'customers', 'view'), 
@@ -127,6 +156,27 @@ router.get('/customers',
 router.get('/customers/:id', 
   checkPermission('unitHead', 'customers', 'view'), 
   getUnitHeadCustomerById
+);
+
+router.post('/customers', 
+  checkPermission('unitHead', 'customers', 'add'), 
+  createUnitHeadCustomer
+);
+
+router.put('/customers/:id', 
+  checkPermission('unitHead', 'customers', 'edit'), 
+  updateUnitHeadCustomer
+);
+
+router.delete('/customers/:id', 
+  checkPermission('unitHead', 'customers', 'delete'), 
+  deleteUnitHeadCustomer
+);
+
+// Get sales persons for customer assignment dropdown
+router.get('/sales-persons-list', 
+  checkPermission('unitHead', 'customers', 'view'), 
+  getUnitHeadSalesPersonsList
 );
 
 // Unit Head Inventory Routes (Full CRUD access)

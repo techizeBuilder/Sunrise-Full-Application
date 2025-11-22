@@ -73,7 +73,7 @@ export const seedBrandsAndProducts = async () => {
     
     // Connect to MongoDB if not connected
     if (mongoose.connection.readyState !== 1) {
-      await mongoose.connect('mongodb+srv://jeeturadicalloop:Mjvesqnj8gY3t0zP@cluster0.by2xy6x.mongodb.net/manufacturing-erp');
+      await mongoose.connect('mongodb+srv://jeeturadicalloop:Mjvesqnj8gY3t0zP@cluster0.by2xy6x.mongodb.net/manuerp');
     }
 
     // Clear existing data

@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
+import { usePermissions } from '@/hooks/usePermissions';
+import { useActionPermissions } from '@/components/permissions/ActionButton';
 import { useToast } from '@/hooks/use-toast';
+import apiService from '@/services/api';
 import { 
   Card, 
   CardContent, 
@@ -77,9 +80,23 @@ function getInventoryApiPath(user) {
   }
 }
 
-// Helper function to check if user has read-only access
-function isReadOnlyRole(user) {
-  return false; // Unit Head now has full CRUD access
+// Permission checking functions using the permissions system
+function useInventoryPermissions() {
+  const { user } = useAuth();
+  const { canPerformAction } = usePermissions();
+
+  // For Unit Head, permissions are stored under unitHead module with inventory as feature key
+  // For other roles, it's under inventory module with items as feature key
+  const moduleName = user?.role === 'Unit Head' ? 'unitHead' : 'inventory';
+  const featureKey = user?.role === 'Unit Head' ? 'inventory' : 'items';
+
+  return {
+    canView: canPerformAction(moduleName, featureKey, 'view'),
+    canAdd: canPerformAction(moduleName, featureKey, 'add'),
+    canEdit: canPerformAction(moduleName, featureKey, 'edit'),
+    canDelete: canPerformAction(moduleName, featureKey, 'delete'),
+    canAlter: canPerformAction(moduleName, featureKey, 'alter')
+  };
 }
 
 // Modern Stats Component
@@ -87,7 +104,7 @@ function ModernStats({ stats, isLoading }) {
   const statsCards = [
     {
       title: 'Total Items',
-      value: stats?.overview?.totalItems || 0,
+      value: stats?.stats?.totalItems || 0,
       icon: Package2,
       color: 'text-blue-600',
       bgColor: 'bg-blue-50 dark:bg-blue-900/20',
@@ -95,7 +112,7 @@ function ModernStats({ stats, isLoading }) {
     },
     {
       title: 'Total Value',
-      value: `₹${stats?.overview?.totalValue?.toLocaleString() || 0}`,
+      value: `₹${stats?.stats?.totalValue?.toLocaleString() || 0}`,
       icon: TrendingUp,
       color: 'text-green-600',
       bgColor: 'bg-green-50 dark:bg-green-900/20',
@@ -103,7 +120,7 @@ function ModernStats({ stats, isLoading }) {
     },
     {
       title: 'Low Stock',
-      value: stats?.overview?.lowStockItems || 0,
+      value: stats?.stats?.lowStockCount || 0,
       icon: AlertTriangle,
       color: 'text-red-600',
       bgColor: 'bg-red-50 dark:bg-red-900/20',
@@ -111,7 +128,7 @@ function ModernStats({ stats, isLoading }) {
     },
     {
       title: 'Categories',
-      value: stats?.overview?.totalCategories || 0,
+      value: stats?.stats?.totalCategories || 0,
       icon: BarChart3,
       color: 'text-purple-600',
       bgColor: 'bg-purple-50 dark:bg-purple-900/20',
@@ -149,11 +166,24 @@ function ModernStats({ stats, isLoading }) {
 
 export default function ModernInventoryUI() {
   const { user } = useAuth();
+  const { canPerformAction } = usePermissions();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
   // Get role-based API path
   const apiBasePath = getInventoryApiPath(user);
+  
+  // Check inventory permissions based on user role
+  const moduleName = user?.role === 'Unit Head' ? 'unitHead' : 'inventory';
+  const featureKey = user?.role === 'Unit Head' ? 'inventory' : 'items';
+  
+  const inventoryPermissions = {
+    canView: canPerformAction(moduleName, featureKey, 'view'),
+    canAdd: canPerformAction(moduleName, featureKey, 'add'),
+    canEdit: canPerformAction(moduleName, featureKey, 'edit'),
+    canDelete: canPerformAction(moduleName, featureKey, 'delete'),
+    canAlter: canPerformAction(moduleName, featureKey, 'alter')
+  };
   
   // State management
   const [showForm, setShowForm] = useState(false);
@@ -177,6 +207,7 @@ export default function ModernInventoryUI() {
 
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: [`${apiBasePath}/stats`],
+    queryFn: () => apiService.getInventoryStats()
   });
 
   const { data: categoriesData } = useQuery({
@@ -187,10 +218,10 @@ export default function ModernInventoryUI() {
     queryKey: [`${apiBasePath}/customer-categories`],
   });
 
-  // Fetch companies for location dropdown
+  // Fetch companies for location dropdown - use authenticated endpoint
   const { data: companiesData } = useQuery({
-    queryKey: ['companies-public'],
-    queryFn: () => apiRequest('GET', '/api/companies/public'),
+    queryKey: ['companies-dropdown'],
+    queryFn: () => apiRequest('GET', '/api/companies/dropdown'),
   });
 
   // Extract arrays from API response
@@ -358,10 +389,18 @@ export default function ModernInventoryUI() {
   const endIndex = startIndex + itemsPerPage;
   const paginatedItems = filteredItems.slice(startIndex, endIndex);
 
-    // Reset to first page when search or filter changes
+  // Reset to first page when search or filter changes
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, selectedCategory, selectedStore, selectedLocation, sortBy]);
+
+  // Auto-select location for Unit Head users
+  useEffect(() => {
+    if (user?.role === 'Unit Head' && companies.length === 1) {
+      // If Unit Head has only one company (their assigned one), auto-select it
+      setSelectedLocation(companies[0].value);
+    }
+  }, [companies, user?.role]);
 
   const handlePageChange = (page) => {
     setCurrentPage(page);
@@ -369,33 +408,35 @@ export default function ModernInventoryUI() {
 
   return (
     <div className="space-y-6">
-      {/* <ModernStats stats={stats} isLoading={statsLoading} /> */}
+      <ModernStats stats={stats} isLoading={statsLoading} />
       
       {/* Modern Action Bar */}
-      {/* <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-blue-200 dark:border-blue-800">
+      <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-blue-200 dark:border-blue-800">
         <CardContent className="p-6">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
             <div className="flex flex-col">
               <h2 className="text-xl font-semibold text-blue-900 dark:text-blue-100">
-                {isReadOnlyRole(user) ? 'Inventory Monitoring' : 'Quick Actions'}
+                {!inventoryPermissions.canAdd && !inventoryPermissions.canEdit && !inventoryPermissions.canDelete ? 'Inventory Monitoring' : 'Quick Actions'}
               </h2>
               <p className="text-sm text-blue-600 dark:text-blue-300">
-                {isReadOnlyRole(user) 
+                {!inventoryPermissions.canAdd && !inventoryPermissions.canEdit && !inventoryPermissions.canDelete 
                   ? 'Monitor inventory levels, view item details and track stock status'
                   : 'Manage your inventory efficiently with these actions'
                 }
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
-              {!isReadOnlyRole(user) && (
+              {inventoryPermissions.canAdd && (
+                <Button 
+                  onClick={() => setShowForm(true)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-200"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Item
+                </Button>
+              )}
+              {(inventoryPermissions.canAdd || inventoryPermissions.canEdit) && (
                 <>
-                  <Button 
-                    onClick={() => setShowForm(true)}
-                    className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-200"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Item
-                  </Button>
                   <Button 
                     onClick={() => setCategoryManagementOpen(true)}
                     variant="outline"
@@ -414,18 +455,11 @@ export default function ModernInventoryUI() {
                   </Button>
                 </>
               )}
-              <Button 
-                onClick={handleRefresh}
-                variant="outline"
-                className="border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-950/30"
-              >
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Refresh
-              </Button>
+             
             </div>
           </div>
         </CardContent>
-      </Card> */}
+      </Card>
 
       {/* Main Content Area */}
       <Card className="shadow-sm border-gray-200 dark:border-gray-700">
@@ -437,7 +471,7 @@ export default function ModernInventoryUI() {
         </CardHeader>
         <CardContent className="p-6">
           <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex flex-col lg:flex-row gap-4">
               <div className="flex-1 relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
@@ -447,63 +481,67 @@ export default function ModernInventoryUI() {
                   className="pl-10 w-full border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400"
                 />
               </div>
-              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                <SelectTrigger className="w-[200px] border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400">
-                  <Filter className="h-4 w-4 mr-2 text-gray-400" />
-                  <SelectValue placeholder="All Categories" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">
-                    <div className="flex items-center gap-2">
-                      <Package2 className="h-4 w-4" />
-                      All Categories
-                    </div>
-                  </SelectItem>
-                  {categories.length > 0 && categories.map((category) => (
-                    <SelectItem key={category._id || category.name} value={category.name}>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                  <SelectTrigger className="w-full sm:w-[200px] border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400">
+                    <Filter className="h-4 w-4 mr-2 text-gray-400" />
+                    <SelectValue placeholder="All Categories" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">
                       <div className="flex items-center gap-2">
-                        <Tag className="h-4 w-4" />
-                        {category.name}
+                        <Package2 className="h-4 w-4" />
+                        All Categories
                       </div>
                     </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-                <SelectTrigger className="w-[200px] border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400">
-                  <Building2 className="h-4 w-4 mr-2 text-gray-400" />
-                  <SelectValue placeholder="All Locations" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">
-                    <div className="flex items-center gap-2">
-                      <Building2 className="h-4 w-4" />
-                      All Locations
-                    </div>
-                  </SelectItem>
-                  {companies.length > 0 && companies.map((company) => (
-                    <SelectItem key={company.value} value={company.value}>
+                    {categories.length > 0 && categories.map((category) => (
+                      <SelectItem key={category._id || category.name} value={category.name}>
+                        <div className="flex items-center gap-2">
+                          <Tag className="h-4 w-4" />
+                          {category.name}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={selectedLocation} onValueChange={setSelectedLocation}>
+                  <SelectTrigger className="w-full sm:w-[280px] border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400">
+                    <Building2 className="h-4 w-4 mr-2 text-gray-400" />
+                    <SelectValue placeholder="All Locations" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">
                       <div className="flex items-center gap-2">
                         <Building2 className="h-4 w-4" />
-                        {company.label}
+                        All Locations
                       </div>
                     </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger className="w-[150px] border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400">
-                  <BarChart3 className="h-4 w-4 mr-2 text-gray-400" />
-                  <SelectValue placeholder="Sort by" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="newest">Newest First</SelectItem>
-                  <SelectItem value="name">Name A-Z</SelectItem>
-                  <SelectItem value="code">Code</SelectItem>
-                  <SelectItem value="category">Category</SelectItem>
-                  <SelectItem value="qty">Quantity</SelectItem>
-                </SelectContent>
-              </Select>
+                    {companies.length > 0 && companies.map((company) => (
+                      <SelectItem key={company.value} value={company.value}>
+                        <div className="flex items-center gap-2 max-w-[240px]">
+                          <Building2 className="h-4 w-4 flex-shrink-0" />
+                          <span className="truncate" title={company.label}>
+                            {company.label}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={sortBy} onValueChange={setSortBy}>
+                  <SelectTrigger className="w-full sm:w-[150px] border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400">
+                    <BarChart3 className="h-4 w-4 mr-2 text-gray-400" />
+                    <SelectValue placeholder="Sort by" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="newest">Newest First</SelectItem>
+                    <SelectItem value="name">Name A-Z</SelectItem>
+                    <SelectItem value="code">Code</SelectItem>
+                    <SelectItem value="category">Category</SelectItem>
+                    <SelectItem value="qty">Quantity</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -616,27 +654,30 @@ export default function ModernInventoryUI() {
                             >
                               <Eye className="h-4 w-4 text-blue-600" />
                             </Button>
-                            {!isReadOnlyRole(user) && (
+                            {(inventoryPermissions.canEdit || inventoryPermissions.canDelete) && (
                               <>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  onClick={() => handleEdit(item)}
-                                  className="h-8 w-8 p-0 hover:bg-green-50 dark:hover:bg-green-900/30"
-                                  title="Edit Item"
-                                >
-                                  <Edit className="h-4 w-4 text-green-600" />
-                                </Button>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  onClick={() => handleDelete(item)}
-                                  className="h-8 w-8 p-0 hover:bg-red-50 dark:hover:bg-red-900/30"
-                                  title="Delete Item"
+                                {inventoryPermissions.canEdit && (
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    onClick={() => handleEdit(item)}
+                                    className="h-8 w-8 p-0 hover:bg-green-50 dark:hover:bg-green-900/30"
+                                    title="Edit Item"
+                                  >
+                                    <Edit className="h-4 w-4 text-green-600" />
+                                  </Button>
+                                )}
+                                {inventoryPermissions.canDelete && (
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    onClick={() => handleDelete(item)}
+                                    className="h-8 w-8 p-0 hover:bg-red-50 dark:hover:bg-red-900/30"
+                                    title="Delete Item"
                                 >
                                   <Trash2 className="h-4 w-4 text-red-600" />
                                 </Button>
-                              </>
+                                )}                        </>
                             )}
                           </div>
                         </TableCell>
@@ -704,8 +745,8 @@ export default function ModernInventoryUI() {
         </CardContent>
       </Card>
 
-      {/* Forms and Modals - Hidden for read-only users */}
-      {!isReadOnlyRole(user) && (
+      {/* Forms and Modals - Show based on permissions */}
+      {(inventoryPermissions.canAdd || inventoryPermissions.canEdit) && (
         <SimpleInventoryForm
           isOpen={showForm}
           onClose={() => {
@@ -727,7 +768,7 @@ export default function ModernInventoryUI() {
         item={viewItem}
       />
 
-      {!isReadOnlyRole(user) && (
+      {inventoryPermissions.canDelete && (
         <DeleteConfirmDialog
           isOpen={deleteConfirm.isOpen}
           onClose={() => setDeleteConfirm({ isOpen: false, item: null })}
@@ -739,8 +780,8 @@ export default function ModernInventoryUI() {
         />
       )}
 
-      {/* Category Management Modals - Hidden for read-only users */}
-      {!isReadOnlyRole(user) && (
+      {/* Category Management Modals - Show based on permissions */}
+      {(inventoryPermissions.canAdd || inventoryPermissions.canEdit) && (
         <>
           <CategoryManagement 
             isOpen={categoryManagementOpen}

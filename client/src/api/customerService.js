@@ -67,3 +67,92 @@ export const customerApi = {
     });
   }
 };
+
+// Unit Head specific customer API
+export const unitHeadCustomerApi = {
+  // Get all customers for Unit Head
+  getAll: (params = {}) => {
+    const queryParams = new URLSearchParams();
+    
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') {
+        queryParams.append(key, value);
+      }
+    });
+
+    const queryString = queryParams.toString();
+    const token = localStorage.getItem('token');
+    return apiRequest(`/unit-head/customers${queryString ? `?${queryString}` : ''}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+  },
+
+  // Get single customer by ID for Unit Head
+  getById: (id) => {
+    const token = localStorage.getItem('token');
+    return apiRequest(`/unit-head/customers/${id}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+  },
+
+  // Create new customer as Unit Head
+  create: (customerData) => {
+    const token = localStorage.getItem('token');
+    return apiRequest('/unit-head/customers', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(customerData)
+    });
+  },
+
+  // Update customer as Unit Head
+  update: (id, updateData) => {
+    const token = localStorage.getItem('token');
+    return apiRequest(`/unit-head/customers/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(updateData)
+    });
+  },
+
+  // Delete customer as Unit Head
+  delete: (id) => {
+    const token = localStorage.getItem('token');
+    return apiRequest(`/unit-head/customers/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+  },
+
+  // Get customers list for dropdown (simplified version of getAll)
+  getCustomers: () => {
+    const token = localStorage.getItem('token');
+    return apiRequest('/unit-head/customers', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+  },
+
+  // Get sales persons list for dropdown
+  getSalesPersons: () => {
+    const token = localStorage.getItem('token');
+    return apiRequest('/unit-head/sales-persons-list', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+  }
+};

@@ -358,6 +358,13 @@ export const getCompaniesDropdown = async (req, res) => {
     
     // Build filter object
     const filter = { isActive: true };
+    
+    // FOR UNIT HEAD: Only show their assigned company/location
+    if (req.user.role === 'Unit Head' && req.user.companyId) {
+      filter._id = req.user.companyId;
+      console.log('Unit Head location filtering - showing only assigned company:', req.user.companyId);
+    }
+    
     if (city) filter.city = new RegExp(city, 'i');
     if (unitName) filter.unitName = new RegExp(unitName, 'i');
     

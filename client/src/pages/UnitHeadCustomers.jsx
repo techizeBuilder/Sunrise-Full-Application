@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { apiRequest } from '@/lib/queryClient';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { unitHeadCustomerApi } from '@/api/customerService';
+import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   Card,
   CardContent,
@@ -32,7 +35,26 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   Search,
   Filter,
@@ -45,66 +67,407 @@ import {
   ChevronLeft,
   ChevronRight,
   UserCheck,
-  UserX
+  UserX,
+  Plus,
+  Edit,
+  Trash2,
+  MoreHorizontal
 } from 'lucide-react';
-import { showSmartToast } from '@/lib/toast-utils';
 
 const CUSTOMER_STATUSES = [
   { value: 'all', label: 'All Status' },
-  { value: 'active', label: 'Active' },
-  { value: 'inactive', label: 'Inactive' }
+  { value: 'Yes', label: 'Active' },
+  { value: 'No', label: 'Inactive' }
 ];
 
-const SORT_OPTIONS = [
-  { value: 'createdAt', label: 'Date Created' },
-  { value: 'name', label: 'Customer Name' },
-  { value: 'city', label: 'City' },
-  { value: 'contactPerson', label: 'Contact Person' }
+const CUSTOMER_CATEGORIES = [
+  { value: 'all', label: 'All Categories' },
+  { value: 'Distributor', label: 'Distributor' },
+  { value: 'Retailer', label: 'Retailer' },
+  { value: 'Wholesaler', label: 'Wholesaler' },
+  { value: 'End User', label: 'End User' }
 ];
+
+const initialFormData = {
+  name: '',
+  contactPerson: '',
+  designation: '',
+  category: 'Distributor',
+  active: 'Yes',
+  mobile: '',
+  email: '',
+  gstin: '',
+  salesContact: 'unassigned',
+  address1: '',
+  googlePin: '',
+  city: '',
+  state: '',
+  country: 'India',
+  pin: '',
+  creditLimit: 0,
+  categoryNote: ''
+};
+
+// Customer Form Component
+const CustomerForm = ({ 
+  formData, 
+  salesPersons, 
+  salesPersonsLoading,
+  salesPersonsError,
+  onFormChange, 
+  onSubmit, 
+  onCancel, 
+  isLoading, 
+  submitText 
+}) => {
+  return (
+    <div className="space-y-6">
+      {/* Primary Details Section */}
+      <div className="border border-gray-200 rounded-lg p-4">
+        <div className="flex items-center mb-4">
+          <h3 className="text-lg font-medium text-gray-900">Primary Details</h3>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="name" className="text-sm font-medium text-gray-700">Name *</Label>
+            <Input
+              id="name"
+              value={formData.name}
+              onChange={(e) => onFormChange('name', e.target.value)}
+              placeholder="Enter customer name"
+              className="mt-1"
+              required
+            />
+          </div>
+          <div>
+            <Label htmlFor="contactPerson" className="text-sm font-medium text-gray-700">Contact Person</Label>
+            <Input
+              id="contactPerson"
+              value={formData.contactPerson}
+              onChange={(e) => onFormChange('contactPerson', e.target.value)}
+              placeholder="Mr"
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <Label htmlFor="designation" className="text-sm font-medium text-gray-700">Designation</Label>
+            <Input
+              id="designation"
+              value={formData.designation}
+              onChange={(e) => onFormChange('designation', e.target.value)}
+              placeholder="Enter designation"
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <Label htmlFor="salesContact" className="text-sm font-medium text-gray-700">Assign to Sales Person</Label>
+            <Select value={formData.salesContact} onValueChange={(value) => onFormChange('salesContact', value)}>
+              <SelectTrigger className="mt-1">
+                <SelectValue placeholder="Select sales person to assign" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unassigned">No Assignment</SelectItem>
+                {salesPersonsLoading && (
+                  <SelectItem value="loading" disabled>Loading sales persons...</SelectItem>
+                )}
+                {salesPersonsError && (
+                  <SelectItem value="error" disabled>Error loading sales persons</SelectItem>
+                )}
+                {!salesPersonsLoading && !salesPersonsError && salesPersons.length === 0 && (
+                  <SelectItem value="none" disabled>No sales persons found</SelectItem>
+                )}
+                {salesPersons.map(person => (
+                  <SelectItem key={person._id} value={person._id}>
+                    {person.fullName || person.username} ({person.email})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">
+              {salesPersonsLoading ? 'Loading...' : 
+               salesPersonsError ? `Error: ${salesPersonsError.message}` :
+               `${salesPersons.length} sales person(s) available`}
+            </p>
+          </div>
+          <div>
+            <Label htmlFor="category" className="text-sm font-medium text-gray-700">Category</Label>
+            <Select value={formData.category} onValueChange={(value) => onFormChange('category', value)}>
+              <SelectTrigger className="mt-1">
+                <SelectValue placeholder="Select category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Distributor">Distributor</SelectItem>
+                <SelectItem value="Retailer">Retailer</SelectItem>
+                <SelectItem value="Wholesaler">Wholesaler</SelectItem>
+                <SelectItem value="End User">End User</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="categoryNote" className="text-sm font-medium text-gray-700">Category Note</Label>
+            <Input
+              id="categoryNote"
+              value={formData.categoryNote}
+              onChange={(e) => onFormChange('categoryNote', e.target.value)}
+              placeholder="Enter category note"
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <Label htmlFor="active" className="text-sm font-medium text-gray-700">Active</Label>
+            <Select value={formData.active} onValueChange={(value) => onFormChange('active', value)}>
+              <SelectTrigger className="mt-1">
+                <SelectValue placeholder="Select status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Yes">Yes</SelectItem>
+                <SelectItem value="No">No</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
+
+      {/* Contact Details Section */}
+      <div className="border border-gray-200 rounded-lg p-4">
+        <div className="flex items-center mb-4">
+          <h3 className="text-lg font-medium text-gray-900">Contact Details</h3>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="mobile" className="text-sm font-medium text-gray-700">Mobile *</Label>
+            <Input
+              id="mobile"
+              value={formData.mobile}
+              onChange={(e) => onFormChange('mobile', e.target.value)}
+              placeholder="Enter mobile number"
+              className="mt-1"
+              required
+            />
+          </div>
+          <div>
+            <Label htmlFor="email" className="text-sm font-medium text-gray-700">Email *</Label>
+            <Input
+              id="email"
+              type="email"
+              value={formData.email}
+              onChange={(e) => onFormChange('email', e.target.value)}
+              placeholder="Enter email address"
+              className="mt-1"
+              required
+            />
+          </div>
+          <div>
+            <Label htmlFor="gstin" className="text-sm font-medium text-gray-700">GSTIN</Label>
+            <Input
+              id="gstin"
+              value={formData.gstin}
+              onChange={(e) => onFormChange('gstin', e.target.value)}
+              placeholder="Enter GSTIN"
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <Label htmlFor="address1" className="text-sm font-medium text-gray-700">Address 1</Label>
+            <Input
+              id="address1"
+              value={formData.address1}
+              onChange={(e) => onFormChange('address1', e.target.value)}
+              placeholder="Enter address"
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <Label htmlFor="googlePin" className="text-sm font-medium text-gray-700">Google Pin</Label>
+            <Input
+              id="googlePin"
+              value={formData.googlePin}
+              onChange={(e) => onFormChange('googlePin', e.target.value)}
+              placeholder="Enter Google Pin"
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <Label htmlFor="city" className="text-sm font-medium text-gray-700">City</Label>
+            <Input
+              id="city"
+              value={formData.city}
+              onChange={(e) => onFormChange('city', e.target.value)}
+              placeholder="Enter city"
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <Label htmlFor="state" className="text-sm font-medium text-gray-700">State</Label>
+            <Input
+              id="state"
+              value={formData.state}
+              onChange={(e) => onFormChange('state', e.target.value)}
+              placeholder="Enter state"
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <Label htmlFor="country" className="text-sm font-medium text-gray-700">Country</Label>
+            <Input
+              value="India"
+              disabled
+              className="mt-1 bg-gray-100"
+            />
+          </div>
+          <div>
+            <Label htmlFor="pin" className="text-sm font-medium text-gray-700">PIN</Label>
+            <Input
+              id="pin"
+              value={formData.pin}
+              onChange={(e) => onFormChange('pin', e.target.value)}
+              placeholder="Enter PIN code"
+              className="mt-1"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Form Actions */}
+      <div className="flex justify-end gap-3 pt-4">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onCancel}
+          disabled={isLoading}
+        >
+          Cancel
+        </Button>
+        <Button
+          onClick={onSubmit}
+          disabled={isLoading}
+          className="min-w-24"
+        >
+          {isLoading ? "Processing..." : submitText}
+        </Button>
+      </div>
+    </div>
+  );
+};
 
 export default function UnitHeadCustomers() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { hasFeatureAccess } = usePermissions();
+  
+  // Permission checks
+  const canView = hasFeatureAccess('unitHead', 'customers', 'view');
+  const canAdd = hasFeatureAccess('unitHead', 'customers', 'add');
+  const canEdit = hasFeatureAccess('unitHead', 'customers', 'edit');
+  const canDelete = hasFeatureAccess('unitHead', 'customers', 'delete');
+
+  // States
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
+  const [formData, setFormData] = useState(initialFormData);
   const [filters, setFilters] = useState({
     page: 1,
     limit: 10,
     search: '',
-    status: 'all',
-    city: '',
+    active: 'all',
+    category: 'all',
     sortBy: 'createdAt',
     sortOrder: 'desc'
   });
 
   // Query for customers list
-  const { data: customersData, isLoading, error, refetch } = useQuery({
+  const { data: customersResponse, isLoading, error, refetch } = useQuery({
     queryKey: ['/api/unit-head/customers', filters],
     queryFn: () => {
-      const params = new URLSearchParams();
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value && value !== 'all') {
-          params.append(key, value.toString());
-        }
-      });
-      return apiRequest('GET', `/api/unit-head/customers?${params.toString()}`);
+      const params = { ...filters };
+      // Clean up filters for API
+      if (params.active === 'all') delete params.active;
+      if (params.category === 'all') delete params.category;
+      return unitHeadCustomerApi.getAll(params);
     },
     retry: 1,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  // Query for sales persons dropdown
+  const { data: salesPersonsResponse, isLoading: salesPersonsLoading, error: salesPersonsError } = useQuery({
+    queryKey: ['/api/unit-head/sales-persons-list'],
+    queryFn: unitHeadCustomerApi.getSalesPersons,
+    staleTime: 10 * 60 * 1000, // 10 minutes
+  });
+
+  const customersData = customersResponse?.data?.customers || [];
+  const summary = customersResponse?.data?.summary || {};
+  const pagination = customersResponse?.data?.pagination || {};
+  const salesPersons = salesPersonsResponse?.salesPersons || [];
+
+  // Mutations for CRUD operations
+  const createMutation = useMutation({
+    mutationFn: unitHeadCustomerApi.create,
+    onSuccess: () => {
+      queryClient.invalidateQueries(['/api/unit-head/customers']);
+      toast({
+        title: "Customer Created",
+        description: "Customer has been created successfully",
+      });
+      setIsCreateModalOpen(false);
+      setFormData(initialFormData);
+    },
     onError: (error) => {
-      showSmartToast(error, 'Failed to fetch customers');
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to create customer",
+        variant: "destructive",
+      });
     }
   });
 
-  // Query for customer detail
-  const { data: customerDetail, isLoading: isDetailLoading } = useQuery({
-    queryKey: ['/api/unit-head/customers', selectedCustomer],
-    queryFn: () => apiRequest('GET', `/api/unit-head/customers/${selectedCustomer}`),
-    enabled: !!selectedCustomer,
-    retry: 1
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }) => unitHeadCustomerApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['/api/unit-head/customers']);
+      toast({
+        title: "Customer Updated",
+        description: "Customer has been updated successfully",
+      });
+      setIsEditModalOpen(false);
+      setSelectedCustomer(null);
+      setFormData(initialFormData);
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to update customer",
+        variant: "destructive",
+      });
+    }
   });
 
-  const customers = customersData?.data?.customers || [];
-  const pagination = customersData?.data?.pagination || {};
-  const summary = customersData?.data?.summary || {};
+  const deleteMutation = useMutation({
+    mutationFn: unitHeadCustomerApi.delete,
+    onSuccess: () => {
+      queryClient.invalidateQueries(['/api/unit-head/customers']);
+      toast({
+        title: "Customer Deleted",
+        description: "Customer has been deleted successfully",
+      });
+      setIsDeleteAlertOpen(false);
+      setSelectedCustomer(null);
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to delete customer",
+        variant: "destructive",
+      });
+    }
+  });
 
+  // Event handlers
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({
       ...prev,
@@ -113,16 +476,67 @@ export default function UnitHeadCustomers() {
     }));
   };
 
-  const handleViewCustomer = (customerId) => {
-    setSelectedCustomer(customerId);
+  const handleViewCustomer = (customer) => {
+    setSelectedCustomer(customer);
     setIsDetailOpen(true);
   };
 
-  const handleCloseDetail = () => {
-    setSelectedCustomer(null);
-    setIsDetailOpen(false);
+  const handleEditCustomer = (customer) => {
+    setSelectedCustomer(customer);
+    setFormData({
+      name: customer.name || '',
+      contactPerson: customer.contactPerson || '',
+      designation: customer.designation || '',
+      category: customer.category || 'Distributor',
+      active: customer.active || 'Yes',
+      mobile: customer.mobile || '',
+      email: customer.email || '',
+      gstin: customer.gstin || '',
+      salesContact: customer.salesContact?._id || 'unassigned',
+      address1: customer.address1 || '',
+      googlePin: customer.googlePin || '',
+      city: customer.city || '',
+      state: customer.state || '',
+      country: customer.country || 'India',
+      pin: customer.pin || '',
+      creditLimit: customer.creditLimit || 0,
+      categoryNote: customer.categoryNote || ''
+    });
+    setIsEditModalOpen(true);
   };
 
+  const handleDeleteCustomer = (customer) => {
+    setSelectedCustomer(customer);
+    setIsDeleteAlertOpen(true);
+  };
+
+  const handleFormSubmit = (e) => {
+    e.preventDefault();
+    
+    // Convert 'unassigned' to null for API
+    const apiData = {
+      ...formData,
+      salesContact: formData.salesContact === 'unassigned' ? null : formData.salesContact
+    };
+    
+    if (isEditModalOpen && selectedCustomer) {
+      updateMutation.mutate({ id: selectedCustomer._id, data: apiData });
+    } else {
+      createMutation.mutate(apiData);
+    }
+  };
+
+  const handleDeleteConfirm = () => {
+    if (selectedCustomer) {
+      deleteMutation.mutate(selectedCustomer._id);
+    }
+  };
+
+  const handleFormChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  // Helper functions
   const getStatusBadge = (isActive) => {
     const active = isActive === 'Yes' || isActive === true;
     return active ? (
@@ -146,12 +560,20 @@ export default function UnitHeadCustomers() {
     });
   };
 
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR'
-    }).format(amount || 0);
-  };
+  // Permission check
+  if (!canView) {
+    return (
+      <div className="p-6">
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center text-red-600">
+              <p>You don't have permission to view customers.</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (error) {
     return (
@@ -175,11 +597,43 @@ export default function UnitHeadCustomers() {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Unit Head Customers</h1>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Customer Management</h1>
           <p className="text-muted-foreground">
-            Manage and view customer information under your unit
+            Manage customers and assign them to sales persons in your unit
           </p>
         </div>
+        {canAdd && (
+          <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Create New Customer
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Create New Customer</DialogTitle>
+                <DialogDescription>
+                  Add a new customer and assign them to a sales person.
+                </DialogDescription>
+              </DialogHeader>
+              <CustomerForm
+                formData={formData}
+                salesPersons={salesPersons}
+                salesPersonsLoading={salesPersonsLoading}
+                salesPersonsError={salesPersonsError}
+                onFormChange={handleFormChange}
+                onSubmit={handleFormSubmit}
+                onCancel={() => {
+                  setIsCreateModalOpen(false);
+                  setFormData(initialFormData);
+                }}
+                isLoading={createMutation.isPending}
+                submitText="Create Customer"
+              />
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       {/* Summary Cards */}
@@ -239,17 +693,16 @@ export default function UnitHeadCustomers() {
         </Card>
       </div>
 
-      
       {/* Filters */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Filter className="h-5 w-5" />
-            Filters
+            Filters & Search
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Search */}
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -262,15 +715,12 @@ export default function UnitHeadCustomers() {
             </div>
 
             {/* Status Filter */}
-            <Select
-              value={filters.status}
-              onValueChange={(value) => handleFilterChange('status', value)}
-            >
+            <Select value={filters.active} onValueChange={(value) => handleFilterChange('active', value)}>
               <SelectTrigger>
-                <SelectValue placeholder="Status" />
+                <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
               <SelectContent>
-                {CUSTOMER_STATUSES.map((status) => (
+                {CUSTOMER_STATUSES.map(status => (
                   <SelectItem key={status.value} value={status.value}>
                     {status.label}
                   </SelectItem>
@@ -278,41 +728,30 @@ export default function UnitHeadCustomers() {
               </SelectContent>
             </Select>
 
-            {/* City Filter */}
-            <Input
-              placeholder="City"
-              value={filters.city}
-              onChange={(e) => handleFilterChange('city', e.target.value)}
-            />
-
-            {/* Sort By */}
-            <Select
-              value={filters.sortBy}
-              onValueChange={(value) => handleFilterChange('sortBy', value)}
-            >
+            {/* Category Filter */}
+            <Select value={filters.category} onValueChange={(value) => handleFilterChange('category', value)}>
               <SelectTrigger>
-                <SelectValue placeholder="Sort By" />
+                <SelectValue placeholder="Filter by category" />
               </SelectTrigger>
               <SelectContent>
-                {SORT_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
+                {CUSTOMER_CATEGORIES.map(category => (
+                  <SelectItem key={category.value} value={category.value}>
+                    {category.label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
 
-            {/* Sort Order */}
-            <Select
-              value={filters.sortOrder}
-              onValueChange={(value) => handleFilterChange('sortOrder', value)}
-            >
+            {/* Items per page */}
+            <Select value={filters.limit.toString()} onValueChange={(value) => handleFilterChange('limit', parseInt(value))}>
               <SelectTrigger>
-                <SelectValue placeholder="Order" />
+                <SelectValue placeholder="Items per page" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="asc">Ascending</SelectItem>
-                <SelectItem value="desc">Descending</SelectItem>
+                <SelectItem value="5">5 per page</SelectItem>
+                <SelectItem value="10">10 per page</SelectItem>
+                <SelectItem value="25">25 per page</SelectItem>
+                <SelectItem value="50">50 per page</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -324,154 +763,143 @@ export default function UnitHeadCustomers() {
         <CardHeader>
           <CardTitle>Customers List</CardTitle>
           <CardDescription>
-            {pagination.total ? `Showing ${(pagination.page - 1) * pagination.limit + 1} to ${Math.min(pagination.page * pagination.limit, pagination.total)} of ${pagination.total} customers` : 'No customers found'}
+            {pagination.total || 0} total customers found
           </CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
-              <p className="mt-2 text-muted-foreground">Loading customers...</p>
-            </div>
-          ) : customers.length === 0 ? (
-            <div className="text-center py-8">
-              <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">No customers found</p>
+            <div className="text-center py-8">Loading customers...</div>
+          ) : customersData.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              No customers found. {canAdd && "Click 'Create New Customer' to add the first customer."}
             </div>
           ) : (
             <>
-              {/* Mobile Cards View */}
-              <div className="block lg:hidden space-y-4">
-                {customers.map((customer) => (
-                  <Card key={customer._id} className="p-4">
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h3 className="font-semibold text-lg">{customer.name}</h3>
-                            {getStatusBadge(customer.active)}
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Customer Details</TableHead>
+                    <TableHead>Contact Info</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Assigned Sales Person</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead className="w-[100px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {customersData.map((customer) => (
+                    <TableRow key={customer._id}>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{customer.name}</div>
+                          {customer.contactPerson && (
+                            <div className="text-sm text-muted-foreground">
+                              Contact: {customer.contactPerson}
+                            </div>
+                          )}
+                          {customer.city && (
+                            <div className="text-sm text-muted-foreground flex items-center">
+                              <MapPin className="h-3 w-3 mr-1" />
+                              {customer.city}{customer.state && `, ${customer.state}`}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="flex items-center text-sm">
+                            <Phone className="h-3 w-3 mr-1" />
+                            {customer.mobile}
                           </div>
-                          <p className="text-sm text-muted-foreground">
-                            {customer.contactPerson}
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-1 gap-2 text-sm">
-                        <div className="flex items-center gap-2">
-                          <Mail className="h-4 w-4 text-muted-foreground" />
-                          <span className="truncate">{customer.email}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Phone className="h-4 w-4 text-muted-foreground" />
-                          <span>{customer.mobile || 'N/A'}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <MapPin className="h-4 w-4 text-muted-foreground" />
-                          <span>{customer.city || 'N/A'}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Building className="h-4 w-4 text-muted-foreground" />
-                          <span>{customer.address1 || customer.address || 'N/A'}</span>
-                        </div>
-                      </div>
-                      
-                      <div className="pt-2 border-t">
-                        <p className="text-xs text-muted-foreground mb-2">
-                          Joined: {formatDate(customer.createdAt)}
-                        </p>
-                        <Button
-                          size="sm"
-                          onClick={() => handleViewCustomer(customer._id)}
-                          className="w-full"
-                        >
-                          <Eye className="h-4 w-4 mr-2" />
-                          View Details
-                        </Button>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-
-              {/* Desktop Table View */}
-              <div className="hidden lg:block overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Customer Name</TableHead>
-                      <TableHead>Contact Person</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Phone</TableHead>
-                      <TableHead>City</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Joined</TableHead>
-                      <TableHead className="text-center">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {customers.map((customer) => (
-                      <TableRow key={customer._id} className="hover:bg-muted/50">
-                        <TableCell>
-                          <div>
-                            <p className="font-medium">{customer.name}</p>
-                            <p className="text-xs text-muted-foreground truncate max-w-[200px]">
-                              {customer.address1 || customer.address || 'No address'}
-                            </p>
+                          <div className="flex items-center text-sm">
+                            <Mail className="h-3 w-3 mr-1" />
+                            {customer.email}
                           </div>
-                        </TableCell>
-                        <TableCell>{customer.contactPerson || 'N/A'}</TableCell>
-                        <TableCell>
-                          <span className="truncate max-w-[150px] block">{customer.email}</span>
-                        </TableCell>
-                        <TableCell>{customer.mobile || 'N/A'}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            <MapPin className="h-3 w-3" />
-                            {customer.city || 'N/A'}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">
+                          {customer.category}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {customer.salesContact ? (
+                          <div className="text-sm">
+                            <div className="font-medium">
+                              {customer.salesContact.fullName || customer.salesContact.username}
+                            </div>
+                            <div className="text-muted-foreground">
+                              {customer.salesContact.email}
+                            </div>
                           </div>
-                        </TableCell>
-                        <TableCell>{getStatusBadge(customer.active)}</TableCell>
-                        <TableCell>{formatDate(customer.createdAt)}</TableCell>
-                        <TableCell className="text-center">
+                        ) : (
+                          <span className="text-muted-foreground text-sm">Not assigned</span>
+                        )}
+                      </TableCell>
+                      <TableCell>{getStatusBadge(customer.active)}</TableCell>
+                      <TableCell>{formatDate(customer.createdAt)}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
                           <Button
-                            size="sm"
                             variant="ghost"
-                            onClick={() => handleViewCustomer(customer._id)}
+                            size="sm"
+                            onClick={() => handleViewCustomer(customer)}
+                            title="View Details"
                           >
-                            <Eye className="h-4 w-4" />
+                            <Eye className="h-4 w-4 text-blue-600" />
                           </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                          {canEdit && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEditCustomer(customer)}
+                              title="Edit"
+                            >
+                              <Edit className="h-4 w-4 text-orange-600" />
+                            </Button>
+                          )}
+                          {canDelete && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteCustomer(customer)}
+                              title="Delete"
+                            >
+                              <Trash2 className="h-4 w-4 text-red-600" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
 
               {/* Pagination */}
               {pagination.pages > 1 && (
-                <div className="flex flex-col md:flex-row justify-between items-center gap-4 mt-6">
-                  <p className="text-sm text-muted-foreground">
-                    Page {pagination.page} of {pagination.pages}
-                  </p>
-                  <div className="flex gap-2">
+                <div className="flex items-center justify-between mt-4">
+                  <div className="text-sm text-muted-foreground">
+                    Page {pagination.page} of {pagination.pages} ({pagination.total} total customers)
+                  </div>
+                  <div className="flex items-center space-x-2">
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleFilterChange('page', pagination.page - 1)}
-                      disabled={pagination.page <= 1}
+                      onClick={() => handleFilterChange('page', filters.page - 1)}
+                      disabled={filters.page <= 1}
                     >
-                      <ChevronLeft className="h-4 w-4 mr-2" />
+                      <ChevronLeft className="h-4 w-4" />
                       Previous
                     </Button>
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleFilterChange('page', pagination.page + 1)}
-                      disabled={pagination.page >= pagination.pages}
+                      onClick={() => handleFilterChange('page', filters.page + 1)}
+                      disabled={filters.page >= pagination.pages}
                     >
                       Next
-                      <ChevronRight className="h-4 w-4 ml-2" />
+                      <ChevronRight className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
@@ -481,189 +909,133 @@ export default function UnitHeadCustomers() {
         </CardContent>
       </Card>
 
-      {/* Customer Detail Dialog */}
-      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+      {/* Edit Modal */}
+      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Customer</DialogTitle>
+            <DialogDescription>
+              Update customer information and sales person assignment.
+            </DialogDescription>
+          </DialogHeader>
+          <CustomerForm
+            formData={formData}
+            salesPersons={salesPersons}
+            salesPersonsLoading={salesPersonsLoading}
+            salesPersonsError={salesPersonsError}
+            onFormChange={handleFormChange}
+            onSubmit={handleFormSubmit}
+            onCancel={() => {
+              setIsEditModalOpen(false);
+              setSelectedCustomer(null);
+              setFormData(initialFormData);
+            }}
+            isLoading={updateMutation.isPending}
+            submitText="Update Customer"
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Alert */}
+      <AlertDialog open={isDeleteAlertOpen} onOpenChange={setIsDeleteAlertOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the customer
+              <strong> {selectedCustomer?.name}</strong> and remove all associated data.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDeleteConfirm}
+              disabled={deleteMutation.isPending}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleteMutation.isPending ? 'Deleting...' : 'Delete Customer'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* View Details Modal */}
+      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>Customer Details</DialogTitle>
             <DialogDescription>
-              View complete customer information and transaction history
+              Complete information for {selectedCustomer?.name}
             </DialogDescription>
           </DialogHeader>
-          
-          {isDetailLoading ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
-              <p className="mt-2 text-muted-foreground">Loading customer details...</p>
-            </div>
-          ) : customerDetail?.data ? (
-            <div className="space-y-6">
-              {/* Customer Header */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Customer Information</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Customer Name:</span>
-                      <span className="font-semibold">{customerDetail.data.name}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Contact Person:</span>
-                      <span>{customerDetail.data.contactPerson || 'N/A'}</span>
-                    </div>
-                    <div className="flex justify-between items-start">
-                      <span className="text-muted-foreground">Email:</span>
-                      <span className="text-right">{customerDetail.data.email}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Phone:</span>
-                      <span>{customerDetail.data.mobile || 'N/A'}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Status:</span>
-                      {getStatusBadge(customerDetail.data.active)}
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Joined:</span>
-                      <span>{formatDate(customerDetail.data.createdAt)}</span>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Address Information</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="flex justify-between items-start">
-                      <span className="text-muted-foreground">Address:</span>
-                      <span className="text-right max-w-[200px]">{customerDetail.data.address1 || customerDetail.data.address || 'N/A'}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">City:</span>
-                      <span>{customerDetail.data.city || 'N/A'}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">State:</span>
-                      <span>{customerDetail.data.state || 'N/A'}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Postal Code:</span>
-                      <span>{customerDetail.data.pin || 'N/A'}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Country:</span>
-                      <span>{customerDetail.data.country || 'N/A'}</span>
-                    </div>
-                  </CardContent>
-                </Card>
+          {selectedCustomer && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <h3 className="font-medium text-lg">Basic Information</h3>
+                <div className="space-y-2">
+                  <div>
+                    <Label className="text-sm font-medium">Customer Name</Label>
+                    <p className="text-sm">{selectedCustomer.name}</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Contact Person</Label>
+                    <p className="text-sm">{selectedCustomer.contactPerson || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Category</Label>
+                    <p className="text-sm">{selectedCustomer.category}</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Status</Label>
+                    <div className="mt-1">{getStatusBadge(selectedCustomer.active)}</div>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Assigned Sales Person</Label>
+                    <p className="text-sm">
+                      {selectedCustomer.salesContact 
+                        ? `${selectedCustomer.salesContact.fullName || selectedCustomer.salesContact.username} (${selectedCustomer.salesContact.email})`
+                        : 'Not assigned to any sales person'
+                      }
+                    </p>
+                  </div>
+                </div>
               </div>
-
-              {/* Order History */}
-              {customerDetail.data.orderHistory && customerDetail.data.orderHistory.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Recent Order History</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Order Number</TableHead>
-                            <TableHead>Date</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead className="text-right">Amount</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {customerDetail.data.orderHistory.map((order) => (
-                            <TableRow key={order._id}>
-                              <TableCell className="font-medium">
-                                {order.orderCode || order.orderNumber}
-                              </TableCell>
-                              <TableCell>{formatDate(order.orderDate)}</TableCell>
-                              <TableCell>
-                                <Badge 
-                                  variant="outline"
-                                  className={
-                                    order.status === 'completed' || order.status === 'approved' 
-                                      ? 'bg-green-100 text-green-800' 
-                                      : order.status === 'pending' || order.status === 'in_production'
-                                      ? 'bg-yellow-100 text-yellow-800'
-                                      : 'bg-gray-100 text-gray-800'
-                                  }
-                                >
-                                  {order.status}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {formatCurrency(order.totalAmount)}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Sales History */}
-              {customerDetail.data.salesHistory && customerDetail.data.salesHistory.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Recent Sales History</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Invoice Number</TableHead>
-                            <TableHead>Date</TableHead>
-                            <TableHead>Payment Status</TableHead>
-                            <TableHead className="text-right">Amount</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {customerDetail.data.salesHistory.map((sale) => (
-                            <TableRow key={sale._id}>
-                              <TableCell className="font-medium">
-                                {sale.invoiceNumber || `INV-${sale._id.slice(-6)}`}
-                              </TableCell>
-                              <TableCell>{formatDate(sale.createdAt)}</TableCell>
-                              <TableCell>
-                                <Badge 
-                                  variant="outline"
-                                  className={
-                                    sale.paymentStatus === 'paid' 
-                                      ? 'bg-green-100 text-green-800' 
-                                      : sale.paymentStatus === 'pending'
-                                      ? 'bg-yellow-100 text-yellow-800'
-                                      : 'bg-red-100 text-red-800'
-                                  }
-                                >
-                                  {sale.paymentStatus}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {formatCurrency(sale.totalAmount)}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          ) : (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground">Customer not found</p>
+              
+              <div className="space-y-4">
+                <h3 className="font-medium text-lg">Contact Information</h3>
+                <div className="space-y-2">
+                  <div>
+                    <Label className="text-sm font-medium">Mobile</Label>
+                    <p className="text-sm">{selectedCustomer.mobile}</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Email</Label>
+                    <p className="text-sm">{selectedCustomer.email}</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">GSTIN</Label>
+                    <p className="text-sm">{selectedCustomer.gstin || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Address</Label>
+                    <p className="text-sm">{selectedCustomer.address1 || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">City, State</Label>
+                    <p className="text-sm">
+                      {[selectedCustomer.city, selectedCustomer.state].filter(Boolean).join(', ') || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">PIN Code</Label>
+                    <p className="text-sm">{selectedCustomer.pin || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium">Created</Label>
+                    <p className="text-sm">{formatDate(selectedCustomer.createdAt)}</p>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </DialogContent>

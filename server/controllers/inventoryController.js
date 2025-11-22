@@ -2,6 +2,7 @@ import { Item, Category, CustomerCategory } from '../models/Inventory.js';
 import { Company } from '../models/Company.js';
 import * as XLSX from 'xlsx';
 import multer from 'multer';
+import mongoose from 'mongoose';
 import { USER_ROLES } from '../../shared/schema.js';
 import notificationService from '../services/notificationService.js';
 
@@ -38,11 +39,14 @@ const generateItemCode = async (type) => {
 
 // ITEM CONTROLLERS
 export const getItems = async (req, res) => {
+  console.log('=== ITEMS API CALLED ===');
+  console.log('User:', req.user?.username, 'Role:', req.user?.role, 'CompanyId:', req.user?.companyId);
+  
   try {
     if (!checkInventoryPermission(req.user, 'view')) {
       return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
     }
-
+    
     const { 
       page = 1, 
       limit = 20, 
@@ -142,7 +146,8 @@ export const getItems = async (req, res) => {
     );
 
     const total = await Item.countDocuments(query);
-
+    console.log(`-----------------------Fetched ${items.length} items out of ${total} total matching items.`);
+  
     // Calculate inventory statistics
     const stats = await Item.aggregate([
       {
@@ -1186,20 +1191,36 @@ export const getLowStockItems = async (req, res) => {
 };
 
 export const getInventoryStats = async (req, res) => {
+  console.log('=== STATS API CALLED ===');
+  console.log('User:', req.user?.username, 'Role:', req.user?.role, 'CompanyId:', req.user?.companyId);
+  
   try {
+    console.log('DEBUG: getInventoryStats called for user:', req.user?.username, 'role:', req.user?.role);
+    
     if (!checkInventoryPermission(req.user, 'view')) {
+      console.log('DEBUG: Permission check failed for user:', req.user?.username);
       return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
     }
+
+    console.log('DEBUG: Permission check passed for user:', req.user?.username);
 
     // Build match stage for company filtering
     let matchStage = {};
     if (req.user.role === 'Unit Head' && req.user.companyId) {
+      // Use string comparison since both companyId and store field are strings
       matchStage = { store: req.user.companyId };
     }
 
+    console.log('Debug - Match stage:', matchStage);
+    console.log('Debug - User companyId:', req.user.companyId);
+    console.log('Debug - User role:', req.user.role);
+
     const pipeline = [];
     if (Object.keys(matchStage).length > 0) {
-      pipeline.push({ $match: matchStage });
+      // Ensure proper string comparison for MongoDB
+      const fixedMatchStage = { store: String(req.user.companyId) };
+      console.log('Debug - Fixed match stage:', fixedMatchStage);
+      pipeline.push({ $match: fixedMatchStage });
     }
     
     pipeline.push({
@@ -1221,7 +1242,8 @@ export const getInventoryStats = async (req, res) => {
     // Build category stats pipeline with company filtering
     const categoryPipeline = [];
     if (Object.keys(matchStage).length > 0) {
-      categoryPipeline.push({ $match: matchStage });
+      const fixedMatchStage = { store: String(req.user.companyId) };
+      categoryPipeline.push({ $match: fixedMatchStage });
     }
     categoryPipeline.push({
       $group: {
@@ -1236,7 +1258,8 @@ export const getInventoryStats = async (req, res) => {
     // Build type stats pipeline with company filtering
     const typePipeline = [];
     if (Object.keys(matchStage).length > 0) {
-      typePipeline.push({ $match: matchStage });
+      const fixedMatchStage = { store: String(req.user.companyId) };
+      typePipeline.push({ $match: fixedMatchStage });
     }
     typePipeline.push({
       $group: {
@@ -1249,7 +1272,10 @@ export const getInventoryStats = async (req, res) => {
     const typeStats = await Item.aggregate(typePipeline);
 
     res.json({
-      overview: stats[0] || { totalItems: 0, totalValue: 0, totalQty: 0, lowStockCount: 0 },
+      stats: {
+        ...stats[0] || { totalItems: 0, totalValue: 0, totalQty: 0, lowStockCount: 0 },
+        totalCategories: categoryStats.length
+      },
       categoryStats,
       typeStats
     });

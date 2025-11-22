@@ -7,10 +7,14 @@ export const getNotifications = async (req, res) => {
     const { page = 1, limit = 20, unreadOnly = false } = req.query;
     const userId = req.user._id;
     const userRole = req.user.role;
+    const userUnit = req.user.unit;
+    const userCompanyId = req.user.companyId;
 
     const result = await notificationService.getUserNotifications(
       userId, 
       userRole, 
+      userUnit,
+      userCompanyId,
       { page, limit, unreadOnly: unreadOnly === 'true' }
     );
 
@@ -33,8 +37,10 @@ export const getUnreadCount = async (req, res) => {
   try {
     const userId = req.user._id;
     const userRole = req.user.role;
+    const userUnit = req.user.unit;
+    const userCompanyId = req.user.companyId;
 
-    const unreadCount = await notificationService.getUnreadCount(userId, userRole);
+    const unreadCount = await notificationService.getUnreadCount(userId, userRole, userUnit, userCompanyId);
 
     res.json({
       success: true,
@@ -78,8 +84,10 @@ export const markAllAsRead = async (req, res) => {
   try {
     const userId = req.user._id;
     const userRole = req.user.role;
+    const userUnit = req.user.unit;
+    const userCompanyId = req.user.companyId;
 
-    const result = await notificationService.markAllAsRead(userId, userRole);
+    const result = await notificationService.markAllAsRead(userId, userRole, userUnit, userCompanyId);
 
     res.json({
       success: true,
@@ -99,13 +107,15 @@ export const markAllAsRead = async (req, res) => {
 // Create test notification (for development)
 export const createTestNotification = async (req, res) => {
   try {
-    const { title, message, type, targetRole } = req.body;
+    const { title, message, type, targetRole, targetUnit, targetCompanyId } = req.body;
 
     const notification = await notificationService.createNotification({
       title: title || 'Test Notification',
       message: message || 'This is a test notification',
       type: type || 'general',
       targetRole: targetRole || 'all',
+      targetUnit: targetUnit || null,
+      targetCompanyId: targetCompanyId || null,
       priority: 'medium'
     });
 

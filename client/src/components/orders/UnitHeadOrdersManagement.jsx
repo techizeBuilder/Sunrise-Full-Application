@@ -7,10 +7,10 @@ import {
   updateOrder, 
   updateOrderStatus,
   deleteOrder, 
-  getCustomers,
   getItems,
   getOrderById
 } from '@/services/api';
+import { unitHeadCustomerApi } from '@/api/customerService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -70,11 +70,18 @@ const UnitHeadOrdersManagement = () => {
 
   const { data: customersData } = useQuery({
     queryKey: ['unit-head-customers'],
-    queryFn: getCustomers
+    queryFn: () => unitHeadCustomerApi.getCustomers()
   });
+
+  // Debug logging to check what data is being returned
+  console.log('🔍 Customers API Response:', customersData);
+  console.log('🔍 User Info:', user);
 
   const orders = ordersData?.data?.orders || [];
   const customersList = customersData?.data?.customers || customersData?.customers || [];
+  
+  // Debug the customers list
+  console.log('🔍 Processed customers list:', customersList);
 
   // Mutations
   const createOrderMutation = useMutation({
@@ -333,13 +340,13 @@ const UnitHeadOrdersManagement = () => {
             <FileText className="h-6 w-6" />
             <h1 className="text-xl font-semibold">Unit Head Orders</h1>
           </div>
-          {/* <Button 
+          <Button 
             onClick={() => setIsCreateModalOpen(true)} 
             className="bg-white text-blue-600 hover:bg-gray-100"
           >
             <Plus className="h-4 w-4 mr-2" />
             Create Order
-          </Button> */}
+          </Button>
         </div>
       </div>
 
@@ -422,27 +429,32 @@ const UnitHeadOrdersManagement = () => {
                   </TableCell>
                   <TableCell>{order.products?.length || 0}</TableCell>
                   <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleView(order)}>
-                          <Eye className="h-4 w-4 mr-2" />
-                          View Details
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleEdit(order)}>
-                          <Edit className="h-4 w-4 mr-2" />
-                          Edit Order
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="text-red-600" onClick={() => handleDelete(order._id)}>
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete Order
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleView(order)}
+                        title="View Details"
+                      >
+                        <Eye className="h-4 w-4 text-blue-600" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleEdit(order)}
+                        title="Edit Order"
+                      >
+                        <Edit className="h-4 w-4 text-orange-600" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDelete(order._id)}
+                        title="Delete Order"
+                      >
+                        <Trash2 className="h-4 w-4 text-red-600" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))

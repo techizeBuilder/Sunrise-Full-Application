@@ -1,8 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { createServer } from "http";
-// Load environment variables
-import dotenv from "dotenv";
-dotenv.config();
+// Import environment configuration
+import { config } from "./config/environment.js";
 // Removed cookieParser - using JWT Bearer tokens only
 import cors from "cors";
 import path from "path";
@@ -77,7 +76,7 @@ app.use('/uploads', express.static('uploads'));
 
     // STEP 1: Add middleware
     app.use(cors({
-      origin: ['http://localhost:5000', 'https://3119338b-e714-42ee-ad89-db926ce8b72e-00-19uqh907sthf1.kirk.replit.dev'],
+      origin: config.CORS_ORIGINS,
       credentials: true
     }));
     app.use(express.json());
@@ -342,13 +341,13 @@ app.use('/uploads', express.static('uploads'));
     // ALWAYS serve the app on port from env or default 5000
     // this serves both the API and the client.
     // It is the only port that is not firewalled.
-    const port = process.env.PORT || 5000;
+    const port = config.PORT;
     server.listen({
       port,
       host: "0.0.0.0",
       reusePort: true,
     }, () => {
-      log(`serving on port ${port}`);
+      log(`Server running on port ${port} in ${config.NODE_ENV} environment`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);

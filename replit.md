@@ -513,7 +513,7 @@ The system supports two database configurations:
 - Enhanced form validation and user feedback with mobile-friendly interface elements
 
 **January 19, 2025 - Enhanced Customer Management with Comprehensive Validation and Error Handling**
-- Fixed critical database connection issue by updating MongoDB URI from manufacturing_erp to manufacturing-erp
+- Fixed critical database connection issue by updating MongoDB URI from manufacturing_erp to manuerp
 - Successfully seeded 15 comprehensive customer records with complete business data across multiple industries
 - Enhanced customer form UI to match add customer design with proper sectioned layout (Primary Details, Contact Details, Notes)
 - Implemented comprehensive form validation with inline error messages for required fields (Name, Mobile, Email)

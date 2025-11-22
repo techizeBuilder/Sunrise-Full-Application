@@ -154,3 +154,92 @@ export const salesApi = {
     });
   }
 };
+
+// Unit Head Sales Management API
+export const unitHeadSalesApi = {
+  // Get all sales persons in Unit Head's company
+  getSalesPersons: (params = {}) => {
+    const queryParams = new URLSearchParams();
+    
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') {
+        queryParams.append(key, value);
+      }
+    });
+
+    const queryString = queryParams.toString();
+    const token = localStorage.getItem('token');
+    return apiRequest(`/unit-head/sales-persons${queryString ? `?${queryString}` : ''}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+  },
+
+  // Get specific sales person by ID
+  getSalesPersonById: (id) => {
+    const token = localStorage.getItem('token');
+    return apiRequest(`/unit-head/sales-persons/${id}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+  },
+
+  // Create new sales person
+  createSalesPerson: (data) => {
+    const token = localStorage.getItem('token');
+    return apiRequest('/unit-head/sales-persons', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+  },
+
+  // Update sales person
+  updateSalesPerson: (id, data) => {
+    const token = localStorage.getItem('token');
+    return apiRequest(`/unit-head/sales-persons/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+  },
+
+  // Delete sales person
+  deleteSalesPerson: (id) => {
+    const token = localStorage.getItem('token');
+    return apiRequest(`/unit-head/sales-persons/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+  },
+
+  // Get sales person orders for detail view
+  getSalesPersonOrders: (salesPersonId, params = {}) => {
+    const queryParams = new URLSearchParams();
+    
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') {
+        queryParams.append(key, value);
+      }
+    });
+
+    const queryString = queryParams.toString();
+    const token = localStorage.getItem('token');
+    return apiRequest(`/unit-head/sales-persons/${salesPersonId}/orders${queryString ? `?${queryString}` : ''}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+  }
+};

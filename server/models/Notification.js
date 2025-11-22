@@ -23,12 +23,21 @@ const notificationSchema = new mongoose.Schema({
   },
   targetRole: {
     type: String,
-    enum: ['Super User', 'Sales', 'all'],
+    enum: ['Super Admin', 'Unit Head', 'Unit Manager', 'Sales', 'Production', 'Manufacturing', 'Packing', 'Dispatch', 'Accounts', 'all'],
     default: 'all'
   },
   targetUserId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
+    default: null
+  },
+  targetUnit: {
+    type: String,
+    default: null
+  },
+  targetCompanyId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Company',
     default: null
   },
   data: {
@@ -61,8 +70,14 @@ const notificationSchema = new mongoose.Schema({
 // Index for efficient querying
 notificationSchema.index({ targetRole: 1, createdAt: -1 });
 notificationSchema.index({ targetUserId: 1, createdAt: -1 });
+notificationSchema.index({ targetUnit: 1, createdAt: -1 });
+notificationSchema.index({ targetCompanyId: 1, createdAt: -1 });
 notificationSchema.index({ type: 1, createdAt: -1 });
 notificationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
+// Compound indexes for role-based filtering
+notificationSchema.index({ targetRole: 1, targetUnit: 1, createdAt: -1 });
+notificationSchema.index({ targetRole: 1, targetCompanyId: 1, createdAt: -1 });
 
 // Virtual for checking if notification is read by specific user
 notificationSchema.methods.isReadByUser = function(userId) {
@@ -70,8 +85,8 @@ notificationSchema.methods.isReadByUser = function(userId) {
 };
 
 // Static method to get unread count for user
-notificationSchema.statics.getUnreadCount = async function(userId, userRole) {
-  const query = {
+notificationSchema.statics.getUnreadCount = async function(userId, userRole, userUnit = null, userCompanyId = null) {
+  let query = {
     $and: [
       {
         $or: [
@@ -85,6 +100,34 @@ notificationSchema.statics.getUnreadCount = async function(userId, userRole) {
       }
     ]
   };
+
+  // Apply unit and company filtering based on role
+  if (userRole === 'Super Admin') {
+    // Super Admin sees all notifications - no additional filtering
+  } else if (userRole === 'Unit Head' || userRole === 'Unit Manager' || userRole === 'Sales' || 
+             userRole === 'Production' || userRole === 'Manufacturing' || userRole === 'Packing' || 
+             userRole === 'Dispatch' || userRole === 'Accounts') {
+    
+    // Unit-based roles should only see notifications for their unit/company or global ones
+    const unitCompanyFilters = [];
+    
+    // Add unit filtering if user has a unit
+    if (userUnit) {
+      unitCompanyFilters.push({ targetUnit: userUnit });
+    }
+    
+    // Add company filtering if user has a company
+    if (userCompanyId) {
+      unitCompanyFilters.push({ targetCompanyId: userCompanyId });
+    }
+    
+    // Add global notifications (no specific unit or company target)
+    unitCompanyFilters.push({ targetUnit: null, targetCompanyId: null });
+    
+    if (unitCompanyFilters.length > 0) {
+      query.$and.push({ $or: unitCompanyFilters });
+    }
+  }
   
   return await this.countDocuments(query);
 };
