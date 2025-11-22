@@ -1,32 +1,42 @@
 // Environment-based configuration for frontend
 const getEnvironmentConfig = () => {
-  // In production, Vite replaces import.meta.env with actual values
-  const isDevelopment = import.meta.env.VITE_NODE_ENV === 'development' || 
-                       import.meta.env.DEV || 
-                       !import.meta.env.VITE_NODE_ENV;
+  // Get environment variables from .env files
+  const nodeEnv = import.meta.env.VITE_NODE_ENV || import.meta.env.MODE;
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
   
-  // Get base URL from environment or determine automatically
+  // Determine environment
+  const isProduction = nodeEnv === 'production' || 
+                      import.meta.env.PROD ||
+                      window.location.hostname === 'sunrize.shrawantravels.com' ||
+                      window.location.hostname.includes('shrawantravels.com');
+  
+  const isDevelopment = !isProduction;
+  
+  // Use environment variable for base URL, with fallback logic
   let baseURL;
   
-  if (import.meta.env.VITE_API_BASE_URL) {
-    // Use explicit environment variable if set
-    baseURL = import.meta.env.VITE_API_BASE_URL;
-  } else if (isDevelopment) {
-    // Development: use localhost
-    baseURL = 'http://localhost:5000';
+  if (apiBaseUrl) {
+    baseURL = apiBaseUrl;
+    console.log('🔧 Using VITE_API_BASE_URL from .env:', baseURL);
+  } else if (isProduction) {
+    baseURL = 'https://sunrize.shrawantravels.com';
+    console.log('🌐 Production environment, using:', baseURL);
   } else {
-    // Production: use current origin or fallback to production URL
-    baseURL = window.location.origin.includes('localhost') 
-      ? 'http://localhost:5000' 
-      : 'https://sunrize.shrawantravels.com';
+    baseURL = 'http://localhost:5000';
+    console.log('🔧 Development environment, using:', baseURL);
   }
   
-  return {
+  const config = {
     isDevelopment,
-    isProduction: !isDevelopment,
+    isProduction,
+    nodeEnv,
     baseURL,
     apiURL: `${baseURL}/api`,
+    envSource: apiBaseUrl ? 'env file' : 'fallback detection'
   };
+  
+  console.log('🚀 Environment Config:', config);
+  return config;
 };
 
 export const config = getEnvironmentConfig();

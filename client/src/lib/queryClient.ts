@@ -1,4 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { config } from '../config/environment';
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -39,8 +40,8 @@ export async function apiRequest(
 ): Promise<any> {
   const token = localStorage.getItem('token');
   
-  // Add base URL if not already present
-  const baseURL = 'http://localhost:5000';
+  // Add base URL if not already present - use environment config
+  const baseURL = config.baseURL;
   const fullUrl = url.startsWith('http') ? url : `${baseURL}${url}`;
   
   console.log(`API Request: ${method} ${fullUrl}`, data || '(no data)');
