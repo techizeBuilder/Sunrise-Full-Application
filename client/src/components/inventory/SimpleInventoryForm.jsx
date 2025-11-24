@@ -22,7 +22,8 @@ import {
   Loader2, 
   Package, 
   AlertCircle,
-  Upload
+  Upload,
+  Plus
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -38,7 +39,8 @@ export default function SimpleInventoryForm({
   customerCategories = [],
   companies = [],
   onSubmit, 
-  isLoading = false 
+  isLoading = false,
+  onOpenCategoryManagement
 }) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -425,24 +427,36 @@ export default function SimpleInventoryForm({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="category" className="text-sm font-medium text-gray-700">Category *</Label>
-                <Select 
-                  value={formData.category} 
-                  onValueChange={(value) => {
-                    handleInputChange('category', value);
-                    handleInputChange('subCategory', ''); // Clear subcategory when category changes
-                  }}
-                >
-                  <SelectTrigger className={`mt-1 ${errors.category ? 'border-red-500' : ''}`}>
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((category) => (
-                      <SelectItem key={category._id} value={category.name}>
-                        {category.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex gap-2 mt-1">
+                  <Select 
+                    value={formData.category} 
+                    onValueChange={(value) => {
+                      handleInputChange('category', value);
+                      handleInputChange('subCategory', ''); // Clear subcategory when category changes
+                    }}
+                  >
+                    <SelectTrigger className={`${errors.category ? 'border-red-500' : ''}`}>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((category) => (
+                        <SelectItem key={category._id} value={category.name}>
+                          {category.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="px-3"
+                    onClick={onOpenCategoryManagement}
+                    title="Add new category"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
                 {errors.category && (
                   <div className="flex items-start gap-2 mt-1">
                     <AlertCircle className="h-3 w-3 text-red-500 mt-0.5 flex-shrink-0" />

@@ -96,6 +96,22 @@ router.get('/companies/public', async (req, res) => {
   }
 });
 
+// Clean up permissions route - remove production permissions from non-production roles
+router.get('/cleanup-permissions', async (req, res) => {
+  try {
+    const { cleanupUserPermissions } = await import('./utils/cleanupPermissions.js');
+    const result = await cleanupUserPermissions();
+    res.json(result);
+  } catch (error) {
+    console.error('Cleanup permissions error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to cleanup permissions',
+      error: error.message
+    });
+  }
+});
+
 // Login route
 router.post('/auth/login', async (req, res) => {
   try {
@@ -182,12 +198,41 @@ router.post('/auth/login', async (req, res) => {
     // Generate JWT token
     const token = generateToken(user._id.toString());
 
+    // Filter permissions based on user role - remove inappropriate modules
+    let filteredPermissions = { ...user.permissions };
+    
+    console.log('🔍 BEFORE FILTERING - User Role:', user.role);
+    console.log('🔍 BEFORE FILTERING - Modules:', user.permissions.modules.map(m => m.name));
+    
+    if (user.role === 'Super Admin') {
+      console.log('✅ Applying Super Admin filtering');
+      // Super Admin should only have superAdmin module
+      filteredPermissions.modules = user.permissions.modules.filter(module => 
+        module.name === 'superAdmin'
+      );
+    } else if (user.role === 'Unit Head') {
+      console.log('✅ Applying Unit Head filtering');
+      // Unit Head should only have unitHead module  
+      filteredPermissions.modules = user.permissions.modules.filter(module => 
+        module.name === 'unitHead'
+      );
+    } else if (user.role === 'Production') {
+      console.log('✅ Applying Production filtering');
+      // Production should only have production module
+      filteredPermissions.modules = user.permissions.modules.filter(module => 
+        module.name === 'production'
+      );
+    }
+    // For other roles, keep all their modules as-is
+    
+    console.log('🔍 AFTER FILTERING - Modules:', filteredPermissions.modules.map(m => m.name));
+
     const userResponse = {
       id: user._id,
       username: user.username,
       email: user.email,
       role: user.role,
-      permissions: user.permissions,
+      permissions: filteredPermissions,
       unit: user.unit,
       companyId: user.companyId?._id,
       company: user.companyId ? {

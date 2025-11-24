@@ -69,9 +69,7 @@ const UNIT_HEAD_MODULES = [
     label: 'Unit Manager',
     features: [
       { key: 'salesApproval', label: 'Sales Approval' },
-      { key: 'salesOrderList', label: 'Sales Order List' },
-      { key: 'inventory', label: 'Inventory Management' },
-      { key: 'reports', label: 'Reports' }
+      { key: 'salesOrderList', label: 'Sales Order List' }
     ]
   },
   {
@@ -89,10 +87,12 @@ const UNIT_HEAD_MODULES = [
     name: 'production',
     label: 'Production',
     features: [
-      { key: 'todaysIndents', label: 'Today\'s Indents' },
-      { key: 'summaryPanel', label: 'Summary Panel' },
-      { key: 'submitData', label: 'Submit Production Data' },
-      { key: 'submissionHistory', label: 'Submission History' }
+      { key: 'productionDashboard', label: 'Production Dashboard' },
+      { key: 'batchPlanning', label: 'Batch Planning' },
+      { key: 'productionExecution', label: 'Production Execution' },
+      { key: 'productionRegister', label: 'Batch Production Register' },
+      { key: 'verificationApproval', label: 'Verification & Approval' },
+      { key: 'productionReports', label: 'Production Reports' }
     ]
   },
   {

@@ -139,6 +139,34 @@ app.use('/uploads', express.static('uploads'));
       }
     });
 
+    // Fix Production permissions endpoint (development only - no auth required)
+    app.get('/api/fix-production-permissions', async (req, res) => {
+      try {
+        const { updateUsersWithProductionPermissions, migrateOldProductionPermissions } = 
+          await import('./utils/updateProductionPermissions.js');
+        
+        // First migrate old permissions
+        const migrationResult = await migrateOldProductionPermissions();
+        
+        // Then add production permissions to users who don't have them
+        const updateResult = await updateUsersWithProductionPermissions();
+
+        res.json({
+          success: true,
+          message: 'Production permissions updated successfully',
+          migration: migrationResult,
+          update: updateResult
+        });
+      } catch (error) {
+        console.error('Error fixing production permissions:', error);
+        res.status(500).json({
+          success: false,
+          message: 'Error fixing production permissions',
+          error: error.message
+        });
+      }
+    });
+
     // STEP 2: Register API routes DIRECTLY
     try {
       const authRoutes = (await import('./auth-routes.js')).default;
@@ -199,6 +227,11 @@ app.use('/uploads', express.static('uploads'));
       const adminRoutes = (await import('./routes/adminRoutes.js')).default;
       app.use('/api/admin', adminRoutes);
       console.log('Admin routes registered at /api/admin');
+
+      // Production routes
+      const productionRoutes = (await import('./controllers/production/productionRoutes.js')).default;
+      app.use('/api/production', productionRoutes);
+      console.log('Production routes registered at /api/production');
 
       // Add direct routes for specific endpoints
       const { authenticateToken } = await import('./middleware/auth.js');

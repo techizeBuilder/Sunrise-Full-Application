@@ -30,7 +30,12 @@ import {
   PieChart,
   ShoppingCart,
   CreditCard,
-  RotateCcw
+  RotateCcw,
+  Calendar,
+  Play,
+  FileText,
+  CheckCircle,
+  BarChart
 } from 'lucide-react';
 
 // Separate menu items for each role
@@ -64,12 +69,6 @@ const superAdminMenuItems = [
     path: '/super-admin/manufacturing',
     icon: Cog,
     module: 'manufacturing'
-  },
-  {
-    label: 'Production',
-    path: '/super-admin/production',
-    icon: Factory,
-    module: 'production'
   },
   {
     label: 'Dispatches',
@@ -183,12 +182,6 @@ const unitHeadMenuItems = [
     module: 'manufacturing'
   },
   {
-    label: 'Production',
-    path: '/unit-head/production',
-    icon: Factory,
-    module: 'production'
-  },
-  {
     label: 'User Management',
     path: '/unit-head/role-permission-management',
     icon: Shield,
@@ -236,6 +229,12 @@ const unitManagerMenuItems = [
     module: 'inventory'
   },
   {
+    label: 'Production',
+    path: '/unit-head/production',
+    icon: Factory,
+    module: 'production'
+  },
+  {
     label: 'Customers',
     path: '/customers',
     icon: Users,
@@ -246,31 +245,44 @@ const unitManagerMenuItems = [
 const productionMenuItems = [
   {
     label: 'Dashboard',
-    path: '/production-dashboard',
-    icon: LayoutDashboard,
-    module: 'dashboard'
-  },
-  {
-    label: 'Production',
-    path: '/production',
+    path: '/production/dashboard',
     icon: Factory,
+    module: 'production'
+  },
+  {
+    label: 'Batch Planning',
+    path: '/production/batch-planning',
+    icon: Calendar,
     module: 'production',
-    submodules: [
-      { label: 'My Production', path: '/production', feature: 'todaysIndents' },
-      { label: 'Submission History', path: '/production/history', feature: 'submissionHistory' }
-    ]
+    feature: 'batchPlanning'
   },
   {
-    label: 'Orders',
-    path: '/orders',
-    icon: Receipt,
-    module: 'orders'
+    label: 'Production Execution',
+    path: '/production/execution',
+    icon: Play,
+    module: 'production',
+    feature: 'productionExecution'
   },
   {
-    label: 'Inventory',
-    path: '/inventory',
-    icon: Package,
-    module: 'inventory'
+    label: 'Batch Register',
+    path: '/production/register',
+    icon: FileText,
+    module: 'production',
+    feature: 'productionRegister'
+  },
+  {
+    label: 'Verification & Approval',
+    path: '/production/verification',
+    icon: CheckCircle,
+    module: 'production',
+    feature: 'verificationApproval'
+  },
+  {
+    label: 'Production Reports',
+    path: '/production/reports',
+    icon: BarChart,
+    module: 'production',
+    feature: 'productionReports'
   }
 ];
 
@@ -450,31 +462,53 @@ export default function Sidebar({ isOpen, onClose }) {
   // Get menu items based on user role - much simpler and cleaner
   const roleMenuItems = getMenuItemsByRole(user?.role);
   
-  // Filter menu items based on module access and settings
-  const filteredMenuItems = roleMenuItems.filter(item => {
-    // Always show dashboard
-    if (item.module === 'dashboard') return true;
-    
-    // Always show items without module restriction
-    if (!item.module) return true;
-    
-    // Check if user has access to the module
-    const hasAccess = hasModuleAccess(item.module);
-    if (!hasAccess) return false;
-    
-    // If item has a specific feature requirement, check feature access
-    if (item.feature) {
-      const hasFeature = hasFeatureAccess(item.module, item.feature, 'view');
-      if (!hasFeature) return false;
-    }
-    
-    // Check if module is enabled in settings
-    if (settings?.modules && settings.modules[item.module] === false) {
-      return false;
-    }
-    
-    return true;
-  });
+  // For Production role users, apply strict filtering to only show production items
+  let filteredMenuItems;
+  if (user?.role === 'Production') {
+    // For Production users, only show production-related items and profile
+    filteredMenuItems = roleMenuItems.filter(item => {
+      // Always show items without module restriction (like profile)
+      if (!item.module) return true;
+      
+      // Only show production module items
+      if (item.module === 'production') {
+        // If item has a specific feature requirement, check feature access
+        if (item.feature) {
+          const hasFeature = hasFeatureAccess(item.module, item.feature, 'view');
+          return hasFeature;
+        }
+        return true;
+      }
+      
+      return false; // Hide all non-production items for Production users
+    });
+  } else {
+    // For other roles, use the existing filtering logic
+    filteredMenuItems = roleMenuItems.filter(item => {
+      // Always show dashboard
+      if (item.module === 'dashboard') return true;
+      
+      // Always show items without module restriction
+      if (!item.module) return true;
+      
+      // Check if user has access to the module
+      const hasAccess = hasModuleAccess(item.module);
+      if (!hasAccess) return false;
+      
+      // If item has a specific feature requirement, check feature access
+      if (item.feature) {
+        const hasFeature = hasFeatureAccess(item.module, item.feature, 'view');
+        if (!hasFeature) return false;
+      }
+      
+      // Check if module is enabled in settings
+      if (settings?.modules && settings.modules[item.module] === false) {
+        return false;
+      }
+      
+      return true;
+    });
+  }
 
   return (
     <>
@@ -560,8 +594,8 @@ export default function Sidebar({ isOpen, onClose }) {
                   <div key={item.path} className="space-y-1">
                     {/* Main Module Button */}
                     <div className="flex items-center">
-                      {/* Special handling for Sales and Production modules - dropdown only, no direct link */}
-                      {(item.module === 'sales' || item.module === 'production') && hasAccessibleSubmodules ? (
+                      {/* Special handling for Sales module - dropdown only, no direct link */}
+                      {item.module === 'sales' && hasAccessibleSubmodules ? (
                         <Button
                           variant="ghost"
                           className={cn(

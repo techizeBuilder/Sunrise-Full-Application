@@ -48,6 +48,7 @@ import SuperAdminCustomers from "@/pages/super-admin/SuperAdminCustomers";
 import SuperAdminSettings from "@/pages/super-admin/SuperAdminSettings";
 import SuperAdminCompanies from "@/pages/super-admin/SuperAdminCompanies";
 import ProductionDashboard from "@/pages/ProductionDashboard";
+import ProductionModule from "@/components/production/ProductionModule";
 import PackingDashboard from "@/pages/PackingDashboard";
 import DispatchDashboard from "@/pages/DispatchDashboard";
 import AccountsDashboard from "@/pages/AccountsDashboard";
@@ -292,6 +293,24 @@ function Router() {
           <ModernInventoryUI />
         </ProtectedRoute>
       </Route>
+      
+      {/* Production Module Routes */}
+      <Route path="/production" nest>
+        <ProtectedRoute>
+          <ProductionModule />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/super-admin/production" nest>
+        <ProtectedRoute requiredRole="Super Admin">
+          <ProductionModule />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/unit-head/production" nest>
+        <ProtectedRoute requiredRole="Unit Head">
+          <ProductionModule />
+        </ProtectedRoute>
+      </Route>
+      
       <Route path="/super-admin/settings">
         <ProtectedRoute requiredRole="Super Admin">
           <SuperAdminSettings />

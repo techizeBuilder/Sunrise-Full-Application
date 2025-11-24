@@ -160,10 +160,12 @@ const MODULES = [
     name: 'production',
     label: 'Production',
     features: [
-      { key: 'todaysIndents', label: 'Today\'s Indents' },
-      { key: 'summaryPanel', label: 'Summary Panel' },
-      { key: 'submitData', label: 'Submit Production Data' },
-      { key: 'submissionHistory', label: 'Submission History' }
+      { key: 'productionDashboard', label: 'Production Dashboard' },
+      { key: 'batchPlanning', label: 'Batch Planning' },
+      { key: 'productionExecution', label: 'Production Execution' },
+      { key: 'productionRegister', label: 'Batch Production Register' },
+      { key: 'verificationApproval', label: 'Verification & Approval' },
+      { key: 'productionReports', label: 'Production Reports' }
     ]
   },
   {
@@ -493,7 +495,35 @@ export default function RolePermissionManagement() {
     }));
   };
 
+  // Helper function to get features from actual permissions or fallback to MODULES
+  const getModuleFeatures = (moduleName) => {
+    const permissionModule = formData.permissions?.modules?.find(m => m.name === moduleName);
+    if (permissionModule && permissionModule.features && permissionModule.features.length > 0) {
+      return permissionModule.features;
+    }
+    // Fallback to MODULES if no permission data
+    const moduleConfig = MODULES.find(m => m.name === moduleName);
+    return moduleConfig?.features || [];
+  };
+
   const getDefaultModulesForRole = (role) => {
+    // Helper function to get feature with label
+    const enrichFeatureWithLabel = (moduleFeatures, featureKey) => {
+      const moduleFeature = moduleFeatures.find(f => f.key === featureKey);
+      return moduleFeature ? moduleFeature.label : featureKey;
+    };
+
+    // Helper function to create feature with permissions and label
+    const createFeaturePermissions = (moduleName, featureKey, permissions) => ({
+      key: featureKey,
+      label: (() => {
+        const module = MODULES.find(m => m.name === moduleName);
+        const feature = module?.features.find(f => f.key === featureKey);
+        return feature?.label || featureKey;
+      })(),
+      ...permissions
+    });
+
     // Return default modules based on role
     switch (role) {
       case 'Super Admin':
@@ -516,6 +546,18 @@ export default function RolePermissionManagement() {
               { key: 'companies', view: true, add: true, edit: true, delete: true, alter: true },
               { key: 'rolePermissions', view: true, add: true, edit: true, delete: true, alter: true },
               { key: 'userManagement', view: true, add: true, edit: true, delete: true, alter: true }
+            ]
+          },
+          {
+            name: 'production',
+            dashboard: true,
+            features: [
+              { key: 'productionDashboard', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'batchPlanning', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'productionExecution', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'productionRegister', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'verificationApproval', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'productionReports', view: true, add: true, edit: true, delete: true, alter: true }
             ]
           }
         ];
@@ -550,6 +592,18 @@ export default function RolePermissionManagement() {
               { key: 'production', view: true, add: true, edit: true, delete: true, alter: true },
               { key: 'userManagement', view: true, add: true, edit: true, delete: true, alter: true }
             ]
+          },
+          {
+            name: 'production',
+            dashboard: true,
+            features: [
+              { key: 'productionDashboard', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'batchPlanning', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'productionExecution', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'productionRegister', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'verificationApproval', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'productionReports', view: true, add: true, edit: true, delete: true, alter: true }
+            ]
           }
         ];
       case 'Unit Manager':
@@ -560,6 +614,21 @@ export default function RolePermissionManagement() {
             features: [
               { key: 'salesApproval', view: true, add: true, edit: true, delete: true, alter: false },
               { key: 'salesOrderList', view: true, add: true, edit: true, delete: true, alter: false }
+            ]
+          }
+        ];
+      case 'Production':
+        return [
+          {
+            name: 'production',
+            dashboard: true,
+            features: [
+              createFeaturePermissions('production', 'productionDashboard', { view: true, add: true, edit: true, delete: true, alter: true }),
+              createFeaturePermissions('production', 'batchPlanning', { view: true, add: true, edit: true, delete: true, alter: true }),
+              createFeaturePermissions('production', 'productionExecution', { view: true, add: true, edit: true, delete: true, alter: true }),
+              createFeaturePermissions('production', 'productionRegister', { view: true, add: true, edit: true, delete: true, alter: true }),
+              createFeaturePermissions('production', 'verificationApproval', { view: true, add: true, edit: true, delete: true, alter: true }),
+              createFeaturePermissions('production', 'productionReports', { view: true, add: true, edit: true, delete: true, alter: true })
             ]
           }
         ];
@@ -585,11 +654,13 @@ export default function RolePermissionManagement() {
   const updateModulePermission = (moduleName, enabled) => {
     if (enabled) {
       // When enabling a module, add it with all features enabled
+      const moduleConfig = MODULES.find(m => m.name === moduleName);
       const newModule = {
         name: moduleName,
         dashboard: true,
-        features: MODULES.find(m => m.name === moduleName)?.features.map(f => ({
+        features: moduleConfig?.features.map(f => ({
           key: f.key,
+          label: f.label,
           view: true,
           add: true,
           edit: true,
@@ -920,7 +991,7 @@ export default function RolePermissionManagement() {
                                 Module Permissions
                               </div>
                               
-                              {module.features.map((feature) => (
+                              {getModuleFeatures(module.name).map((feature) => (
                                 <div key={feature.key}>
                                   {/* Desktop Layout */}
                                   <div className="hidden lg:grid grid-cols-5 gap-4 items-center py-2">

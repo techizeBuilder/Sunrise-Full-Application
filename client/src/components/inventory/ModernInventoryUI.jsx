@@ -62,6 +62,7 @@ import SimpleInventoryForm from './SimpleInventoryForm';
 import ViewItemModal from './ViewItemModal';
 import DeleteConfirmDialog from './DeleteConfirmDialog';
 import CategoryManagement from './CategoryManagement';
+import ExcelImportExport from './ExcelImportExport';
 
 import { apiRequest } from '@/lib/queryClient';
 import { showSmartToast } from '@/lib/toast-utils';
@@ -455,7 +456,11 @@ export default function ModernInventoryUI() {
                   </Button>
                 </>
               )}
-             
+              
+              {/* Excel Import/Export - Available to all users with view permissions */}
+              {inventoryPermissions.canView && (
+                <ExcelImportExport type="items" />
+              )}
             </div>
           </div>
         </CardContent>
@@ -759,6 +764,7 @@ export default function ModernInventoryUI() {
           companies={companies}
           onSubmit={handleFormSubmit}
           isLoading={createItemMutation.isPending || updateItemMutation.isPending}
+          onOpenCategoryManagement={() => setCategoryManagementOpen(true)}
         />
       )}
 

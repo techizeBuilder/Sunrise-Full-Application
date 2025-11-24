@@ -415,13 +415,23 @@ function CustomerCategoryFormModal({ isOpen, onClose, editingCategory, onSubmit,
 }
 
 // Delete Confirmation Modal
-function DeleteConfirmationModal({ isOpen, onClose, onConfirm, title, description, isLoading }) {
+function DeleteConfirmationModal({ isOpen, onClose, onConfirm, title, description, isLoading, category }) {
+  const hasProducts = category && (category.productCount || 0) > 0;
+  
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader className="text-center space-y-3">
-          <div className="mx-auto w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
-            <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
+          <div className={`mx-auto w-12 h-12 rounded-full flex items-center justify-center ${
+            hasProducts 
+              ? 'bg-yellow-100 dark:bg-yellow-900/30' 
+              : 'bg-red-100 dark:bg-red-900/30'
+          }`}>
+            <AlertTriangle className={`h-6 w-6 ${
+              hasProducts 
+                ? 'text-yellow-600 dark:text-yellow-400' 
+                : 'text-red-600 dark:text-red-400'
+            }`} />
           </div>
           <DialogTitle className="text-xl font-semibold text-gray-900 dark:text-gray-100">
             {title}
@@ -432,11 +442,13 @@ function DeleteConfirmationModal({ isOpen, onClose, onConfirm, title, descriptio
         </div>
         <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
           <Button variant="outline" onClick={onClose} disabled={isLoading}>
-            Cancel
+            {hasProducts ? 'Close' : 'Cancel'}
           </Button>
-          <Button variant="destructive" onClick={onConfirm} disabled={isLoading}>
-            {isLoading ? 'Deleting...' : 'Delete'}
-          </Button>
+          {!hasProducts && (
+            <Button variant="destructive" onClick={onConfirm} disabled={isLoading}>
+              {isLoading ? 'Deleting...' : 'Delete'}
+            </Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>
@@ -535,16 +547,27 @@ function CategoryManagementModal({ isOpen, onClose }) {
   };
 
   const handleDelete = (category) => {
+    const productCount = category.productCount || 0;
+    const hasProducts = productCount > 0;
+    
     setDeleteConfirm({
       isOpen: true,
       item: category,
       title: 'Delete Category',
-      description: `Are you sure you want to delete "${category.name}"? This action cannot be undone.`
+      description: hasProducts 
+        ? `Cannot delete "${category.name}" because it contains ${productCount} product${productCount === 1 ? '' : 's'}. Please move or delete all products from this category first.`
+        : `Are you sure you want to delete "${category.name}"? This action cannot be undone.`
     });
   };
 
   const confirmDelete = () => {
     if (deleteConfirm.item) {
+      const productCount = deleteConfirm.item.productCount || 0;
+      if (productCount > 0) {
+        // Don't proceed with deletion if category has products
+        setDeleteConfirm({ isOpen: false, item: null });
+        return;
+      }
       deleteCategoryMutation.mutate(deleteConfirm.item._id);
     }
   };
@@ -653,6 +676,7 @@ function CategoryManagementModal({ isOpen, onClose }) {
                           <TableHead className="font-semibold text-gray-900 dark:text-gray-100">Category Name</TableHead>
                           <TableHead className="font-semibold text-gray-900 dark:text-gray-100">Description</TableHead>
                           <TableHead className="font-semibold text-gray-900 dark:text-gray-100">Subcategories</TableHead>
+                          <TableHead className="font-semibold text-gray-900 dark:text-gray-100 text-center">Products</TableHead>
                           <TableHead className="w-[120px] font-semibold text-gray-900 dark:text-gray-100">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -698,6 +722,22 @@ function CategoryManagementModal({ isOpen, onClose }) {
                               ) : (
                                 <span className="text-xs text-gray-400">No subcategories</span>
                               )}
+                            </TableCell>
+                            <TableCell className="py-4 text-center">
+                              <div className="flex items-center justify-center">
+                                <Badge 
+                                  variant={category.productCount > 0 ? "default" : "secondary"}
+                                  className={`
+                                    ${category.productCount > 0 
+                                      ? 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800' 
+                                      : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                                    }
+                                  `}
+                                >
+                                  <Package className="h-3 w-3 mr-1" />
+                                  {category.productCount || 0}
+                                </Badge>
+                              </div>
                             </TableCell>
                             <TableCell className="py-4">
                               <div className="flex gap-1">
@@ -772,6 +812,7 @@ function CategoryManagementModal({ isOpen, onClose }) {
         onConfirm={confirmDelete}
         title={deleteConfirm.title}
         description={deleteConfirm.description}
+        category={deleteConfirm.item}
         isLoading={deleteCategoryMutation.isPending}
       />
     </>

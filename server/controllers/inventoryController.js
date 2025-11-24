@@ -590,6 +590,8 @@ export const adjustStock = async (req, res) => {
 // CATEGORY CONTROLLERS
 export const getCategories = async (req, res) => {
   try {
+    console.log('🔍 GetCategories called by:', req.user?.role);
+    
     if (!checkInventoryPermission(req.user, 'view')) {
       return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
     }
@@ -598,21 +600,54 @@ export const getCategories = async (req, res) => {
 
     // For Unit Head users, only show categories that exist in their company's inventory
     if (req.user.role === 'Unit Head' && req.user.companyId) {
+      console.log('🏢 Unit Head - filtering by company:', req.user.companyId);
+      
       // Get distinct categories from items that belong to the Unit Head's company
       const companyCategories = await Item.distinct('category', { store: req.user.companyId });
       
       // Get category documents for those categories that exist in the company
-      categories = await Category.find({ 
+      const rawCategories = await Category.find({ 
         name: { $in: companyCategories } 
       }).sort({ createdAt: -1, name: 1 });
+
+      // Add product count for each category (company-specific)
+      categories = await Promise.all(
+        rawCategories.map(async (category) => {
+          const productCount = await Item.countDocuments({ 
+            category: category.name,
+            store: req.user.companyId 
+          });
+          const categoryObj = category.toObject();
+          categoryObj.productCount = productCount;
+          console.log(`📊 Category "${category.name}" has ${productCount} products (company-specific)`);
+          return categoryObj;
+        })
+      );
     } else {
+      console.log('👑 Super Admin or other role - showing all categories');
+      
       // For Super Admin and other roles, show all categories
       categories = await Category.find().sort({ createdAt: -1, name: 1 });
+
+      // Add product count for each category (all companies)
+      const categoriesWithCount = await Promise.all(
+        categories.map(async (category) => {
+          const productCount = await Item.countDocuments({ 
+            category: category.name 
+          });
+          const categoryObj = category.toObject();
+          categoryObj.productCount = productCount;
+          console.log(`📊 Category "${category.name}" has ${productCount} products (global)`);
+          return categoryObj;
+        })
+      );
+      categories = categoriesWithCount;
     }
 
+    console.log(`✅ Returning ${categories.length} categories with product counts`);
     res.json({ categories });
   } catch (error) {
-    console.error('Get categories error:', error);
+    console.error('❌ Get categories error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 };
