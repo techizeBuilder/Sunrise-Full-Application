@@ -24,7 +24,77 @@ const SalesApproval = () => {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [filteredOrders, setFilteredOrders] = useState([]);
+  
+  // Production calculation states
+  const [productionData, setProductionData] = useState({});
+  // Structure: { productName: { packing: 0, physicalStock: 0, batchAdjusted: 0, qtyPerBatch: 0, toBeProducedDay: 0 } }
   const { toast } = useToast();
+
+  // Initialize production data for a product
+  const initializeProductionData = (productName) => {
+    if (!productionData[productName]) {
+      setProductionData(prev => ({
+        ...prev,
+        [productName]: {
+          packing: 0,
+          physicalStock: 0,
+          batchAdjusted: 0,
+          qtyPerBatch: 0, // Default value changed to 0
+          toBeProducedDay: 0
+        }
+      }));
+    }
+  };
+
+  // Get production data with fallback values
+  const getProductionData = (productName) => {
+    return productionData[productName] || {
+      packing: 0,
+      physicalStock: 0,
+      batchAdjusted: 0,
+      qtyPerBatch: 0,
+      toBeProducedDay: 0
+    };
+  };
+
+  // Update production data field
+  const updateProductionField = (productName, field, value) => {
+    const numValue = value === '' ? 0 : parseFloat(value);
+    setProductionData(prev => ({
+      ...prev,
+      [productName]: {
+        ...prev[productName],
+        [field]: isNaN(numValue) ? 0 : numValue
+      }
+    }));
+  };
+
+  // Calculate Production with final batches = Batch_Adjusted * Qty_per_Batch
+  const getProductionWithFinalBatches = (productName) => {
+    const data = getProductionData(productName);
+    return Math.round((data.batchAdjusted * data.qtyPerBatch) * 100) / 100;
+  };
+
+  // Calculate Expiry/Shortage = Production_with_final_batches - To_be_produced_day
+  const getExpiryShortage = (productName) => {
+    const data = getProductionData(productName);
+    const productionWithFinalBatches = getProductionWithFinalBatches(productName);
+    return Math.round((productionWithFinalBatches - data.toBeProducedDay) * 100) / 100;
+  };
+
+  // Calculate Balance with final batches = Production_with_final_batches - Packing
+  const getBalanceWithFinalBatches = (productName) => {
+    const data = getProductionData(productName);
+    const productionWithFinalBatches = getProductionWithFinalBatches(productName);
+    return Math.round((productionWithFinalBatches - data.packing) * 100) / 100;
+  };
+
+  // Calculate To be produced/Batches = To_be_produced_day / Qty_per_Batch
+  const getToBeProducedBatches = (productName) => {
+    const data = getProductionData(productName);
+    if (data.qtyPerBatch === 0) return 0;
+    return Math.round((data.toBeProducedDay / data.qtyPerBatch) * 100) / 100; // Round to 2 decimals
+  };
 
   // Filter orders by date range
   const filterOrdersByDate = (orders) => {
@@ -46,6 +116,13 @@ const SalesApproval = () => {
     const filtered = filterOrdersByDate(individualOrders);
     setFilteredOrders(filtered);
   }, [individualOrders, dateFrom, dateTo]);
+
+  // Initialize production data when products change
+  useEffect(() => {
+    products.forEach(product => {
+      initializeProductionData(product);
+    });
+  }, [products]);
 
   // Get dynamic status counts
   const getStatusCounts = () => {
@@ -469,6 +546,23 @@ const SalesApproval = () => {
                       <div className="text-xs font-semibold text-gray-900">Stock</div>
                     </div>
                   </th>
+                  {/* Batch Adjusted Column */}
+                  <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[80px] lg:min-w-[100px]">
+                    <div className="flex flex-col items-center gap-1">
+                      <Package className="h-3 w-3 lg:h-4 lg:w-4 text-cyan-600" />
+                      <div className="text-xs font-semibold text-gray-900">Batch</div>
+                      <div className="text-xs font-semibold text-gray-900">Adjusted</div>
+                    </div>
+                  </th>
+                  {/* To be Produced/Day Column */}
+                  <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[90px] lg:min-w-[110px]">
+                    <div className="flex flex-col items-center gap-1">
+                      <Package className="h-3 w-3 lg:h-4 lg:w-4 text-amber-600" />
+                      <div className="text-xs font-semibold text-gray-900">To be Prod.</div>
+                      <div className="text-xs font-semibold text-gray-900">/Day</div>
+                    </div>
+                  </th>
+                
                   {salesPersons.slice(0, 8).map((salesPerson) => {
                     const personOrderCount = orders.filter(order => {
                       const orderSalesPersonName = getSalesPersonName(order);
@@ -498,16 +592,28 @@ const SalesApproval = () => {
                       </div>
                     </th>
                   )}
+                  
+                  {/* Total Indent Column */}
                   <th className="p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[90px] lg:min-w-[120px] bg-gradient-to-r from-green-50 to-green-100">
                     <div className="flex flex-col items-center gap-1">
                       <Package className="h-3 w-3 lg:h-4 lg:w-4 text-green-600" />
-                      <div className="text-xs font-bold text-gray-900">Order Summary</div>
+                      <div className="text-xs font-bold text-gray-900">Total Indent</div>
                       <div className="text-xs text-gray-600 font-normal">
-                        Total Qty 
+                        Salesman
                       </div>
                     </div>
                   </th>
+                  
+                  {/* Qty/Batch Column */}
+                  <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[80px] lg:min-w-[100px]">
+                    <div className="flex flex-col items-center gap-1">
+                      <Package className="h-3 w-3 lg:h-4 lg:w-4 text-teal-600" />
+                      <div className="text-xs font-semibold text-gray-900">Qty/</div>
+                      <div className="text-xs font-semibold text-gray-900">Batch</div>
+                    </div>
+                  </th>
                 </tr>
+                
               </thead>
 
               <tbody>
@@ -536,9 +642,14 @@ const SalesApproval = () => {
                       {/* Packing Column */}
                       <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
                         <div className="text-center">
-                          <div className="text-base lg:text-lg font-bold text-blue-600">
-                            0
-                          </div>
+                          <Input
+                            type="number"
+                            value={getProductionData(product).packing}
+                            onChange={(e) => updateProductionField(product, 'packing', e.target.value)}
+                            className="w-16 h-8 text-center text-sm font-bold text-blue-600 border-none bg-transparent focus:ring-1 focus:ring-blue-300"
+                            min="0"
+                            step="0.01"
+                          />
                         </div>
                       </td>
 
@@ -546,7 +657,7 @@ const SalesApproval = () => {
                       <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
                         <div className="text-center">
                           <div className="text-base lg:text-lg font-bold text-red-600">
-                            0
+                            {getExpiryShortage(product)}
                           </div>
                         </div>
                       </td>
@@ -555,7 +666,7 @@ const SalesApproval = () => {
                       <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
                         <div className="text-center">
                           <div className="text-base lg:text-lg font-bold text-green-600">
-                            0
+                            {getProductionWithFinalBatches(product)}
                           </div>
                         </div>
                       </td>
@@ -564,7 +675,7 @@ const SalesApproval = () => {
                       <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
                         <div className="text-center">
                           <div className="text-base lg:text-lg font-bold text-purple-600">
-                            0
+                            {getBalanceWithFinalBatches(product)}
                           </div>
                         </div>
                       </td>
@@ -573,7 +684,7 @@ const SalesApproval = () => {
                       <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
                         <div className="text-center">
                           <div className="text-base lg:text-lg font-bold text-orange-600">
-                            0
+                            {getToBeProducedBatches(product)}
                           </div>
                         </div>
                       </td>
@@ -581,9 +692,42 @@ const SalesApproval = () => {
                       {/* Physical Stock Column */}
                       <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
                         <div className="text-center">
-                          <div className="text-base lg:text-lg font-bold text-indigo-600">
-                            0
-                          </div>
+                          <Input
+                            type="number"
+                            value={getProductionData(product).physicalStock}
+                            onChange={(e) => updateProductionField(product, 'physicalStock', e.target.value)}
+                            className="w-16 h-8 text-center text-sm font-bold text-indigo-600 border-none bg-transparent focus:ring-1 focus:ring-indigo-300"
+                            min="0"
+                            step="0.01"
+                          />
+                        </div>
+                      </td>
+
+                      {/* Batch Adjusted Column */}
+                      <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
+                        <div className="text-center">
+                          <Input
+                            type="number"
+                            value={getProductionData(product).batchAdjusted}
+                            onChange={(e) => updateProductionField(product, 'batchAdjusted', e.target.value)}
+                            className="w-16 h-8 text-center text-sm font-bold text-cyan-600 border-none bg-transparent focus:ring-1 focus:ring-cyan-300"
+                            min="0"
+                            step="0.01"
+                          />
+                        </div>
+                      </td>
+
+                      {/* To be Produced/Day Column */}
+                      <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
+                        <div className="text-center">
+                          <Input
+                            type="number"
+                            value={getProductionData(product).toBeProducedDay}
+                            onChange={(e) => updateProductionField(product, 'toBeProducedDay', e.target.value)}
+                            className="w-18 h-8 text-center text-sm font-bold text-amber-600 border-none bg-transparent focus:ring-1 focus:ring-amber-300"
+                            min="0"
+                            step="1"
+                          />
                         </div>
                       </td>
 
@@ -623,7 +767,7 @@ const SalesApproval = () => {
                         </td>
                       )}
 
-                      {/* Total Quantity Column */}
+                      {/* Total Indent Column */}
                       <td className="p-3 border-r align-middle bg-gray-50">
                         <div className="flex flex-col items-center space-y-2">
                           {/* Main Total Display */}
@@ -631,47 +775,22 @@ const SalesApproval = () => {
                             <div className="text-xl font-bold text-blue-600">
                               {totalQuantity}
                             </div>
-                            {/* <div className="text-xs text-gray-500 uppercase ">
-                              Total Qty
-                            </div> */}
                           </div>
-                          
-                          {/* Order Count */}
-                          {/* <div className="text-center">
-                            <div className="text-sm font-semibold text-gray-700">
-                              {totalOrderCount} Orders
-                            </div>
-                          </div> */}
-                          
-                          {/* Average per Order */}
-                          {/* {totalOrderCount > 0 && (
-                            <div className="text-center">
-                              <div className="text-sm text-gray-600">
-                                Avg: {Math.round((totalQuantity / totalOrderCount) * 100) / 100}
-                              </div>
-                              <div className="text-xs text-gray-500">per order</div>
-                            </div>
-                          )}
-                           */}
-                          {/* Status Distribution (Compact) */}
-                          {/* {productOrders.length > 0 && (
-                            <div className="text-center w-full">
-                              <div className="text-xs text-gray-500 mb-1">Status</div>
-                              <div className="flex flex-wrap justify-center gap-1">
-                                {Object.entries(
-                                  productOrders.reduce((acc, order) => {
-                                    const status = order.status || 'Pending';
-                                    acc[status] = (acc[status] || 0) + 1;
-                                    return acc;
-                                  }, {})
-                                ).map(([status, count]) => (
-                                  <span key={status} className="text-xs px-1 py-0.5 rounded bg-gray-200 text-gray-700">
-                                    {count} {status}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )} */}
+                        </div>
+                      </td>
+
+                      {/* Qty/Batch Column */}
+                      <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
+                        <div className="text-center">
+                          <Input
+                            type="number"
+                            value={getProductionData(product).qtyPerBatch === 0 ? '' : getProductionData(product).qtyPerBatch}
+                            onChange={(e) => updateProductionField(product, 'qtyPerBatch', e.target.value)}
+                            className="w-16 h-8 text-center text-sm font-bold text-teal-600 border-none bg-transparent focus:ring-1 focus:ring-teal-300"
+                            min="0"
+                            step="1"
+                            placeholder=""
+                          />
                         </div>
                       </td>
                     </tr>

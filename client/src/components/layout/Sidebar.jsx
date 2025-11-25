@@ -229,12 +229,6 @@ const unitManagerMenuItems = [
     module: 'inventory'
   },
   {
-    label: 'Production',
-    path: '/unit-head/production',
-    icon: Factory,
-    module: 'production'
-  },
-  {
     label: 'Customers',
     path: '/customers',
     icon: Users,
