@@ -32,7 +32,6 @@ import MyInvoices from "@/pages/sales/MyInvoices";
 
 import RefundDamage from "@/pages/sales/RefundDamage";
 import SalesDashboard from "@/pages/SalesDashboard";
-import NewProductionPage from "@/pages/NewProductionPage";
 import ProductionHistoryPage from "@/pages/ProductionHistoryPage";
 import RoleBasedDashboard from "@/components/layout/RoleBasedDashboard";
 import NotificationsPage from "@/pages/NotificationsPage";
@@ -166,11 +165,24 @@ function Router() {
           <Manufacturing />
         </RoleBasedProtectedRoute>
       </Route>
-      <Route path="/production">
-        <ProtectedRoute requiredRole="Production">
-          <NewProductionPage />
+      
+      {/* Production Module Routes - Must come before specific routes */}
+      <Route path="/production/:rest*">
+        <ProtectedRoute>
+          <ProductionModule />
         </ProtectedRoute>
       </Route>
+      <Route path="/super-admin/production/:rest*">
+        <ProtectedRoute requiredRole="Super Admin">
+          <ProductionModule />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/unit-head/production/:rest*">
+        <ProtectedRoute requiredRole="Unit Head">
+          <ProductionModule />
+        </ProtectedRoute>
+      </Route>
+      
       <Route path="/production/history">
         <ProtectedRoute requiredRole="Production">
           <ProductionHistoryPage />
@@ -294,23 +306,6 @@ function Router() {
         </ProtectedRoute>
       </Route>
       
-      {/* Production Module Routes */}
-      <Route path="/production" nest>
-        <ProtectedRoute>
-          <ProductionModule />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/super-admin/production" nest>
-        <ProtectedRoute requiredRole="Super Admin">
-          <ProductionModule />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/unit-head/production" nest>
-        <ProtectedRoute requiredRole="Unit Head">
-          <ProductionModule />
-        </ProtectedRoute>
-      </Route>
-      
       <Route path="/super-admin/settings">
         <ProtectedRoute requiredRole="Super Admin">
           <SuperAdminSettings />
@@ -378,11 +373,6 @@ function Router() {
         <UnitManagerProtectedRoute requiredRole="Unit Manager">
           <SalesOrderList />
         </UnitManagerProtectedRoute>
-      </Route>
-      <Route path="/production-dashboard">
-        <ProtectedRoute requiredRole="Production">
-          <ProductionDashboard />
-        </ProtectedRoute>
       </Route>
       <Route path="/packing-dashboard">
         <ProtectedRoute requiredRole="Packing">

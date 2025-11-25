@@ -6,7 +6,7 @@ import SalesDashboard from "@/pages/SalesDashboard";
 import UnitHeadDashboard from "@/pages/UnitHeadDashboard";
 import UnitManagerDashboard from "@/pages/UnitManagerDashboard";
 import SuperAdminDashboard from "@/pages/SuperAdminDashboard";
-import ProductionDashboard from "@/pages/ProductionDashboard";
+import ProductionModule from "@/components/production/ProductionModule";
 import PackingDashboard from "@/pages/PackingDashboard";
 import DispatchDashboard from "@/pages/DispatchDashboard";
 import AccountsDashboard from "@/pages/AccountsDashboard";
@@ -32,7 +32,7 @@ export default function RoleBasedDashboard() {
           setLocation('/sales-dashboard');
           return;
         case 'Production':
-          setLocation('/production-dashboard');
+          setLocation('/production/dashboard');
           return;
         case 'Packing':
           setLocation('/packing-dashboard');
@@ -61,7 +61,7 @@ export default function RoleBasedDashboard() {
     case 'Sales':
       return <SalesDashboard />;
     case 'Production':
-      return <ProductionDashboard />;
+      return <ProductionModule />;
     case 'Packing':
       return <PackingDashboard />;
     case 'Dispatch':
