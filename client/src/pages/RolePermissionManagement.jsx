@@ -498,11 +498,20 @@ export default function RolePermissionManagement() {
   // Helper function to get features from actual permissions or fallback to MODULES
   const getModuleFeatures = (moduleName) => {
     const permissionModule = formData.permissions?.modules?.find(m => m.name === moduleName);
-    if (permissionModule && permissionModule.features && permissionModule.features.length > 0) {
-      return permissionModule.features;
-    }
-    // Fallback to MODULES if no permission data
     const moduleConfig = MODULES.find(m => m.name === moduleName);
+    
+    if (permissionModule && permissionModule.features && permissionModule.features.length > 0) {
+      // Enrich permission features with labels from MODULES configuration
+      return permissionModule.features.map(permFeature => {
+        const configFeature = moduleConfig?.features?.find(f => f.key === permFeature.key);
+        return {
+          ...permFeature,
+          label: configFeature?.label || permFeature.key
+        };
+      });
+    }
+    
+    // Fallback to MODULES if no permission data
     return moduleConfig?.features || [];
   };
 
