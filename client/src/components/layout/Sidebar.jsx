@@ -202,19 +202,19 @@ const unitManagerMenuItems = [
     icon: LayoutDashboard,
     module: 'dashboard'
   },
-  {
-    label: 'Sales Approval',
-    path: '/sales-approval',
-    icon: Shield,
-    module: 'unitManager',
-    feature: 'salesApproval'
-  },
-  {
+   {
     label: 'Sales Order List',
     path: '/sales-order-list',
     icon: TrendingUp,
     module: 'unitManager',
     feature: 'salesOrderList'
+  },
+  {
+    label: 'Indent Summary ',
+    path: '/sales-approval',
+    icon: Shield,
+    module: 'unitManager',
+    feature: 'salesApproval'
   },
   {
     label: 'Orders',

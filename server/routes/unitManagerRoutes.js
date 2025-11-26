@@ -99,7 +99,8 @@ router.get('/debug', async (req, res) => {
 
 // Unit Manager specific routes
 router.get('/items', getItems); // Comment out but keep for reference
-router.get('/orders', getOrders); // Main API with all data
+// COMMENTED OUT - Using product summary API instead
+// router.get('/orders', getOrders); // Main API with all data
 router.get('/all-orders', getAllOrders); // New endpoint for sales order list
 router.get('/sales-order-list', getAllOrders); // Alternative endpoint for sales order list
 router.get('/orders/:id', getOrderById); // Get single order details

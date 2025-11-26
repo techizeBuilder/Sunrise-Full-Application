@@ -263,12 +263,33 @@ export default function ModernInventoryUI() {
       });
     },
     onError: (error) => {
+      console.error('Create item error details:', error);
+      
+      // DON'T close the modal on error - let user fix the issue
       // Show proper validation error message
       if (error.status === 400 && error.message) {
+        // Check for duplicate item error
+        if (error.message.includes('Duplicate item detected') || error.message.includes('already exists')) {
+          toast({
+            title: "⚠️ Duplicate Item",
+            description: error.message.replace(/[\n\r]/g, ' '), // Clean line breaks
+            variant: "destructive",
+            duration: 10000 // Longer duration for reading
+          });
+        } else {
+          toast({
+            title: "❌ Validation Error",
+            description: error.message,
+            variant: "destructive",
+            duration: 6000
+          });
+        }
+      } else if (error.message) {
         toast({
-          title: "Create Item: Validation Error",
+          title: "❌ Create Item Failed",
           description: error.message,
           variant: "destructive",
+          duration: 6000
         });
       } else {
         showSmartToast(error, 'Create Item');
@@ -303,11 +324,11 @@ export default function ModernInventoryUI() {
   });
 
   // Handlers
-  const handleFormSubmit = (data) => {
+  const handleFormSubmit = async (data) => {
     if (editingItem) {
-      updateItemMutation.mutate({ id: editingItem._id, data });
+      return await updateItemMutation.mutateAsync({ id: editingItem._id, data });
     } else {
-      createItemMutation.mutate(data);
+      return await createItemMutation.mutateAsync(data);
     }
   };
 

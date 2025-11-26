@@ -38,6 +38,7 @@ const UnitHeadOrdersManagement = () => {
   const [formData, setFormData] = useState({
     customerId: '',
     customerName: '',
+    salesPersonId: '',
     orderDate: new Date().toISOString().split('T')[0],
     remarks: '',
     selectedProducts: []
@@ -73,15 +74,35 @@ const UnitHeadOrdersManagement = () => {
     queryFn: () => unitHeadCustomerApi.getCustomers()
   });
 
+  // Sales persons query
+  const { 
+    data: salesPersonsData, 
+    isLoading: isLoadingSalesPersons 
+  } = useQuery({
+    queryKey: ['unit-head-sales-persons'],
+    queryFn: async () => {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/unit-head/sales-persons', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error('Failed to fetch sales persons');
+      return response.json();
+    }
+  });
+
   // Debug logging to check what data is being returned
   console.log('🔍 Customers API Response:', customersData);
   console.log('🔍 User Info:', user);
 
   const orders = ordersData?.data?.orders || [];
   const customersList = customersData?.data?.customers || customersData?.customers || [];
+  const salesPersonsList = salesPersonsData?.data?.salesPersons || salesPersonsData?.salesPersons || [];
   
-  // Debug the customers list
+  // Debug the data lists
   console.log('🔍 Processed customers list:', customersList);
+  console.log('🔍 Processed sales persons list:', salesPersonsList);
+  console.log('🔍 Sales persons raw data:', salesPersonsData);
+  console.log('🔍 Sales persons loading state:', isLoadingSalesPersons);
 
   // Mutations
   const createOrderMutation = useMutation({
@@ -152,6 +173,7 @@ const UnitHeadOrdersManagement = () => {
     setFormData({
       customerId: '',
       customerName: '',
+      salesPersonId: '',
       orderDate: new Date().toISOString().split('T')[0],
       remarks: '',
       selectedProducts: []
@@ -159,13 +181,18 @@ const UnitHeadOrdersManagement = () => {
   };
 
   const handleCreate = () => {
-    if (!formData.customerId || formData.selectedProducts.length === 0) {
-      toast({ title: "Validation Error", description: "Please select a customer and products", variant: "destructive" });
+    if (!formData.customerId || !formData.salesPersonId || formData.selectedProducts.length === 0) {
+      toast({ 
+        title: "Validation Error", 
+        description: "Please select a customer, sales person and products", 
+        variant: "destructive" 
+      });
       return;
     }
 
     const orderData = {
       customerId: formData.customerId,
+      salesPersonId: formData.salesPersonId,
       orderDate: formData.orderDate,
       products: formData.selectedProducts.map(p => ({
         product: p._id,
@@ -253,6 +280,7 @@ const UnitHeadOrdersManagement = () => {
         ...orderToEdit,
         customerId: orderToEdit.customer?._id || orderToEdit.customerId,
         customerName: orderToEdit.customer?.name || orderToEdit.customerName,
+        salesPersonId: orderToEdit.salesPerson?._id || orderToEdit.salesPersonId,
         selectedProducts: orderToEdit.products?.map(p => ({
           _id: p.product?._id || p._id || p.productId,
           name: p.product?.name || p.productName || p.name || 'Product',
@@ -276,6 +304,7 @@ const UnitHeadOrdersManagement = () => {
         ...order,
         customerId: order.customer?._id || order.customerId,
         customerName: order.customer?.name || order.customerName,
+        salesPersonId: order.salesPerson?._id || order.salesPersonId,
         selectedProducts: order.products?.map(p => ({
           _id: p.product?._id || p._id || p.productId,
           name: p.product?.name || p.productName || p.name || 'Product',
@@ -471,7 +500,7 @@ const UnitHeadOrdersManagement = () => {
             <DialogDescription>Fill in the details to create a new order.</DialogDescription>
           </DialogHeader>
           <div className="space-y-6">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div>
                 <Label htmlFor="customer">Customer Name *</Label>
                 <Select 
@@ -498,6 +527,35 @@ const UnitHeadOrdersManagement = () => {
                 </Select>
               </div>
               <div>
+                <Label htmlFor="salesPerson">Sales Person *</Label>
+                <Select 
+                  value={formData.salesPersonId || ''} 
+                  onValueChange={(value) => {
+                    setFormData({
+                      ...formData, 
+                      salesPersonId: value
+                    });
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={isLoadingSalesPersons ? "Loading sales persons..." : "Select sales person"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {isLoadingSalesPersons ? (
+                      <SelectItem value="" disabled>Loading...</SelectItem>
+                    ) : salesPersonsList.length === 0 ? (
+                      <SelectItem value="" disabled>No sales persons found</SelectItem>
+                    ) : (
+                      salesPersonsList.map((salesperson) => (
+                        <SelectItem key={salesperson._id} value={salesperson._id}>
+                          {salesperson.fullName || salesperson.name}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
                 <Label htmlFor="orderDate">Order Date *</Label>
                 <Input
                   id="orderDate"
@@ -513,7 +571,7 @@ const UnitHeadOrdersManagement = () => {
                 onProductSelect={handleProductSelect}
                 selectedProducts={formData.selectedProducts}
                 onQuantityChange={handleQuantityChange}
-                onRemoveProduct={handleProductRemove}
+                onProductRemove={handleProductRemove}
               />
             </div>
             <div className="flex gap-3 pt-4">
@@ -704,7 +762,7 @@ const UnitHeadOrdersManagement = () => {
           </DialogHeader>
           {selectedOrder && (
             <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <Label htmlFor="edit-customer">Customer Name *</Label>
                   <Select 
@@ -727,6 +785,35 @@ const UnitHeadOrdersManagement = () => {
                           {customer.name}
                         </SelectItem>
                       ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="edit-salesPerson">Sales Person *</Label>
+                  <Select 
+                    value={selectedOrder.salesPersonId || ''} 
+                    onValueChange={(value) => {
+                      setSelectedOrder({
+                        ...selectedOrder, 
+                        salesPersonId: value
+                      });
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={isLoadingSalesPersons ? "Loading sales persons..." : "Select sales person"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {isLoadingSalesPersons ? (
+                        <SelectItem value="" disabled>Loading...</SelectItem>
+                      ) : salesPersonsList.length === 0 ? (
+                        <SelectItem value="" disabled>No sales persons found</SelectItem>
+                      ) : (
+                        salesPersonsList.map((salesperson) => (
+                          <SelectItem key={salesperson._id} value={salesperson._id}>
+                            {salesperson.fullName || salesperson.name}
+                          </SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -768,7 +855,7 @@ const UnitHeadOrdersManagement = () => {
                     );
                     setSelectedOrder({...selectedOrder, selectedProducts: updatedProducts});
                   }}
-                  onRemoveProduct={(productId) => {
+                  onProductRemove={(productId) => {
                     const updatedProducts = (selectedOrder.selectedProducts || []).filter(p => p._id !== productId);
                     setSelectedOrder({...selectedOrder, selectedProducts: updatedProducts});
                   }}
@@ -778,11 +865,21 @@ const UnitHeadOrdersManagement = () => {
               <div className="flex gap-3 pt-4">
                 <Button 
                   onClick={() => {
+                    if (!selectedOrder.customerId || !selectedOrder.salesPersonId || !selectedOrder.selectedProducts?.length) {
+                      toast({ 
+                        title: "Validation Error", 
+                        description: "Please select a customer, sales person and products", 
+                        variant: "destructive" 
+                      });
+                      return;
+                    }
+                    
                     console.log('💾 Save Edit clicked, order data:', selectedOrder);
                     updateOrderMutation.mutate({
                       orderId: selectedOrder._id,
                       orderData: {
                         customerId: selectedOrder.customerId,
+                        salesPersonId: selectedOrder.salesPersonId,
                         orderDate: selectedOrder.orderDate,
                         products: (selectedOrder.selectedProducts || []).map(p => ({
                           product: p._id,

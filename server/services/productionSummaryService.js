@@ -1,0 +1,201 @@
+import Order from '../models/Order.js';
+import ProductDailySummary from '../models/ProductDailySummary.js';
+import { Item } from '../models/Inventory.js';
+import mongoose from 'mongoose';
+
+/**
+ * Update product summary when orders change
+ * @param {string} productId - Product ID
+ * @param {Date} date - Order date
+ * @param {string} companyId - Company ID
+ */
+export const updateProductSummary = async (productId, date, companyId) => {
+  try {
+    // Normalize date to start of day
+    const summaryDate = new Date(date);
+    summaryDate.setUTCHours(0, 0, 0, 0);
+
+    // Get product details
+    const product = await Item.findById(productId);
+    if (!product) {
+      throw new Error(`Product not found: ${productId}`);
+    }
+
+    // Aggregate total indent for this product/date/company
+    const aggregationResult = await Order.aggregate([
+      {
+        $match: {
+          companyId: new mongoose.Types.ObjectId(companyId),
+          orderDate: {
+            $gte: summaryDate,
+            $lt: new Date(summaryDate.getTime() + 24 * 60 * 60 * 1000) // Next day
+          },
+          'products.product': new mongoose.Types.ObjectId(productId),
+          status: { $nin: ['cancelled', 'rejected'] } // Exclude cancelled/rejected orders
+        }
+      },
+      {
+        $unwind: '$products'
+      },
+      {
+        $match: {
+          'products.product': new mongoose.Types.ObjectId(productId)
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalIndent: { $sum: '$products.quantity' }
+        }
+      }
+    ]);
+
+    const totalIndent = aggregationResult.length > 0 ? aggregationResult[0].totalIndent : 0;
+
+    // Find or create summary document
+    let summary = await ProductDailySummary.findOneAndUpdate(
+      {
+        date: summaryDate,
+        companyId: new mongoose.Types.ObjectId(companyId),
+        productId: new mongoose.Types.ObjectId(productId)
+      },
+      {
+        $setOnInsert: {
+          productName: product.name,
+          qtyPerBatch: 0,
+          packing: 0,
+          physicalStock: 0,
+          batchAdjusted: 0
+        },
+        totalIndent: totalIndent
+      },
+      {
+        new: true,
+        upsert: true
+      }
+    );
+
+    // Recalculate formulas
+    summary.calculateFormulas();
+    await summary.save();
+
+    console.log(`Updated product summary for ${product.name} on ${summaryDate.toISOString().split('T')[0]}: totalIndent = ${totalIndent}`);
+    
+    return summary;
+  } catch (error) {
+    console.error('Error updating product summary:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get sales breakdown for a product on a specific date
+ * @param {string} productId - Product ID
+ * @param {Date} date - Date
+ * @param {string} companyId - Company ID
+ */
+export const getSalesBreakdown = async (productId, date, companyId) => {
+  try {
+    const summaryDate = new Date(date);
+    summaryDate.setUTCHours(0, 0, 0, 0);
+
+    const breakdown = await Order.aggregate([
+      {
+        $match: {
+          companyId: new mongoose.Types.ObjectId(companyId),
+          orderDate: {
+            $gte: summaryDate,
+            $lt: new Date(summaryDate.getTime() + 24 * 60 * 60 * 1000)
+          },
+          'products.product': new mongoose.Types.ObjectId(productId),
+          status: { $nin: ['cancelled', 'rejected'] }
+        }
+      },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'salesPerson',
+          foreignField: '_id',
+          as: 'salesPersonDetails'
+        }
+      },
+      {
+        $unwind: '$products'
+      },
+      {
+        $match: {
+          'products.product': new mongoose.Types.ObjectId(productId)
+        }
+      },
+      {
+        $group: {
+          _id: '$salesPerson',
+          salesPersonName: { $first: { $ifNull: [{ $arrayElemAt: ['$salesPersonDetails.fullName', 0] }, { $arrayElemAt: ['$salesPersonDetails.username', 0] }] } },
+          totalQuantity: { $sum: '$products.quantity' },
+          orderCount: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          salesPersonId: '$_id',
+          salesPersonName: { $ifNull: ['$salesPersonName', 'Unknown'] },
+          totalQuantity: 1,
+          orderCount: 1,
+          _id: 0
+        }
+      }
+    ]);
+
+    return breakdown;
+  } catch (error) {
+    console.error('Error getting sales breakdown:', error);
+    return [];
+  }
+};
+
+/**
+ * Initialize summary for a new product
+ * @param {string} productId - Product ID
+ * @param {string} productName - Product name
+ * @param {string} companyId - Company ID
+ */
+export const initializeProductSummary = async (productId, productName, companyId) => {
+  try {
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+
+    // Check if summary already exists for today
+    const existingSummary = await ProductDailySummary.findOne({
+      date: today,
+      companyId: new mongoose.Types.ObjectId(companyId),
+      productId: new mongoose.Types.ObjectId(productId)
+    });
+
+    if (existingSummary) {
+      console.log(`Summary already exists for product ${productName} on ${today.toISOString().split('T')[0]}`);
+      return existingSummary;
+    }
+
+    // Create new summary with default values
+    const summary = new ProductDailySummary({
+      date: today,
+      companyId: new mongoose.Types.ObjectId(companyId),
+      productId: new mongoose.Types.ObjectId(productId),
+      productName: productName,
+      qtyPerBatch: 0,
+      packing: 0,
+      physicalStock: 0,
+      batchAdjusted: 0,
+      totalIndent: 0
+    });
+
+    summary.calculateFormulas();
+    await summary.save();
+
+    console.log(`Initialized summary for new product: ${productName}`);
+    return summary;
+  } catch (error) {
+    console.error('Error initializing product summary:', error);
+    throw error;
+  }
+};

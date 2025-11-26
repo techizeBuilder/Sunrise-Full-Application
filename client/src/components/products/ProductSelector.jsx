@@ -364,7 +364,7 @@ const ProductSelector = React.memo(({
                               min="0"
                               max={product.stock}
                               placeholder={product.stock > 0 ? "0" : "Out of Stock"}
-                              value={selectedQuantity || ''}
+                              defaultValue={selectedQuantity || ''}
                               disabled={product.stock <= 0}
                               onChange={(e) => {
                                 e.stopPropagation();

@@ -2,6 +2,7 @@ import Order from '../models/Order.js';
 import Customer from '../models/Customer.js';
 import { Item } from '../models/Inventory.js';
 import notificationService from '../services/notificationService.js';
+import { updateProductSummary } from '../services/productionSummaryService.js';
 
 // Create new order
 const createOrder = async (req, res) => {
@@ -117,6 +118,20 @@ const createOrder = async (req, res) => {
 
     // Populate order with customer details for notification
     await order.populate('customer', 'name email');
+
+    // Update production summary for each product in the order
+    try {
+      for (const productItem of orderProducts) {
+        await updateProductSummary(
+          productItem.product.toString(), 
+          order.orderDate, 
+          order.companyId.toString()
+        );
+      }
+    } catch (summaryError) {
+      console.error('Failed to update production summary:', summaryError);
+      // Don't fail the order creation if summary update fails
+    }
 
     // Trigger notification for new order
     try {
@@ -395,6 +410,32 @@ const updateOrder = async (req, res) => {
 
     await order.save();
 
+    // Update production summaries for affected products
+    try {
+      // Update summary for all products in the updated order
+      if (products && products.length > 0) {
+        for (const productItem of orderProducts) {
+          await updateProductSummary(
+            productItem.product.toString(),
+            order.orderDate,
+            order.companyId.toString()
+          );
+        }
+      } else {
+        // If products weren't changed, update for existing products
+        for (const productItem of order.products) {
+          await updateProductSummary(
+            productItem.product.toString(),
+            order.orderDate,
+            order.companyId.toString()
+          );
+        }
+      }
+    } catch (summaryError) {
+      console.error('Failed to update production summary:', summaryError);
+      // Don't fail the order update if summary update fails
+    }
+
     // Populate the updated order
     const updatedOrder = await Order.findById(id)
       .populate('customer', 'name email mobile address city state')
@@ -421,12 +462,34 @@ const deleteOrder = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const order = await Order.findByIdAndDelete(id);
+    const order = await Order.findById(id);
     if (!order) {
       return res.status(404).json({
         success: false,
         message: 'Order not found'
       });
+    }
+
+    // Store order details before deletion for summary updates
+    const orderProducts = order.products;
+    const orderDate = order.orderDate;
+    const companyId = order.companyId;
+
+    // Delete the order
+    await Order.findByIdAndDelete(id);
+
+    // Update production summaries for all products in the deleted order
+    try {
+      for (const productItem of orderProducts) {
+        await updateProductSummary(
+          productItem.product.toString(),
+          orderDate,
+          companyId.toString()
+        );
+      }
+    } catch (summaryError) {
+      console.error('Failed to update production summary after order deletion:', summaryError);
+      // Don't fail the order deletion if summary update fails
     }
 
     res.json({

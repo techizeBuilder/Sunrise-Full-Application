@@ -1,10 +1,12 @@
 import { Item, Category, CustomerCategory } from '../models/Inventory.js';
 import { Company } from '../models/Company.js';
+import ProductDailySummary from '../models/ProductDailySummary.js';
 import * as XLSX from 'xlsx';
 import multer from 'multer';
 import mongoose from 'mongoose';
 import { USER_ROLES } from '../../shared/schema.js';
 import notificationService from '../services/notificationService.js';
+import { initializeProductSummary, updateProductSummary } from '../services/productionSummaryService.js';
 
 // Helper function to check inventory permissions
 const checkInventoryPermission = (user, action) => {
@@ -19,6 +21,44 @@ const checkInventoryPermission = (user, action) => {
   }
   
   return user.permissions?.Inventory?.[action] === true;
+};
+
+// Helper function to update qtyPerBatch in product summary
+const updateProductSummaryQtyPerBatch = async (productId, productName, qtyPerBatch, date, companyId) => {
+  try {
+    const summaryDate = new Date(date);
+    summaryDate.setUTCHours(0, 0, 0, 0);
+
+    // Find or create/update the product summary with qtyPerBatch
+    await ProductDailySummary.findOneAndUpdate(
+      {
+        date: summaryDate,
+        companyId: new mongoose.Types.ObjectId(companyId),
+        productId: new mongoose.Types.ObjectId(productId)
+      },
+      {
+        $setOnInsert: {
+          productName: productName,
+          totalIndent: 0,
+          packing: 0,
+          physicalStock: 0,
+          batchAdjusted: 0
+        },
+        $set: {
+          qtyPerBatch: qtyPerBatch
+        }
+      },
+      {
+        upsert: true,
+        new: true
+      }
+    );
+
+    console.log(`Product summary qtyPerBatch updated for ${productName}: ${qtyPerBatch}`);
+  } catch (error) {
+    console.error('Error updating product summary qtyPerBatch:', error);
+    throw error;
+  }
 };
 
 // Auto-generate item code
@@ -256,7 +296,14 @@ export const createItem = async (req, res) => {
     }
 
     const itemData = req.body;
-    console.log('Received item data:', itemData);
+    console.log('📝 Received item data:', itemData);
+    console.log('👤 User info:', {
+      id: req.user._id,
+      username: req.user.username,
+      role: req.user.role,
+      companyId: req.user.companyId,
+      hasCompany: !!req.user.company
+    });
 
     // Enhanced validation
     const validation = validateItemData(itemData);
@@ -267,24 +314,131 @@ export const createItem = async (req, res) => {
       });
     }
 
+    // Check for duplicate item name (case-insensitive) within company
+    if (itemData.name && itemData.name.trim()) {
+      const trimmedName = itemData.name.trim();
+      
+      // Determine the company ID for duplicate checking
+      let companyIdForCheck = req.user.companyId;
+      
+      // If store field contains a companyId (ObjectId), use it for checking
+      if (itemData.store && itemData.store.match(/^[0-9a-fA-F]{24}$/)) {
+        companyIdForCheck = itemData.store;
+      }
+      
+      // Escape special regex characters and create case-insensitive query
+      const escapedName = trimmedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const query = {
+        name: { $regex: new RegExp(`^${escapedName}$`, 'i') }
+      };
+      
+      // Add company filter for proper isolation
+      if (companyIdForCheck) {
+        // Check duplicates in both companyId and store fields
+        // This handles both old items (stored in store field) and new items (stored in companyId)
+        query.$or = [
+          { companyId: companyIdForCheck },
+          { store: companyIdForCheck }
+        ];
+      }
+      
+      console.log('📋 Duplicate check details:', {
+        itemName: trimmedName,
+        userCompanyId: req.user.companyId,
+        storeValue: itemData.store,
+        companyIdForCheck,
+        finalQuery: query
+      });
+      const existingItemByName = await Item.findOne(query);
+      console.log('Found existing item:', existingItemByName ? `${existingItemByName.name} (${existingItemByName.code})` : 'None');
+      
+      if (existingItemByName) {
+        console.log(`Duplicate item name found: "${trimmedName}" (existing: "${existingItemByName.name}", ID: ${existingItemByName._id})`);
+        return res.status(400).json({
+          success: false,
+          message: `Duplicate item detected! Item "${trimmedName}" already exists (Code: ${existingItemByName.code}). Please use a different name.`,
+          duplicateItem: {
+            name: existingItemByName.name,
+            code: existingItemByName.code,
+            id: existingItemByName._id
+          }
+        });
+      }
+    }
+
     // Auto-generate code if not provided or if code already exists
     if (!itemData.code || itemData.code.trim() === '') {
       itemData.code = await generateItemCode(itemData.type);
     } else {
-      // Check if code already exists
-      const existingItem = await Item.findOne({ code: itemData.code.trim() });
+      // Check if code already exists within same company
+      const codeQuery = { 
+        code: itemData.code.trim()
+      };
+      
+      if (req.user.companyId) {
+        codeQuery.companyId = req.user.companyId;
+      }
+      
+      console.log('Code duplicate check query:', codeQuery);
+      const existingItem = await Item.findOne(codeQuery);
+      
       if (existingItem) {
         console.log('Code already exists, auto-generating new code...');
         itemData.code = await generateItemCode(itemData.type);
+        console.log('New auto-generated code:', itemData.code);
       }
     }
 
     // Sanitize and prepare data
     const sanitizedData = sanitizeItemData(itemData);
-    console.log('Sanitized data:', sanitizedData);
+    
+    // Ensure company assignment - crucial for proper isolation
+    if (req.user.companyId) {
+      sanitizedData.companyId = req.user.companyId;
+    }
+    
+    // If store field contains a companyId, use it for companyId
+    if (sanitizedData.store && sanitizedData.store.match(/^[0-9a-fA-F]{24}$/)) {
+      sanitizedData.companyId = sanitizedData.store;
+    }
+    
+    console.log('Final data before creation:', {
+      name: sanitizedData.name,
+      code: sanitizedData.code,
+      companyId: sanitizedData.companyId,
+      userCompanyId: req.user.companyId
+    });
     
     const item = await Item.create(sanitizedData);
     console.log('Item saved successfully:', item);
+
+    // Initialize production summary for new product
+    try {
+      if (req.user.companyId) {
+        await initializeProductSummary(
+          item._id.toString(),
+          item.name,
+          req.user.companyId.toString()
+        );
+        console.log('Production summary initialized for new product:', item.name);
+        
+        // Sync qtyPerBatch if batch field is provided
+        if (item.batch && !isNaN(parseFloat(item.batch))) {
+          const today = new Date().toISOString().split('T')[0];
+          await updateProductSummaryQtyPerBatch(
+            item._id.toString(),
+            item.name,
+            parseFloat(item.batch),
+            today,
+            req.user.companyId.toString()
+          );
+          console.log('QtyPerBatch synced for new product:', item.name, 'Value:', item.batch);
+        }
+      }
+    } catch (summaryError) {
+      console.error('Failed to initialize production summary:', summaryError);
+      // Don't fail the item creation if summary initialization fails
+    }
 
     // Trigger notification for new inventory item
     try {
@@ -496,6 +650,24 @@ export const updateItem = async (req, res) => {
 
     if (!item) {
       return res.status(404).json({ message: 'Item not found' });
+    }
+
+    // Sync qtyPerBatch if batch field was updated
+    try {
+      if (item.batch && !isNaN(parseFloat(item.batch)) && req.user.companyId) {
+        const today = new Date().toISOString().split('T')[0];
+        await updateProductSummaryQtyPerBatch(
+          item._id.toString(),
+          item.name,
+          parseFloat(item.batch),
+          today,
+          req.user.companyId.toString()
+        );
+        console.log('QtyPerBatch synced for updated product:', item.name, 'Value:', item.batch);
+      }
+    } catch (syncError) {
+      console.error('Failed to sync qtyPerBatch:', syncError);
+      // Don't fail the update if sync fails
     }
 
     res.json({
@@ -1063,8 +1235,41 @@ export const importItemsFromExcel = [upload.single('file'), async (req, res) => 
         });
 
         // Validate required fields with better error messages
-        if (!itemData.name) {
-          throw new Error('Item name is required and cannot be empty');
+        if (!itemData.name || !itemData.name.trim()) {
+          throw new Error(`Row ${rowNumber}: Item name is required and cannot be empty`);
+        }
+
+        const trimmedName = itemData.name.trim();
+
+        // Check for duplicate item name (case-insensitive) within company
+        const escapedName = trimmedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const query = {
+          name: { $regex: new RegExp(`^${escapedName}$`, 'i') }
+        };
+        
+        // Determine company ID for duplicate checking (same logic as manual creation)
+        let companyIdForCheck = req.user.companyId;
+        if (itemData.store && itemData.store.match(/^[0-9a-fA-F]{24}$/)) {
+          companyIdForCheck = itemData.store;
+        }
+        
+        // Check duplicates in both companyId and store fields (same as manual creation)
+        if (companyIdForCheck) {
+          query.$or = [
+            { companyId: companyIdForCheck },
+            { store: companyIdForCheck }
+          ];
+        }
+        
+        console.log(`📋 Import duplicate check for "${trimmedName}":`, {
+          companyIdForCheck,
+          query
+        });
+        
+        const existingItemByName = await Item.findOne(query);
+        
+        if (existingItemByName) {
+          throw new Error(`❌ Row ${rowNumber}: Duplicate item "${trimmedName}" - already exists as "${existingItemByName.name}" (Code: ${existingItemByName.code}). Please use a different name.`);
         }
 
         // Ensure type has a valid value
@@ -1080,24 +1285,45 @@ export const importItemsFromExcel = [upload.single('file'), async (req, res) => 
         }
 
         // Auto-generate code if not provided
-        if (!itemData.code) {
+        if (!itemData.code || !itemData.code.trim()) {
           const prefix = itemData.type === 'Product' ? 'PRO' : 'SER';
-          const count = await Item.countDocuments({ code: new RegExp(`^${prefix}\\d{4}$`) });
+          const count = await Item.countDocuments({ 
+            code: new RegExp(`^${prefix}\\d{4}$`),
+            ...(req.user.companyId && { companyId: req.user.companyId })
+          });
           itemData.code = `${prefix}${String(count + 1).padStart(4, '0')}`;
+          console.log(`Auto-generated code for ${trimmedName}: ${itemData.code}`);
         }
 
         // Check for duplicate code and auto-generate new one if exists
-        let existingItem = await Item.findOne({ code: itemData.code });
-        if (existingItem) {
+        const codeQuery = { code: itemData.code };
+        if (companyIdForCheck) {
+          codeQuery.$or = [
+            { companyId: companyIdForCheck },
+            { store: companyIdForCheck }
+          ];
+        }
+        
+        let existingItemByCode = await Item.findOne(codeQuery);
+        
+        if (existingItemByCode) {
           console.log(`Code ${itemData.code} already exists, auto-generating new code...`);
-          const prefix = itemData.type === 'Product' ? 'PRO' : 'SER';
-          const count = await Item.countDocuments({ code: new RegExp(`^${prefix}\\d{4}$`) });
-          itemData.code = `${prefix}${String(count + 1).padStart(4, '0')}`;
+          throw new Error(`Row ${rowNumber}: Item code "${itemData.code}" already exists for item "${existingItemByCode.name}". Please use a unique code or leave blank for auto-generation.`);
+        }
+
+        // Ensure company assignment from store field or user
+        if (companyIdForCheck) {
+          itemData.companyId = companyIdForCheck;
+        }
+        
+        // If store field contains a companyId, use it for companyId
+        if (itemData.store && itemData.store.match(/^[0-9a-fA-F]{24}$/)) {
+          itemData.companyId = itemData.store;
         }
 
         // Create new item
         const newItem = await Item.create(itemData);
-        console.log(`Created new item: ${itemData.name} (${itemData.code}) - ID: ${newItem._id}`);
+        console.log(`✅ Successfully created item: ${trimmedName} (Code: ${itemData.code}) - Row ${rowNumber}`);
 
         results.successful++;
       } catch (rowError) {

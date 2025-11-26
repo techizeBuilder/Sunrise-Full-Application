@@ -174,15 +174,21 @@ export default function ExcelImportExport({ type = 'items' }) {
         queryClient.invalidateQueries([config.queryKey]);
         queryClient.invalidateQueries([`${apiBasePath}/stats`]);
 
+        const successCount = result.results?.successful || 0;
+        const failedCount = result.results?.failed || 0;
+        const totalCount = result.results?.total || 0;
+
         toast({
-          title: "Import Successful",
-          description: `Successfully imported ${result.results?.successful || 0} records`,
+          title: "✅ Import Completed",
+          description: `Successfully imported ${successCount} of ${totalCount} records${failedCount > 0 ? `. ${failedCount} failed (see details below)` : ''}`,
+          duration: 6000
         });
       } else {
         toast({
-          title: "Import Failed",
-          description: result.message || "Import failed",
+          title: "❌ Import Failed",
+          description: result.message || "Import failed completely",
           variant: "destructive",
+          duration: 8000
         });
       }
 
@@ -298,9 +304,9 @@ export default function ExcelImportExport({ type = 'items' }) {
             'Max Stock': 100,
             'GST %': 18,
             'HSN Code': '12345678',
-            'Store Location': 'Warehouse A',
+            'Store Location': 'Main Warehouse',
             'Supplier': 'Sample Supplier',
-            'Batch': 'BATCH001',
+            'Qty/Batch': 'BATCH001',
             'Lead Time': 5,
             'Internal Manufacturing': 'NO',
             'Purchase Allowed': 'YES',

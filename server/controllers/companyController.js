@@ -359,10 +359,18 @@ export const getCompaniesDropdown = async (req, res) => {
     // Build filter object
     const filter = { isActive: true };
     
-    // FOR UNIT HEAD: Only show their assigned company/location
-    if (req.user.role === 'Unit Head' && req.user.companyId) {
+    // Role-based filtering
+    if (req.user.role === 'Super Admin') {
+      // SUPER ADMIN: Show ALL companies (no filtering)
+      console.log('Super Admin access - showing all companies');
+    } else if (req.user.role === 'Unit Head' && req.user.companyId) {
+      // UNIT HEAD: Only show their assigned company/location
       filter._id = req.user.companyId;
       console.log('Unit Head location filtering - showing only assigned company:', req.user.companyId);
+    } else if ((req.user.role === 'Unit Manager' || req.user.role === 'Sales' || req.user.role === 'Production') && req.user.companyId) {
+      // OTHER ROLES WITH COMPANY: Only show their assigned company
+      filter._id = req.user.companyId;
+      console.log(`${req.user.role} location filtering - showing only assigned company:`, req.user.companyId);
     }
     
     if (city) filter.city = new RegExp(city, 'i');

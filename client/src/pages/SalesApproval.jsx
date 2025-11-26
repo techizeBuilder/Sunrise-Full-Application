@@ -69,15 +69,70 @@ const SalesApproval = () => {
     }));
   };
 
+  // Save production data to backend
+  const saveProductionData = async (productName) => {
+    try {
+      const product = orders.find(p => p.productName === productName);
+      if (!product) return;
+
+      const data = getProductionData(productName);
+      const today = new Date().toISOString().split('T')[0];
+
+      const response = await fetch('/api/sales/update-product-summary', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          date: today,
+          productId: product.productId || product._id,
+          updates: {
+            packing: data.packing,
+            physicalStock: data.physicalStock,
+            batchAdjusted: data.batchAdjusted,
+            qtyPerBatch: data.qtyPerBatch
+          }
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Production data saved:', result);
+        toast({
+          title: 'Success',
+          description: `Production data saved for ${productName}`
+        });
+      } else {
+        throw new Error('Failed to save production data');
+      }
+    } catch (error) {
+      console.error('Error saving production data:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to save production data',
+        variant: 'destructive'
+      });
+    }
+  };
+
   // Calculate Production with final batches = Batch_Adjusted * Qty_per_Batch
   const getProductionWithFinalBatches = (productName) => {
     const data = getProductionData(productName);
+    // Use backend-calculated value if available, otherwise calculate
+    if (data.productionFinalBatches !== undefined) {
+      return data.productionFinalBatches;
+    }
     return Math.round((data.batchAdjusted * data.qtyPerBatch) * 100) / 100;
   };
 
   // Calculate Expiry/Shortage = Production_with_final_batches - To_be_produced_day
   const getExpiryShortage = (productName) => {
     const data = getProductionData(productName);
+    // Use backend-calculated value if available, otherwise calculate
+    if (data.expiryShortage !== undefined) {
+      return data.expiryShortage;
+    }
     const productionWithFinalBatches = getProductionWithFinalBatches(productName);
     return Math.round((productionWithFinalBatches - data.toBeProducedDay) * 100) / 100;
   };
@@ -85,6 +140,10 @@ const SalesApproval = () => {
   // Calculate Balance with final batches = Production_with_final_batches - Packing
   const getBalanceWithFinalBatches = (productName) => {
     const data = getProductionData(productName);
+    // Use backend-calculated value if available, otherwise calculate
+    if (data.balanceFinalBatches !== undefined) {
+      return data.balanceFinalBatches;
+    }
     const productionWithFinalBatches = getProductionWithFinalBatches(productName);
     return Math.round((productionWithFinalBatches - data.packing) * 100) / 100;
   };
@@ -92,6 +151,10 @@ const SalesApproval = () => {
   // Calculate To be produced/Batches = To_be_produced_day / Qty_per_Batch
   const getToBeProducedBatches = (productName) => {
     const data = getProductionData(productName);
+    // Use backend-calculated value if available, otherwise calculate
+    if (data.toBeProducedBatches !== undefined) {
+      return data.toBeProducedBatches;
+    }
     if (data.qtyPerBatch === 0) return 0;
     return Math.round((data.toBeProducedDay / data.qtyPerBatch) * 100) / 100; // Round to 2 decimals
   };
@@ -109,6 +172,48 @@ const SalesApproval = () => {
       if (toDate && orderDate > toDate) return false;
       return true;
     });
+  };
+
+  // Load production summary data
+  const loadProductionSummary = async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const response = await fetch(`/api/sales/product-summary?date=${today}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.products) {
+          // Convert API response to productionData format
+          const newProductionData = {};
+          result.products.forEach(product => {
+            newProductionData[product.productName] = {
+              packing: product.summary.packing || 0,
+              physicalStock: product.summary.physicalStock || 0,
+              batchAdjusted: product.summary.batchAdjusted || 0,
+              qtyPerBatch: product.qtyPerBatch || 0,
+              toBeProducedDay: product.summary.toBeProducedDay || 0,
+              productionFinalBatches: product.summary.productionFinalBatches || 0,
+              // Add calculated fields for display
+              totalIndent: product.summary.totalIndent || 0,
+              productionFinalBatches: product.summary.productionFinalBatches || 0,
+              toBeProducedBatches: product.summary.toBeProducedBatches || 0,
+              expiryShortage: product.summary.expiryShortage || 0,
+              balanceFinalBatches: product.summary.balanceFinalBatches || 0
+            };
+          });
+          setProductionData(newProductionData);
+          console.log('Production summary loaded:', newProductionData);
+        }
+      } else {
+        console.log('No production summary found, using defaults');
+      }
+    } catch (error) {
+      console.error('Error loading production summary:', error);
+    }
   };
 
   // Update filtered orders when date range or orders change
@@ -174,8 +279,10 @@ const SalesApproval = () => {
     try {
       setLoading(true);
       
-      // Fetch comprehensive unit-manager data for grid display
-      const ordersResponse = await fetch('/api/unit-manager/orders', {
+      // Use product summary API instead of unit-manager orders
+      // Get current date for product summary
+      const today = new Date().toISOString().split('T')[0];
+      const productSummaryResponse = await fetch(`/api/sales/product-summary?date=${today}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -188,14 +295,13 @@ const SalesApproval = () => {
         }
       });
       
-      if (ordersResponse.ok && individualOrdersResponse.ok) {
-        const responseData = await ordersResponse.json();
+      if (productSummaryResponse.ok && individualOrdersResponse.ok) {
+        const productSummaryData = await productSummaryResponse.json();
         const individualOrdersData = await individualOrdersResponse.json();
         
-        console.log('=== COMPREHENSIVE API RESPONSE ===');
-        console.log('Response structure:', Object.keys(responseData));
-        console.log('Data array length:', responseData.data?.length || 0);
-        console.log('Metadata:', responseData.metadata);
+        console.log('=== PRODUCT SUMMARY API RESPONSE ===');
+        console.log('Response structure:', Object.keys(productSummaryData));
+        console.log('Products array length:', productSummaryData.products?.length || 0);
         console.log('=== INDIVIDUAL ORDERS ===');
         console.log('Individual orders count:', individualOrdersData.orders?.length || 0);
         console.log('Sample order statuses:', individualOrdersData.orders?.slice(0, 5)?.map(o => o.status) || []);
@@ -206,15 +312,44 @@ const SalesApproval = () => {
           setIndividualOrders(individualOrdersData.orders);
         }
         
-        if (responseData.success && responseData.data) {
-          // Set the comprehensive data for detailed display
-          setOrders(responseData.data);
+        if (productSummaryData.success && productSummaryData.products) {
+          // Transform product summary data to match the expected unit-manager format
+          // Include ALL products, even those with empty salesBreakdown
+          const transformedData = productSummaryData.products.map(product => {
+            // Handle products with empty salesBreakdown
+            const hasSalesData = product.salesBreakdown && product.salesBreakdown.length > 0;
+            
+            return {
+              productId: product.productId,
+              productName: product.productName,
+              productCode: product.productCode || '',
+              totalOrders: hasSalesData ? product.salesBreakdown.reduce((sum, sp) => sum + sp.orderCount, 0) : 0,
+              totalQuantity: hasSalesData ? product.salesBreakdown.reduce((sum, sp) => sum + sp.totalQuantity, 0) : 0,
+              salesPersons: hasSalesData ? product.salesBreakdown.map(sp => ({
+                _id: sp.salesPersonId,
+                fullName: sp.salesPersonName,
+                username: sp.salesPersonName, // Use same as fullName since we don't have username in breakdown
+                email: '',
+                role: 'Sales',
+                totalQuantity: sp.totalQuantity,
+                orderCount: sp.orderCount,
+                orders: [] // We don't have individual order details in sales breakdown, but UI can handle this
+              })) : [] // Empty array for products with no sales data
+            };
+          });
+
+          console.log('=== TRANSFORMED DATA ===');
+          console.log('Transformed data:', transformedData);
           
-          // Extract products and sales persons from the comprehensive response
-          const products = responseData.data.map(item => item.productName);
+          // Set the transformed data to match the expected format
+          setOrders(transformedData);
+          
+          // Extract products and sales persons from the transformed response
+          const products = transformedData.map(item => item.productName);
           const allSalesPersons = new Map(); // Use Map to store unique salespeople with full info
           
-          responseData.data.forEach(product => {
+          // Collect all sales persons from ALL products (even empty ones)
+          transformedData.forEach(product => {
             product.salesPersons.forEach(sp => {
               // Create unique key using ID to avoid duplicates
               if (!allSalesPersons.has(sp._id)) {
@@ -226,6 +361,15 @@ const SalesApproval = () => {
               }
             });
           });
+          
+          // If no sales persons found from products, create a default entry to show "0" values
+          if (allSalesPersons.size === 0) {
+            allSalesPersons.set('no-sales', {
+              id: 'no-sales',
+              fullName: 'No Sales Data',
+              username: 'no-sales'
+            });
+          }
           
           // Convert to array and create display names
           const salesPersonsArray = Array.from(allSalesPersons.values());
@@ -250,7 +394,7 @@ const SalesApproval = () => {
           
           // Create grid data structure for frontend display
           const grid = {};
-          responseData.data.forEach(product => {
+          transformedData.forEach(product => {
             grid[product.productName] = {};
             
             // Initialize all sales persons for this product using display names
@@ -259,20 +403,33 @@ const SalesApproval = () => {
             });
             
             // Fill in actual data from the API response using display names
-            product.salesPersons.forEach(sp => {
-              // Find the display name for this salesperson
-              const salesPersonObj = salesPersonsWithDisplayNames.find(spObj => spObj.id === sp._id);
-              const displayName = salesPersonObj ? salesPersonObj.displayName : sp.fullName;
-              
-              if (grid[product.productName][displayName]) {
-                grid[product.productName][displayName] = sp.orders || [];
-              }
-            });
+            if (product.salesPersons.length > 0) {
+              product.salesPersons.forEach(sp => {
+                // Find the display name for this salesperson
+                const salesPersonObj = salesPersonsWithDisplayNames.find(spObj => spObj.id === sp._id);
+                const displayName = salesPersonObj ? salesPersonObj.displayName : sp.fullName;
+                
+                if (grid[product.productName][displayName]) {
+                  // Create mock order data since salesBreakdown doesn't have individual orders
+                  grid[product.productName][displayName] = [{
+                    orderId: `summary-${sp._id}`,
+                    orderCode: `SUMMARY-${sp.orderCount}`,
+                    quantity: sp.totalQuantity,
+                    customerName: `Total from ${sp.orderCount} orders`,
+                    status: 'aggregated',
+                    orderDate: new Date()
+                  }];
+                }
+              });
+            } else {
+              // Product has no sales data - all sales persons show empty arrays (which will display as 0)
+              console.log(`Product ${product.productName} has no sales data - showing 0 for all sales persons`);
+            }
           });
           
           // Store the product data separately for total calculations
           const productData = {};
-          responseData.data.forEach(product => {
+          transformedData.forEach(product => {
             productData[product.productName] = {
               totalQuantity: product.totalQuantity,
               totalOrders: product.totalOrders
@@ -299,6 +456,9 @@ const SalesApproval = () => {
         throw new Error('Failed to fetch data');
       }
 
+      // Load production summary data
+      await loadProductionSummary();
+
     } catch (error) {
       console.error('Error fetching data:', error);
       toast({
@@ -323,7 +483,7 @@ const SalesApproval = () => {
       
       // Update all orders for the selected product
       const updatePromises = selectedProductOrders.map(order => 
-        fetch(`/api/unit-manager/orders/${order._id}/status`, {
+        fetch(`/api/orders/${order._id}/status`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -405,7 +565,7 @@ const SalesApproval = () => {
     <div className="p-2 lg:p-6 bg-gray-50 min-h-screen">
       {/* Header */}
       <div className="mb-3 lg:mb-6">
-        <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-2">Sales Approval Dashboard</h1>
+        <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-2">Indent Summary Dashboard</h1>
         <p className="text-sm lg:text-base text-gray-600">Manage product orders by sales person</p>
       </div>
 
@@ -487,31 +647,24 @@ const SalesApproval = () => {
           {/* Responsive Table - Same UI for Mobile and Desktop */}
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1200px]">
-              {/* Header Row with Sales Persons */}
+              {/* Header Row - Fixed 10 columns */}
               <thead>
                 <tr className="border-b bg-gray-50">
+                  {/* 1. Products Column */}
                   <th className="bg-gray-50 p-1 lg:p-2 text-left font-semibold text-gray-900 border-r min-w-[100px] lg:min-w-[160px]">
                     <div className="flex items-center gap-1 lg:gap-2">
                       <Package className="h-3 w-3 lg:h-4 lg:w-4" />
                       <span className="text-xs lg:text-sm">Products</span>
                     </div>
                   </th>
-                  {/* Packing Column */}
+                  {/* 2. Packing Column */}
                   <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[70px] lg:min-w-[90px]">
                     <div className="flex flex-col items-center gap-1">
                       <Package className="h-3 w-3 lg:h-4 lg:w-4 text-blue-600" />
                       <div className="text-xs font-semibold text-gray-900">Packing</div>
                     </div>
                   </th>
-                  {/* Expiry/Shortage Column */}
-                  <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[80px] lg:min-w-[100px]">
-                    <div className="flex flex-col items-center gap-1">
-                      <Package className="h-3 w-3 lg:h-4 lg:w-4 text-red-600" />
-                      <div className="text-xs font-semibold text-gray-900">Expiry/</div>
-                      <div className="text-xs font-semibold text-gray-900">Shortage</div>
-                    </div>
-                  </th>
-                  {/* Production with final batches Column */}
+                  {/* 3. Production with final batches Column */}
                   <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[90px] lg:min-w-[110px]">
                     <div className="flex flex-col items-center gap-1">
                       <Package className="h-3 w-3 lg:h-4 lg:w-4 text-green-600" />
@@ -520,7 +673,7 @@ const SalesApproval = () => {
                       <div className="text-xs font-semibold text-gray-900">batches</div>
                     </div>
                   </th>
-                  {/* Balance with final batches Column */}
+                  {/* 4. Balance with final batches Column */}
                   <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[90px] lg:min-w-[110px]">
                     <div className="flex flex-col items-center gap-1">
                       <Package className="h-3 w-3 lg:h-4 lg:w-4 text-purple-600" />
@@ -529,16 +682,7 @@ const SalesApproval = () => {
                       <div className="text-xs font-semibold text-gray-900">batches</div>
                     </div>
                   </th>
-                  {/* To be produced/Batches Column */}
-                  <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[90px] lg:min-w-[110px]">
-                    <div className="flex flex-col items-center gap-1">
-                      <Package className="h-3 w-3 lg:h-4 lg:w-4 text-orange-600" />
-                      <div className="text-xs font-semibold text-gray-900">To be</div>
-                      <div className="text-xs font-semibold text-gray-900">produced/</div>
-                      <div className="text-xs font-semibold text-gray-900">Batches</div>
-                    </div>
-                  </th>
-                  {/* Physical Stock Column */}
+                  {/* 5. Physical Stock Column */}
                   <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[80px] lg:min-w-[100px]">
                     <div className="flex flex-col items-center gap-1">
                       <Package className="h-3 w-3 lg:h-4 lg:w-4 text-indigo-600" />
@@ -546,7 +690,7 @@ const SalesApproval = () => {
                       <div className="text-xs font-semibold text-gray-900">Stock</div>
                     </div>
                   </th>
-                  {/* Batch Adjusted Column */}
+                  {/* 6. Batch Adjusted Column */}
                   <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[80px] lg:min-w-[100px]">
                     <div className="flex flex-col items-center gap-1">
                       <Package className="h-3 w-3 lg:h-4 lg:w-4 text-cyan-600" />
@@ -554,7 +698,7 @@ const SalesApproval = () => {
                       <div className="text-xs font-semibold text-gray-900">Adjusted</div>
                     </div>
                   </th>
-                  {/* To be Produced/Day Column */}
+                  {/* 7. To be Produced/Day Column */}
                   <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[90px] lg:min-w-[110px]">
                     <div className="flex flex-col items-center gap-1">
                       <Package className="h-3 w-3 lg:h-4 lg:w-4 text-amber-600" />
@@ -562,58 +706,29 @@ const SalesApproval = () => {
                       <div className="text-xs font-semibold text-gray-900">/Day</div>
                     </div>
                   </th>
-                
-                  {salesPersons.slice(0, 8).map((salesPerson) => {
-                    const personOrderCount = orders.filter(order => {
-                      const orderSalesPersonName = getSalesPersonName(order);
-                      return orderSalesPersonName === salesPerson;
-                    }).length;
-
-                    return (
-                      <th key={salesPerson} className="p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[120px] lg:min-w-[150px]">
-                        <div className="flex flex-col items-center gap-1">
-                          <User className="h-3 w-3 lg:h-4 lg:w-4 text-gray-600" />
-                          <div className="text-xs font-semibold text-gray-900 text-center leading-tight" title={salesPerson}>
-                            {salesPerson}
-                          </div>
-                        </div>
-                      </th>
-                    );
-                  })}
-                  {salesPersons.length > 8 && (
-                    <th className="p-4 text-center font-semibold text-gray-900 border-r min-w-[130px]">
-                      <div className="flex flex-col items-center gap-1">
-                        <div className="text-sm font-semibold text-gray-600">
-                          +{salesPersons.length - 8} more
-                        </div>
-                        <div className="text-xs text-gray-500 font-normal">
-                          sales persons
-                        </div>
-                      </div>
-                    </th>
-                  )}
-                  
-                  {/* Total Indent Column */}
+                  {/* 8. CutesBoy.ai Column */}
+                  <th className="p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[120px] lg:min-w-[150px]">
+                    <div className="flex flex-col items-center gap-1">
+                      <User className="h-3 w-3 lg:h-4 lg:w-4 text-gray-600" />
+                      <div className="text-xs font-semibold text-gray-900 text-center leading-tight">CutesBoy.ai</div>
+                    </div>
+                  </th>
+                  {/* 9. Total Indent Salesman Column */}
                   <th className="p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[90px] lg:min-w-[120px] bg-gradient-to-r from-green-50 to-green-100">
                     <div className="flex flex-col items-center gap-1">
                       <Package className="h-3 w-3 lg:h-4 lg:w-4 text-green-600" />
                       <div className="text-xs font-bold text-gray-900">Total Indent</div>
-                      <div className="text-xs text-gray-600 font-normal">
-                        Salesman
-                      </div>
+                      <div className="text-xs font-bold text-gray-900">Salesman</div>
                     </div>
                   </th>
-                  
-                  {/* Qty/Batch Column */}
-                  <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[80px] lg:min-w-[100px]">
+                  {/* 10. Qty/Batch Column - LAST COLUMN */}
+                  <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[90px] lg:min-w-[110px]">
                     <div className="flex flex-col items-center gap-1">
-                      <Package className="h-3 w-3 lg:h-4 lg:w-4 text-teal-600" />
-                      <div className="text-xs font-semibold text-gray-900">Qty/</div>
-                      <div className="text-xs font-semibold text-gray-900">Batch</div>
+                      <Package className="h-3 w-3 lg:h-4 lg:w-4 text-orange-600" />
+                      <div className="text-xs font-semibold text-gray-900">Qty/Batch</div>
                     </div>
                   </th>
                 </tr>
-                
               </thead>
 
               <tbody>
@@ -627,9 +742,12 @@ const SalesApproval = () => {
                   const productOrders = productData ? 
                     productData.salesPersons.flatMap(sp => sp.orders || []) : [];
 
+                  // Get CutesBoy.ai sales data (first sales person for demo)
+                  const cutesBoyData = salesPersons.length > 0 ? gridData[product]?.[salesPersons[0]] || [] : [];
+
                   return (
                     <tr key={product} className="border-b hover:bg-gray-50/50 transition-colors">
-                      {/* Product Name (Left Column) */}
+                      {/* 1. Product Name Column */}
                       <td className="bg-white p-1 lg:p-2 font-medium text-gray-900 border-r max-w-[100px] lg:max-w-[160px]">
                         <div className="flex flex-col">
                           <span className="text-xs font-semibold text-gray-900 leading-tight break-words">{product}</span>
@@ -639,158 +757,101 @@ const SalesApproval = () => {
                         </div>
                       </td>
 
-                      {/* Packing Column */}
+                      {/* 2. Packing Column */}
+                      <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
+                        <div className="text-center">
+                          <div className="text-base lg:text-lg font-bold text-blue-600">
+                            {getProductionData(product).packing || 0}
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* 3. Production with final batches Column - EDITABLE */}
                       <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
                         <div className="text-center">
                           <Input
                             type="number"
-                            value={getProductionData(product).packing}
-                            onChange={(e) => updateProductionField(product, 'packing', e.target.value)}
-                            className="w-16 h-8 text-center text-sm font-bold text-blue-600 border-none bg-transparent focus:ring-1 focus:ring-blue-300"
+                            value={getProductionData(product).productionFinalBatches || getProductionWithFinalBatches(product)}
+                            onChange={(e) => updateProductionField(product, 'productionFinalBatches', e.target.value)}
+                            onBlur={() => saveProductionData(product)}
+                            className="w-16 h-8 text-center text-sm font-bold text-green-600 border-none bg-transparent focus:ring-1 focus:ring-green-300"
                             min="0"
                             step="0.01"
+                            placeholder="Auto"
                           />
                         </div>
                       </td>
 
-                      {/* Expiry/Shortage Column */}
-                      <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
-                        <div className="text-center">
-                          <div className="text-base lg:text-lg font-bold text-red-600">
-                            {getExpiryShortage(product)}
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Production with final batches Column */}
+                      {/* 4. Balance with final batches Column */}
                       <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
                         <div className="text-center">
                           <div className="text-base lg:text-lg font-bold text-green-600">
-                            {getProductionWithFinalBatches(product)}
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Balance with final batches Column */}
-                      <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
-                        <div className="text-center">
-                          <div className="text-base lg:text-lg font-bold text-purple-600">
                             {getBalanceWithFinalBatches(product)}
                           </div>
                         </div>
                       </td>
 
-                      {/* To be produced/Batches Column */}
+                      {/* 5. Physical Stock Column */}
+                      <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
+                        <div className="text-center">
+                          <div className="text-base lg:text-lg font-bold text-purple-600">
+                            {getProductionData(product).physicalStock || 0}
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* 6. Batch Adjusted Column */}
+                      <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
+                        <div className="text-center">
+                          <div className="text-base lg:text-lg font-bold text-cyan-600">
+                            {getProductionData(product).batchAdjusted || 0}
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* 7. To be Produced/Day Column */}
+                      <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
+                        <div className="text-center">
+                          <div className="text-base lg:text-lg font-bold text-amber-600">
+                            {getProductionData(product).toBeProducedDay || 0}
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* 8. CutesBoy.ai Column */}
+                      <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
+                        {cutesBoyData.length === 0 ? (
+                          <span className="text-gray-400 text-sm lg:text-base">0</span>
+                        ) : (
+                          <div className="text-center">
+                            <div className="text-base lg:text-lg font-bold text-orange-600">
+                              {cutesBoyData.reduce((sum, order) => sum + (order.quantity || 0), 0)}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {cutesBoyData.length} order{cutesBoyData.length !== 1 ? 's' : ''}
+                            </div>
+                          </div>
+                        )}
+                      </td>
+
+                      {/* 9. Total Indent Salesman Column */}
+                      <td className="p-1 lg:p-2 border-r align-middle bg-gradient-to-r from-green-50 to-green-100 text-center">
+                        <div className="text-center">
+                          <div className="text-base lg:text-lg font-bold text-blue-600">
+                            {totalQuantity}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {totalOrderCount} order{totalOrderCount !== 1 ? 's' : ''}
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* 10. Qty/Batch Column - LAST COLUMN */}
                       <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
                         <div className="text-center">
                           <div className="text-base lg:text-lg font-bold text-orange-600">
-                            {getToBeProducedBatches(product)}
+                            {getProductionData(product).qtyPerBatch || 0}
                           </div>
-                        </div>
-                      </td>
-
-                      {/* Physical Stock Column */}
-                      <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
-                        <div className="text-center">
-                          <Input
-                            type="number"
-                            value={getProductionData(product).physicalStock}
-                            onChange={(e) => updateProductionField(product, 'physicalStock', e.target.value)}
-                            className="w-16 h-8 text-center text-sm font-bold text-indigo-600 border-none bg-transparent focus:ring-1 focus:ring-indigo-300"
-                            min="0"
-                            step="0.01"
-                          />
-                        </div>
-                      </td>
-
-                      {/* Batch Adjusted Column */}
-                      <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
-                        <div className="text-center">
-                          <Input
-                            type="number"
-                            value={getProductionData(product).batchAdjusted}
-                            onChange={(e) => updateProductionField(product, 'batchAdjusted', e.target.value)}
-                            className="w-16 h-8 text-center text-sm font-bold text-cyan-600 border-none bg-transparent focus:ring-1 focus:ring-cyan-300"
-                            min="0"
-                            step="0.01"
-                          />
-                        </div>
-                      </td>
-
-                      {/* To be Produced/Day Column */}
-                      <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
-                        <div className="text-center">
-                          <Input
-                            type="number"
-                            value={getProductionData(product).toBeProducedDay}
-                            onChange={(e) => updateProductionField(product, 'toBeProducedDay', e.target.value)}
-                            className="w-18 h-8 text-center text-sm font-bold text-amber-600 border-none bg-transparent focus:ring-1 focus:ring-amber-300"
-                            min="0"
-                            step="1"
-                          />
-                        </div>
-                      </td>
-
-                      {/* Grid Cells for each Sales Person - Show only COUNT */}
-                      {salesPersons.slice(0, 8).map((salesPerson) => {
-                        const cellOrders = gridData[product]?.[salesPerson] || [];
-                        
-                        return (
-                          <td key={`${product}-${salesPerson}`} className="p-1 lg:p-2 border-r text-center align-middle">
-                            {cellOrders.length === 0 ? (
-                              <span className="text-gray-400 text-sm lg:text-base">0</span>
-                            ) : (
-                              <div className="text-center">
-                                <div className="text-base lg:text-lg font-bold text-blue-600">
-                                  {cellOrders.reduce((sum, order) => sum + (order.quantity || 0), 0)}
-                                </div>
-                                <div className="text-xs text-gray-500">
-                                  {cellOrders.length} order{cellOrders.length !== 1 ? 's' : ''}
-                                </div>
-                              </div>
-                            )}
-                          </td>
-                        );
-                      })}
-
-                      {/* Additional sales persons indicator */}
-                      {salesPersons.length > 8 && (
-                        <td className="p-4 border-r text-center align-middle">
-                          <div className="text-center">
-                            <div className="text-lg font-bold text-gray-600">
-                              {salesPersons.slice(8).reduce((total, salesPerson) => {
-                                return total + (gridData[product]?.[salesPerson]?.length || 0);
-                              }, 0)}
-                            </div>
-                            <div className="text-xs text-gray-500">others</div>
-                          </div>
-                        </td>
-                      )}
-
-                      {/* Total Indent Column */}
-                      <td className="p-3 border-r align-middle bg-gray-50">
-                        <div className="flex flex-col items-center space-y-2">
-                          {/* Main Total Display */}
-                          <div className="text-center pb-2 w-full">
-                            <div className="text-xl font-bold text-blue-600">
-                              {totalQuantity}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Qty/Batch Column */}
-                      <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
-                        <div className="text-center">
-                          <Input
-                            type="number"
-                            value={getProductionData(product).qtyPerBatch === 0 ? '' : getProductionData(product).qtyPerBatch}
-                            onChange={(e) => updateProductionField(product, 'qtyPerBatch', e.target.value)}
-                            className="w-16 h-8 text-center text-sm font-bold text-teal-600 border-none bg-transparent focus:ring-1 focus:ring-teal-300"
-                            min="0"
-                            step="1"
-                            placeholder=""
-                          />
                         </div>
                       </td>
                     </tr>

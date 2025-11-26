@@ -23,7 +23,7 @@ const authenticateToken = async (req, res, next) => {
         return res.status(401).json({ message: 'Invalid token structure.' });
       }
       
-      const user = await User.findById(userId).select('-password');
+      const user = await User.findById(userId).select('-password').populate('companyId', 'name unitName city state');
 
       if (!user || !user.isActive) {
         return res.status(401).json({ message: 'Invalid token or user not active.' });
@@ -35,7 +35,13 @@ const authenticateToken = async (req, res, next) => {
         username: user.username,
         role: user.role,
         unit: user.unit,
-        companyId: user.companyId,
+        companyId: user.companyId?._id || user.companyId, // Handle both populated and non-populated cases
+        company: user.companyId ? {
+          id: user.companyId._id || user.companyId,
+          name: user.companyId.name,
+          unitName: user.companyId.unitName,
+          location: `${user.companyId.city}, ${user.companyId.state}`
+        } : null,
         permissions: user.permissions || []
       };
       

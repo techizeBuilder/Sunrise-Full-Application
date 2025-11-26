@@ -46,6 +46,7 @@ export default function SimpleInventoryForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
   const [imagePreview, setImagePreview] = useState(null);
+  
   const [formData, setFormData] = useState({
     name: '',
     code: '',
@@ -65,13 +66,33 @@ export default function SimpleInventoryForm({
     gst: 0,
     hsn: '',
       batch: '',
-      store: 'Hyderabad',
+      store: '',
       leadTime: 0,
     internalManufacturing: false,
     purchase: true,
     internalNotes: '',
     image: ''
   });
+
+  // Auto-select default store location for Unit Head
+  useEffect(() => {
+    console.log('🏢 Companies data:', companies);
+    console.log('📝 Form data store:', formData.store);
+    console.log('✏️ Is editing item:', !!item);
+    
+    if (companies && companies.length > 0 && !item && formData.store === '') {
+      // For new items, auto-select the first company as default (user's company)
+      const defaultCompany = companies[0];
+      if (defaultCompany && defaultCompany.value) {
+        console.log('🎯 Auto-selecting store:', defaultCompany.label, 'Value:', defaultCompany.value);
+        setFormData(prev => ({ ...prev, store: defaultCompany.value }));
+      } else {
+        console.log('❌ No valid default company found');
+      }
+    } else {
+      console.log('❌ Auto-select conditions not met');
+    }
+  }, [companies, item, formData.store]);
 
   // Get available subcategories based on selected category
   const availableSubCategories = React.useMemo(() => {
@@ -140,7 +161,7 @@ export default function SimpleInventoryForm({
       gst: 0,
       hsn: '',
       batch: '',
-      store: 'Hyderabad',
+      store: '',
       leadTime: 0,
       internalManufacturing: false,
       purchase: true,
@@ -198,7 +219,7 @@ export default function SimpleInventoryForm({
         validationErrors.name = 'Item name is required';
       }
       
-      if (!formData.store) {
+      if (!formData.store || formData.store.trim() === '') {
         validationErrors.store = 'Store location is required';
       }
       
@@ -232,7 +253,7 @@ export default function SimpleInventoryForm({
       
       await onSubmit(processedData);
       
-      // Success - close modal and reset form
+      // Only close modal and reset form if we reach here (no errors thrown)
       resetForm();
       onClose();
       
@@ -638,19 +659,19 @@ export default function SimpleInventoryForm({
                 />
               </div>
               <div>
-                <Label htmlFor="batch" className="text-sm font-medium text-gray-700">Batch</Label>
+                <Label htmlFor="batch" className="text-sm font-medium text-gray-700">Qty/Batch</Label>
                 <Input
                   id="batch"
                   value={formData.batch}
                   onChange={(e) => handleInputChange('batch', e.target.value)}
-                  placeholder="Enter batch"
+                  placeholder="Enter qty per batch"
                   className="mt-1"
                 />
               </div>
               <div>
                 <Label htmlFor="store" className="text-sm font-medium text-gray-700">Store Location *</Label>
                 <Select value={formData.store} onValueChange={(value) => handleInputChange('store', value)}>
-                  <SelectTrigger className="mt-1">
+                  <SelectTrigger className={`mt-1 ${errors.store ? 'border-red-500' : ''}`}>
                     <SelectValue placeholder="Select store location" />
                   </SelectTrigger>
                   <SelectContent>
@@ -665,6 +686,12 @@ export default function SimpleInventoryForm({
                     )}
                   </SelectContent>
                 </Select>
+                {errors.store && (
+                  <p className="mt-1 text-sm text-red-600 flex items-center">
+                    <AlertCircle className="w-4 h-4 mr-1" />
+                    {errors.store}
+                  </p>
+                )}
               </div>
               <div>
                 <Label htmlFor="leadTime" className="text-sm font-medium text-gray-700">Lead Time (days)</Label>

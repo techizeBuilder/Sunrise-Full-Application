@@ -92,52 +92,7 @@ const initialFormData = {
   state: '',
   pincode: '',
   password: '',
-  confirmPassword: '',
-  permissions: {
-    role: 'Sales',
-    modules: [
-      {
-        name: 'orders',
-        dashboard: true,
-        features: [
-          { key: 'view', view: true, add: false, edit: false, delete: false, alter: false },
-          { key: 'add', view: true, add: true, edit: false, delete: false, alter: false },
-          { key: 'edit', view: true, add: true, edit: true, delete: false, alter: false },
-          { key: 'delete', view: true, add: true, edit: true, delete: true, alter: false }
-        ]
-      },
-      {
-        name: 'customers',
-        dashboard: true,
-        features: [
-          { key: 'view', view: true, add: false, edit: false, delete: false, alter: false },
-          { key: 'add', view: true, add: true, edit: false, delete: false, alter: false },
-          { key: 'edit', view: true, add: true, edit: true, delete: false, alter: false },
-          { key: 'delete', view: true, add: true, edit: true, delete: true, alter: false }
-        ]
-      },
-      {
-        name: 'dispatches',
-        dashboard: true,
-        features: [
-          { key: 'view', view: true, add: false, edit: false, delete: false, alter: false },
-          { key: 'add', view: true, add: true, edit: false, delete: false, alter: false },
-          { key: 'edit', view: true, add: true, edit: true, delete: false, alter: false },
-          { key: 'delete', view: true, add: true, edit: true, delete: true, alter: false }
-        ]
-      },
-      {
-        name: 'payments',
-        dashboard: true,
-        features: [
-          { key: 'view', view: true, add: false, edit: false, delete: false, alter: false },
-          { key: 'add', view: true, add: true, edit: false, delete: false, alter: false },
-          { key: 'edit', view: true, add: true, edit: true, delete: false, alter: false },
-          { key: 'delete', view: true, add: true, edit: true, delete: true, alter: false }
-        ]
-      }
-    ]
-  }
+  confirmPassword: ''
 };
 
 export default function UnitHeadSales() {
@@ -241,19 +196,37 @@ export default function UnitHeadSales() {
 
   // CRUD Mutations
   const createMutation = useMutation({
-    mutationFn: (data) => apiRequest('POST', '/api/unit-head/sales-persons', data),
-    onSuccess: (data) => {
-      showSmartToast({
-        variant: 'default',
-        title: 'Success',
-        description: data.message || 'Sales person created successfully'
-      });
+    mutationFn: (data) => {
+      console.log('Creating sales person with data:', data);
+      return apiRequest('POST', '/api/unit-head/sales-persons', data);
+    },
+    onSuccess: (response) => {
+      console.log('Create mutation success response:', response);
+      // Handle successful response - check if response has success: true
+      if (response && response.success) {
+        toast({
+          title: "✅ Success",
+          description: response.message || 'Sales person created successfully',
+          className: "border-green-200 bg-green-50 text-green-800",
+          duration: 4000
+        });
+      } else {
+        // Fallback for successful API call without success flag
+        toast({
+          title: "✅ Success",
+          description: response?.message || 'Sales person created successfully',
+          className: "border-green-200 bg-green-50 text-green-800",
+          duration: 4000
+        });
+      }
       queryClient.invalidateQueries(['/unit-head/sales-persons']);
       setIsCreateModalOpen(false);
       setFormData(initialFormData);
     },
     onError: (error) => {
       console.error('Create sales person error:', error);
+      console.error('Error status:', error.status);
+      console.error('Error message:', error.message);
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -316,6 +289,42 @@ export default function UnitHeadSales() {
   };
 
   const handleFormChange = (field, value) => {
+    // Input validation for specific fields
+    if (field === 'mobile') {
+      // Only allow numbers and limit to exactly 10 digits
+      const numericValue = value.replace(/\D/g, '');
+      if (numericValue.length <= 10) {
+        setFormData(prev => ({
+          ...prev,
+          [field]: numericValue
+        }));
+      }
+      return;
+    }
+    
+    if (field === 'pincode') {
+      // Only allow numbers and limit to 6 digits
+      const numericValue = value.replace(/\D/g, '');
+      if (numericValue.length <= 6) {
+        setFormData(prev => ({
+          ...prev,
+          [field]: numericValue
+        }));
+      }
+      return;
+    }
+    
+    if (field === 'username') {
+      // Only allow alphanumeric and underscore, no spaces
+      const sanitizedValue = value.replace(/[^a-zA-Z0-9_]/g, '');
+      setFormData(prev => ({
+        ...prev,
+        [field]: sanitizedValue
+      }));
+      return;
+    }
+    
+    // Default handling for other fields
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -358,14 +367,95 @@ export default function UnitHeadSales() {
   const handleFormSubmit = (e) => {
     e.preventDefault();
     
+    // Required field validation
+    const requiredFields = ['username', 'fullName', 'email', 'mobile', 'address', 'city', 'state', 'pincode'];
+    const missingFields = requiredFields.filter(field => !formData[field] || formData[field].trim() === '');
+    
+    if (missingFields.length > 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Validation Error',
+        description: `Please fill in required fields: ${missingFields.join(', ')}`,
+        duration: 5000
+      });
+      return;
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      toast({
+        variant: 'destructive',
+        title: 'Validation Error',
+        description: 'Please enter a valid email address',
+        duration: 5000
+      });
+      return;
+    }
+
+    // Mobile number validation - must be exactly 10 digits
+    const mobileRegex = /^\d{10}$/;
+    if (!mobileRegex.test(formData.mobile.replace(/\s+/g, ''))) {
+      toast({
+        variant: 'destructive',
+        title: 'Validation Error',
+        description: 'Mobile number must be exactly 10 digits',
+        duration: 5000
+      });
+      return;
+    }
+
+    // Pincode validation - must be numeric
+    const pincodeRegex = /^\d{6}$/;
+    if (!pincodeRegex.test(formData.pincode)) {
+      toast({
+        variant: 'destructive',
+        title: 'Validation Error',
+        description: 'Pincode must be exactly 6 digits',
+        duration: 5000
+      });
+      return;
+    }
+
+    // Username validation - no spaces, special characters
+    const usernameRegex = /^[a-zA-Z0-9_]+$/;
+    if (!usernameRegex.test(formData.username)) {
+      toast({
+        variant: 'destructive',
+        title: 'Validation Error',
+        description: 'Username can only contain letters, numbers, and underscore',
+        duration: 5000
+      });
+      return;
+    }
+    
     // Password validation for create mode
     if (isCreateModalOpen) {
+      if (!formData.password || formData.password.trim() === '') {
+        toast({
+          variant: 'destructive',
+          title: 'Validation Error',
+          description: 'Password is required',
+          duration: 5000
+        });
+        return;
+      }
       if (formData.password !== formData.confirmPassword) {
-        showSmartToast({ message: 'Passwords do not match' }, 'Validation Error');
+        toast({
+          variant: 'destructive',
+          title: 'Validation Error',
+          description: 'Passwords do not match',
+          duration: 5000
+        });
         return;
       }
       if (formData.password.length < 6) {
-        showSmartToast({ message: 'Password must be at least 6 characters long' }, 'Validation Error');
+        toast({
+          variant: 'destructive',
+          title: 'Validation Error',
+          description: 'Password must be at least 6 characters long',
+          duration: 5000
+        });
         return;
       }
     }
@@ -375,16 +465,8 @@ export default function UnitHeadSales() {
       const { password, confirmPassword, permissions, ...editData } = formData;
       updateMutation.mutate({ id: selectedSalesPerson._id, data: editData });
     } else {
-      // For create, include password and permissions with Sales role
-      const createData = {
-        ...formData,
-        permissions: {
-          role: 'Sales',
-          modules: [] // Sales permissions will be set by backend defaults
-        }
-      };
-      // Remove confirmPassword before sending
-      delete createData.confirmPassword;
+      // For create, don't send permissions - let backend set defaults
+      const { confirmPassword, permissions, ...createData } = formData;
       createMutation.mutate(createData);
     }
   };
@@ -947,46 +1029,52 @@ export default function UnitHeadSales() {
                 <Label htmlFor="mobile">Mobile *</Label>
                 <Input
                   id="mobile"
+                  type="tel"
                   value={formData.mobile}
                   onChange={(e) => handleFormChange('mobile', e.target.value)}
-                  placeholder="Enter mobile number"
+                  placeholder="Enter 10 digit mobile number"
                   required
                 />
               </div>
               <div className="md:col-span-2">
-                <Label htmlFor="address">Address</Label>
+                <Label htmlFor="address">Address *</Label>
                 <Input
                   id="address"
                   value={formData.address}
                   onChange={(e) => handleFormChange('address', e.target.value)}
                   placeholder="Enter address"
+                  required
                 />
               </div>
               <div>
-                <Label htmlFor="city">City</Label>
+                <Label htmlFor="city">City *</Label>
                 <Input
                   id="city"
                   value={formData.city}
                   onChange={(e) => handleFormChange('city', e.target.value)}
                   placeholder="Enter city"
+                  required
                 />
               </div>
               <div>
-                <Label htmlFor="state">State</Label>
+                <Label htmlFor="state">State *</Label>
                 <Input
                   id="state"
                   value={formData.state}
                   onChange={(e) => handleFormChange('state', e.target.value)}
                   placeholder="Enter state"
+                  required
                 />
               </div>
               <div>
-                <Label htmlFor="pincode">PIN Code</Label>
+                <Label htmlFor="pincode">PIN Code * (6 digits)</Label>
                 <Input
                   id="pincode"
+                  type="tel"
                   value={formData.pincode}
                   onChange={(e) => handleFormChange('pincode', e.target.value)}
-                  placeholder="Enter PIN code"
+                  placeholder="Enter 6-digit PIN code"
+                  required
                 />
               </div>
               

@@ -4,6 +4,7 @@ import Sale from '../models/Sale.js';
 import { Item } from '../models/Inventory.js';
 import User from '../models/User.js';
 import { USER_ROLES } from '../../shared/schema.js';
+import { updateProductSummary } from '../services/productionSummaryService.js';
 
 // Unit Head Orders Management
 export const getUnitHeadOrders = async (req, res) => {
@@ -702,10 +703,11 @@ export const getUnitHeadDashboard = async (req, res) => {
 // Create new order
 export const createUnitHeadOrder = async (req, res) => {
   try {
-    const { customerId, orderDate, products, notes } = req.body;
+    const { customerId, orderDate, products, notes, salesPersonId } = req.body;
     const unitHead = req.user;
 
     console.log('🆕 Creating new order by Unit Head:', unitHead.username);
+    console.log('Order data:', { customerId, orderDate, salesPersonId, productsCount: products?.length });
 
     // Validation
     const errors = {};
@@ -727,6 +729,25 @@ export const createUnitHeadOrder = async (req, res) => {
       errors.orderDate = 'Order date is required';
     } else if (new Date(orderDate).toString() === 'Invalid Date') {
       errors.orderDate = 'Order date must be a valid date';
+    }
+
+    // Validate sales person
+    if (!salesPersonId) {
+      errors.salesPersonId = 'Sales person is required';
+    } else {
+      // Check if sales person exists and belongs to same company
+      const salesPerson = await User.findOne({
+        _id: salesPersonId,
+        companyId: unitHead.companyId,
+        $or: [
+          { role: 'Sales' },
+          { role: 'sales' },
+          { role: { $regex: /sales/i } }
+        ]
+      });
+      if (!salesPerson) {
+        errors.salesPersonId = 'Sales person not found or not from same company';
+      }
     }
 
     if (!products || !Array.isArray(products) || products.length === 0) {
@@ -790,12 +811,27 @@ export const createUnitHeadOrder = async (req, res) => {
       totalAmount,
       notes,
       status: 'pending',
-      salesPerson: unitHead._id, // Unit Head as creator
+      salesPerson: salesPersonId, // Assigned to selected sales person
       companyId: unitHead.companyId,
-      createdBy: unitHead._id
+      createdBy: unitHead._id // Unit Head as creator, but sales person gets the order
     };
 
     const order = await Order.create(orderData);
+
+    // Update product summaries for all products in the order
+    try {
+      for (const orderProduct of orderProducts) {
+        await updateProductSummary(
+          orderProduct.product,
+          new Date(orderDate),
+          unitHead.companyId
+        );
+      }
+      console.log('✅ Product summaries updated after order creation');
+    } catch (summaryError) {
+      console.error('⚠️ Error updating product summaries:', summaryError);
+      // Don't fail the order creation if summary update fails
+    }
 
     // Populate the order for response
     const populatedOrder = await Order.findById(order._id)
@@ -913,6 +949,23 @@ export const updateUnitHeadOrder = async (req, res) => {
 
     await order.save();
 
+    // Update product summaries for all products in the order
+    try {
+      if (products && Array.isArray(products)) {
+        for (const orderProduct of orderProducts) {
+          await updateProductSummary(
+            orderProduct.product,
+            order.orderDate,
+            unitHead.companyId
+          );
+        }
+        console.log('✅ Product summaries updated after order update');
+      }
+    } catch (summaryError) {
+      console.error('⚠️ Error updating product summaries:', summaryError);
+      // Don't fail the order update if summary update fails
+    }
+
     // Populate the updated order
     const updatedOrder = await Order.findById(id)
       .populate('customer', 'name email mobile address city state')
@@ -982,6 +1035,21 @@ export const updateUnitHeadOrderStatus = async (req, res) => {
 
     await order.save();
 
+    // Update product summaries for status changes that might affect quantities
+    try {
+      for (const orderProduct of order.products) {
+        await updateProductSummary(
+          orderProduct.product,
+          order.orderDate,
+          unitHead.companyId
+        );
+      }
+      console.log('✅ Product summaries updated after status change');
+    } catch (summaryError) {
+      console.error('⚠️ Error updating product summaries:', summaryError);
+      // Don't fail the status update if summary update fails
+    }
+
     // Populate the updated order
     const updatedOrder = await Order.findById(id)
       .populate('customer', 'name email mobile address')
@@ -1035,6 +1103,21 @@ export const deleteUnitHeadOrder = async (req, res) => {
     }
 
     await Order.findByIdAndDelete(id);
+
+    // Update product summaries for all products that were in the deleted order
+    try {
+      for (const orderProduct of order.products) {
+        await updateProductSummary(
+          orderProduct.product,
+          order.orderDate,
+          unitHead.companyId
+        );
+      }
+      console.log('✅ Product summaries updated after order deletion');
+    } catch (summaryError) {
+      console.error('⚠️ Error updating product summaries:', summaryError);
+      // Don't fail the deletion if summary update fails
+    }
 
     res.json({
       success: true,
@@ -1432,12 +1515,32 @@ export const createUnitHeadSalesPerson = async (req, res) => {
       }
     }
 
-    // Prepare user data with company assignment
+    // Prepare user data with company assignment - exclude permissions from req.body to set defaults
+    const { permissions, ...bodyWithoutPermissions } = req.body;
+    
     const userData = {
-      ...req.body,
+      ...bodyWithoutPermissions,
       role: 'Sales', // Force role to Sales
       companyId: req.user.companyId, // Force company assignment to Unit Head's company
-      active: req.body.active || 'Yes'
+      active: req.body.active || 'Yes',
+      // Set default Sales permissions - only sales-related, NO inventory access
+      permissions: {
+        role: 'sales',
+        modules: [
+          {
+            name: 'sales',
+            dashboard: true,
+            features: [
+              { key: 'salesDashboard', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'orders', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'myCustomers', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'myDeliveries', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'myInvoices', view: true, add: true, edit: true, delete: true, alter: true },
+              { key: 'refundReturn', view: true, add: true, edit: true, delete: true, alter: true }
+            ]
+          }
+        ]
+      }
     };
 
     const newUser = new User(userData);
@@ -1446,7 +1549,8 @@ export const createUnitHeadSalesPerson = async (req, res) => {
     // Populate the response
     await newUser.populate('companyId', 'name city state');
 
-    res.status(201).json({
+    // Return consistent success response
+    return res.status(201).json({
       success: true,
       message: 'Sales person created successfully',
       salesPerson: {

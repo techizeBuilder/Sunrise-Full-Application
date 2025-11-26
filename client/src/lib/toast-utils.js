@@ -147,7 +147,9 @@ export const showSmartToast = (errorOrSuccess, context = '') => {
   try {
     // Handle success messages (both string and object format)
     if (typeof errorOrSuccess === 'string' || 
-        (errorOrSuccess && typeof errorOrSuccess === 'object' && errorOrSuccess.message && !errorOrSuccess.status && !errorOrSuccess.error)) {
+        (errorOrSuccess && typeof errorOrSuccess === 'object' && 
+         (errorOrSuccess.success === true || 
+          (errorOrSuccess.message && !errorOrSuccess.status && !errorOrSuccess.error)))) {
       
       const successMessage = typeof errorOrSuccess === 'string' ? errorOrSuccess : errorOrSuccess.message;
       
