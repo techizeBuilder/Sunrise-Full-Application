@@ -35,7 +35,8 @@ import {
   Play,
   FileText,
   CheckCircle,
-  BarChart
+  BarChart,
+  Clock
 } from 'lucide-react';
 
 // Separate menu items for each role
@@ -277,6 +278,27 @@ const productionMenuItems = [
     icon: BarChart,
     module: 'production',
     feature: 'productionReports'
+  },
+  {
+    label: 'Production Group',
+    path: '/production/production-group',
+    icon: Users,
+    module: 'production',
+    feature: 'productionGroup'
+  },
+  {
+    label: 'Quantity Batch',
+    path: '/production/quantity-batch',
+    icon: Package,
+    module: 'production',
+    feature: 'quantityBatch'
+  },
+  {
+    label: 'Production Shift',
+    path: '/production/production-shift',
+    icon: Clock,
+    module: 'production',
+    feature: 'productionShift'
   }
 ];
 

@@ -93,8 +93,8 @@ productDailySummarySchema.methods.calculateFormulas = function() {
   // expiryShortage = productionFinalBatches - toBeProducedDay
   this.expiryShortage = Math.round((this.productionFinalBatches - this.toBeProducedDay) * 100) / 100;
   
-  // balanceFinalBatches = productionFinalBatches - packing
-  this.balanceFinalBatches = Math.round((this.productionFinalBatches - this.packing) * 100) / 100;
+  // produceBatches = productionFinalBatches - packing
+  this.produceBatches = Math.round((this.productionFinalBatches - this.packing) * 100) / 100;
   
   return this;
 };

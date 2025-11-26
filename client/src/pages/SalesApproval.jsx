@@ -137,12 +137,12 @@ const SalesApproval = () => {
     return Math.round((productionWithFinalBatches - data.toBeProducedDay) * 100) / 100;
   };
 
-  // Calculate Balance with final batches = Production_with_final_batches - Packing
-  const getBalanceWithFinalBatches = (productName) => {
+  // Calculate Produce / Batches = Production_with_final_batches - Packing
+  const getProduceBatches = (productName) => {
     const data = getProductionData(productName);
     // Use backend-calculated value if available, otherwise calculate
-    if (data.balanceFinalBatches !== undefined) {
-      return data.balanceFinalBatches;
+    if (data.produceBatches !== undefined) {
+      return data.produceBatches;
     }
     const productionWithFinalBatches = getProductionWithFinalBatches(productName);
     return Math.round((productionWithFinalBatches - data.packing) * 100) / 100;
@@ -202,7 +202,7 @@ const SalesApproval = () => {
               productionFinalBatches: product.summary.productionFinalBatches || 0,
               toBeProducedBatches: product.summary.toBeProducedBatches || 0,
               expiryShortage: product.summary.expiryShortage || 0,
-              balanceFinalBatches: product.summary.balanceFinalBatches || 0
+              produceBatches: product.summary.produceBatches || 0
             };
           });
           setProductionData(newProductionData);
@@ -673,13 +673,12 @@ const SalesApproval = () => {
                       <div className="text-xs font-semibold text-gray-900">batches</div>
                     </div>
                   </th>
-                  {/* 4. Balance with final batches Column */}
+                  {/* 4. Produce / Batches Column */}
                   <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[90px] lg:min-w-[110px]">
                     <div className="flex flex-col items-center gap-1">
                       <Package className="h-3 w-3 lg:h-4 lg:w-4 text-purple-600" />
-                      <div className="text-xs font-semibold text-gray-900">Balance</div>
-                      <div className="text-xs font-semibold text-gray-900">with final</div>
-                      <div className="text-xs font-semibold text-gray-900">batches</div>
+                      <div className="text-xs font-semibold text-gray-900">Produce /</div>
+                      <div className="text-xs font-semibold text-gray-900">Batches</div>
                     </div>
                   </th>
                   {/* 5. Physical Stock Column */}
@@ -782,11 +781,11 @@ const SalesApproval = () => {
                         </div>
                       </td>
 
-                      {/* 4. Balance with final batches Column */}
+                      {/* 4. Produce / Batches Column */}
                       <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
                         <div className="text-center">
                           <div className="text-base lg:text-lg font-bold text-green-600">
-                            {getBalanceWithFinalBatches(product)}
+                            {getProduceBatches(product)}
                           </div>
                         </div>
                       </td>

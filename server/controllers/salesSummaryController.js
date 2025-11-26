@@ -142,7 +142,7 @@ export const getSalesSummary = async (req, res) => {
             toBeProducedDay: summary.toBeProducedDay,
             toBeProducedBatches: summary.toBeProducedBatches,
             expiryShortage: summary.expiryShortage,
-            balanceFinalBatches: summary.balanceFinalBatches
+            produceBatches: summary.produceBatches,
           },
           salesBreakdown: salesBreakdown
         };
@@ -296,7 +296,7 @@ export const updateSalesSummary = async (req, res) => {
         toBeProducedDay: summary.toBeProducedDay,
         toBeProducedBatches: summary.toBeProducedBatches,
         expiryShortage: summary.expiryShortage,
-        balanceFinalBatches: summary.balanceFinalBatches
+        produceBatches: summary.produceBatches,
       }
     });
 

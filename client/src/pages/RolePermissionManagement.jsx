@@ -165,7 +165,10 @@ const MODULES = [
       { key: 'productionExecution', label: 'Production Execution' },
       { key: 'productionRegister', label: 'Batch Production Register' },
       { key: 'verificationApproval', label: 'Verification & Approval' },
-      { key: 'productionReports', label: 'Production Reports' }
+      { key: 'productionReports', label: 'Production Reports' },
+      { key: 'productionGroup', label: 'Production Group' },
+      { key: 'quantityBatch', label: 'Quantity Batch' },
+      { key: 'productionShift', label: 'Production Shift' }
     ]
   },
   {
@@ -637,7 +640,10 @@ export default function RolePermissionManagement() {
               createFeaturePermissions('production', 'productionExecution', { view: true, add: true, edit: true, delete: true, alter: true }),
               createFeaturePermissions('production', 'productionRegister', { view: true, add: true, edit: true, delete: true, alter: true }),
               createFeaturePermissions('production', 'verificationApproval', { view: true, add: true, edit: true, delete: true, alter: true }),
-              createFeaturePermissions('production', 'productionReports', { view: true, add: true, edit: true, delete: true, alter: true })
+              createFeaturePermissions('production', 'productionReports', { view: true, add: true, edit: true, delete: true, alter: true }),
+              createFeaturePermissions('production', 'productionGroup', { view: true, add: true, edit: true, delete: true, alter: true }),
+              createFeaturePermissions('production', 'quantityBatch', { view: true, add: true, edit: true, delete: true, alter: true }),
+              createFeaturePermissions('production', 'productionShift', { view: true, add: true, edit: true, delete: true, alter: true })
             ]
           }
         ];

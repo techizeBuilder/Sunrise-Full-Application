@@ -43,7 +43,7 @@ async function testProductionSummary() {
       toBeProducedDay: testSummary.toBeProducedDay,
       toBeProducedBatches: testSummary.toBeProducedBatches,
       expiryShortage: testSummary.expiryShortage,
-      balanceFinalBatches: testSummary.balanceFinalBatches
+      produceBatches: testSummary.produceBatches
     });
 
     // Test 3: Test updateProductSummary function

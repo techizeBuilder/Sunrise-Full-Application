@@ -83,7 +83,7 @@ const testProductSummaryUpdate = async () => {
       console.log(`  - To Be Produced Day: ${updateData2.summary?.toBeProducedDay}`);
       console.log(`  - To Be Produced Batches: ${updateData2.summary?.toBeProducedBatches}`);
       console.log(`  - Expiry Shortage: ${updateData2.summary?.expiryShortage}`);
-      console.log(`  - Balance Final Batches: ${updateData2.summary?.balanceFinalBatches}`);
+      console.log(`  - Produce Batches: ${updateData2.summary?.produceBatches}`);
     } else {
       console.log('❌ Second update failed:');
       console.log('Error:', JSON.stringify(updateData2, null, 2));

@@ -15,7 +15,10 @@ export const updateUsersWithProductionPermissions = async () => {
         { key: 'productionExecution', view: true, add: true, edit: true, delete: true, alter: true },
         { key: 'productionRegister', view: true, add: true, edit: true, delete: true, alter: true },
         { key: 'verificationApproval', view: true, add: true, edit: true, delete: true, alter: true },
-        { key: 'productionReports', view: true, add: true, edit: true, delete: true, alter: true }
+        { key: 'productionReports', view: true, add: true, edit: true, delete: true, alter: true },
+        { key: 'productionGroup', view: true, add: true, edit: true, delete: true, alter: true },
+        { key: 'quantityBatch', view: true, add: true, edit: true, delete: true, alter: true },
+        { key: 'productionShift', view: true, add: true, edit: true, delete: true, alter: true }
       ]
     };
 
@@ -103,7 +106,10 @@ export const migrateOldProductionPermissions = async () => {
         { key: 'productionExecution', view: true, add: true, edit: true, delete: true, alter: true },
         { key: 'productionRegister', view: true, add: true, edit: true, delete: true, alter: true },
         { key: 'verificationApproval', view: true, add: true, edit: true, delete: true, alter: true },
-        { key: 'productionReports', view: true, add: true, edit: true, delete: true, alter: true }
+        { key: 'productionReports', view: true, add: true, edit: true, delete: true, alter: true },
+        { key: 'productionGroup', view: true, add: true, edit: true, delete: true, alter: true },
+        { key: 'quantityBatch', view: true, add: true, edit: true, delete: true, alter: true },
+        { key: 'productionShift', view: true, add: true, edit: true, delete: true, alter: true }
       ]
     };
 

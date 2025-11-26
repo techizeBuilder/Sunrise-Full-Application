@@ -6,6 +6,9 @@ import ProductionExecution from '@/pages/production/ProductionExecution';
 import BatchProductionRegister from '@/pages/production/BatchProductionRegister';
 import ProductionVerification from '@/pages/production/ProductionVerification';
 import ProductionReports from '@/pages/production/ProductionReports';
+import ProductionGroup from '@/pages/production/ProductionGroup';
+import QuantityBatch from '@/pages/production/QuantityBatch';
+import ProductionShift from '@/pages/production/ProductionShift';
 
 export default function ProductionModule() {
   return (
@@ -27,6 +30,15 @@ export default function ProductionModule() {
       </Route>
       <Route path="/production/reports">
         <ProductionReports />
+      </Route>
+      <Route path="/production/production-group">
+        <ProductionGroup />
+      </Route>
+      <Route path="/production/quantity-batch">
+        <QuantityBatch />
+      </Route>
+      <Route path="/production/production-shift">
+        <ProductionShift />
       </Route>
       <Route path="/production">
         <Redirect to="/production/dashboard" />
@@ -50,6 +62,15 @@ export default function ProductionModule() {
       <Route path="/super-admin/production/reports">
         <ProductionReports />
       </Route>
+      <Route path="/super-admin/production/production-group">
+        <ProductionGroup />
+      </Route>
+      <Route path="/super-admin/production/quantity-batch">
+        <QuantityBatch />
+      </Route>
+      <Route path="/super-admin/production/production-shift">
+        <ProductionShift />
+      </Route>
       <Route path="/super-admin/production">
         <Redirect to="/super-admin/production/dashboard" />
       </Route>
@@ -71,6 +92,15 @@ export default function ProductionModule() {
       </Route>
       <Route path="/unit-head/production/reports">
         <ProductionReports />
+      </Route>
+      <Route path="/unit-head/production/production-group">
+        <ProductionGroup />
+      </Route>
+      <Route path="/unit-head/production/quantity-batch">
+        <QuantityBatch />
+      </Route>
+      <Route path="/unit-head/production/production-shift">
+        <ProductionShift />
       </Route>
       <Route path="/unit-head/production">
         <Redirect to="/unit-head/production/dashboard" />

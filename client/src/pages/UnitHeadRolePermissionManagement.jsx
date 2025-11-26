@@ -92,7 +92,10 @@ const UNIT_HEAD_MODULES = [
       { key: 'productionExecution', label: 'Production Execution' },
       { key: 'productionRegister', label: 'Batch Production Register' },
       { key: 'verificationApproval', label: 'Verification & Approval' },
-      { key: 'productionReports', label: 'Production Reports' }
+      { key: 'productionReports', label: 'Production Reports' },
+      { key: 'productionGroup', label: 'Production Group' },
+      { key: 'quantityBatch', label: 'Quantity Batch' },
+      { key: 'productionShift', label: 'Production Shift' }
     ]
   },
   {

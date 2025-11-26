@@ -17,7 +17,10 @@ import {
   Users,
   Settings,
   Bell,
-  Search
+  Search,
+  Package,
+  Hash,
+  UserCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
@@ -65,6 +68,27 @@ const productionNavItems = [
     path: '/production/reports',
     icon: BarChart3,
     description: 'Production reports'
+  },
+  {
+    id: 'production-group',
+    label: 'Production Group',
+    path: '/production/production-group',
+    icon: Users,
+    description: 'Manage production groups'
+  },
+  {
+    id: 'quantity-batch',
+    label: 'Quantity Batch',
+    path: '/production/quantity-batch',
+    icon: Package,
+    description: 'Manage quantity batches'
+  },
+  {
+    id: 'production-shift',
+    label: 'Production Shift',
+    path: '/production/production-shift',
+    icon: Clock,
+    description: 'Manage production shifts'
   }
 ];
 
