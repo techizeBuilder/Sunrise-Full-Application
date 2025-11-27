@@ -35,7 +35,7 @@ import {
   Calendar,
   User,
   Package,
-  DollarSign,
+  IndianRupee,
   Loader2
 } from 'lucide-react';
 import { showSmartToast } from '@/lib/toast-utils';
@@ -148,10 +148,6 @@ export default function SuperAdminOrders() {
           <h1 className="text-3xl font-bold">Super Admin - Orders Management</h1>
           <p className="text-muted-foreground">Manage and monitor all orders across the system</p>
         </div>
-        <Button onClick={() => refetch()} variant="outline">
-          <Package className="h-4 w-4 mr-2" />
-          Refresh Data
-        </Button>
       </div>
 
       {/* Summary Cards */}
@@ -174,7 +170,7 @@ export default function SuperAdminOrders() {
           <CardContent className="p-6">
             <div className="flex items-center space-x-4">
               <div className="p-3 bg-green-100 rounded-lg">
-                <DollarSign className="h-6 w-6 text-green-600" />
+                <IndianRupee className="h-6 w-6 text-green-600" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{formatCurrency(summary.totalAmount)}</p>

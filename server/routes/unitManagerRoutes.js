@@ -10,6 +10,15 @@ import {
   getAllOrders,
   getOrderById
 } from '../controllers/unitManagerController.js';
+// Import production group functions from unit head controller (shared functionality)
+import {
+  getUnitHeadProductionGroups,
+  getUnitHeadProductionGroupById,
+  createUnitHeadProductionGroup,
+  updateUnitHeadProductionGroup,
+  deleteUnitHeadProductionGroup,
+  getUnitHeadAvailableItems
+} from '../controllers/unitHeadController.js';
 // Import models for debug endpoint
 import User from '../models/User.js';
 import Order from '../models/Order.js';
@@ -134,5 +143,14 @@ router.get('/fix-orders', fixOrdersSalesPersonAssignment); // Utility to fix exi
 // router.get('/users', getSalesPersons); // Commented - data now included in /orders
 router.put('/orders/:id/status', updateOrderStatus);
 router.get('/dashboard/stats', getDashboardStats);
+
+// Production Groups routes (shared with Unit Head)
+// Unit Manager and Unit Head work with same production groups in same location/company
+router.get('/production-groups', getUnitHeadProductionGroups);
+router.get('/production-groups/:id', getUnitHeadProductionGroupById);
+router.post('/production-groups', createUnitHeadProductionGroup);
+router.put('/production-groups/:id', updateUnitHeadProductionGroup);
+router.delete('/production-groups/:id', deleteUnitHeadProductionGroup);
+router.get('/production-groups/items/available', getUnitHeadAvailableItems);
 
 export default router;

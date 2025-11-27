@@ -43,7 +43,7 @@ export const getSettings = async (req, res) => {
     }
 
     const settings = await Settings.getSettings();
-    res.json({ settings });
+    res.json({ data: settings });
   } catch (error) {
     console.error('Get settings error:', error);
     res.status(500).json({ message: 'Internal server error' });
@@ -83,7 +83,7 @@ export const updateSettings = async (req, res) => {
 
 export const updateCompanySettings = async (req, res) => {
   try {
-    if (req.user.role !== USER_ROLES.SUPER_USER) {
+    if (req.user.role !== USER_ROLES.SUPER_ADMIN) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
@@ -111,7 +111,7 @@ export const updateCompanySettings = async (req, res) => {
 
 export const updateSystemSettings = async (req, res) => {
   try {
-    if (req.user.role !== USER_ROLES.SUPER_USER) {
+    if (req.user.role !== USER_ROLES.SUPER_ADMIN) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
@@ -137,87 +137,34 @@ export const updateSystemSettings = async (req, res) => {
   }
 };
 
-export const updateEmailSettings = async (req, res) => {
-  try {
-    if (req.user.role !== USER_ROLES.SUPER_USER) {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-
-    const { smtpHost, smtpPort, smtpUser, smtpPassword, fromEmail, fromName } = req.body;
-
-    const settings = await Settings.getSettings();
-    
-    if (smtpHost) settings.email.smtpHost = smtpHost;
-    if (smtpPort) settings.email.smtpPort = smtpPort;
-    if (smtpUser) settings.email.smtpUser = smtpUser;
-    if (smtpPassword) settings.email.smtpPassword = smtpPassword;
-    if (fromEmail) settings.email.fromEmail = fromEmail;
-    if (fromName) settings.email.fromName = fromName;
-
-    await settings.save();
-
-    res.json({
-      message: 'Email settings updated successfully',
-      email: {
-        ...settings.email.toObject(),
-        smtpPassword: '***' // Hide password in response
-      }
-    });
-  } catch (error) {
-    console.error('Update email settings error:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-};
-
-export const updateModuleSettings = async (req, res) => {
-  try {
-    if (req.user.role !== USER_ROLES.SUPER_USER) {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-
-    const moduleSettings = req.body;
-
-    const settings = await Settings.getSettings();
-    
-    Object.keys(moduleSettings).forEach(module => {
-      if (typeof moduleSettings[module] === 'boolean') {
-        settings.modules[module] = moduleSettings[module];
-      }
-    });
-
-    await settings.save();
-
-    res.json({
-      message: 'Module settings updated successfully',
-      modules: settings.modules
-    });
-  } catch (error) {
-    console.error('Update module settings error:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-};
-
 export const updateNotificationSettings = async (req, res) => {
   try {
-    if (req.user.role !== USER_ROLES.SUPER_USER) {
+    if (req.user.role !== USER_ROLES.SUPER_ADMIN) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    const notificationSettings = req.body;
+    const { roleNotifications } = req.body;
 
     const settings = await Settings.getSettings();
     
-    Object.keys(notificationSettings).forEach(notification => {
-      if (typeof notificationSettings[notification] === 'boolean') {
-        settings.notifications[notification] = notificationSettings[notification];
-      }
-    });
+    // Update role-based notification settings
+    if (roleNotifications) {
+      if (!settings.notifications) settings.notifications = {};
+      if (!settings.notifications.roleSettings) settings.notifications.roleSettings = {};
+      
+      Object.keys(roleNotifications).forEach(role => {
+        settings.notifications.roleSettings[role] = {
+          ...settings.notifications.roleSettings[role],
+          ...roleNotifications[role]
+        };
+      });
+    }
 
     await settings.save();
 
     res.json({
       message: 'Notification settings updated successfully',
-      notifications: settings.notifications
+      data: settings.notifications
     });
   } catch (error) {
     console.error('Update notification settings error:', error);
@@ -227,7 +174,7 @@ export const updateNotificationSettings = async (req, res) => {
 
 export const updateBackupSettings = async (req, res) => {
   try {
-    if (req.user.role !== USER_ROLES.SUPER_USER) {
+    if (req.user.role !== USER_ROLES.SUPER_ADMIN) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
@@ -253,7 +200,7 @@ export const updateBackupSettings = async (req, res) => {
 
 export const updateThemeSettings = async (req, res) => {
   try {
-    if (req.user.role !== USER_ROLES.SUPER_USER) {
+    if (req.user.role !== USER_ROLES.SUPER_ADMIN) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
@@ -278,11 +225,7 @@ export const updateThemeSettings = async (req, res) => {
 
 export const uploadCompanyLogo = async (req, res) => {
   try {
-    console.log('=== LOGO UPLOAD START ===');
-    console.log('User role:', req.user?.role);
-    console.log('File:', req.file);
-    
-    if (req.user.role !== USER_ROLES.SUPER_USER) {
+    if (req.user.role !== USER_ROLES.SUPER_ADMIN) {
       return res.status(403).json({ message: 'Access denied' });
     }
 

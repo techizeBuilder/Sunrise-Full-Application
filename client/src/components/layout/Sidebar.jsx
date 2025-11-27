@@ -183,6 +183,13 @@ const unitHeadMenuItems = [
     module: 'manufacturing'
   },
   {
+    label: 'Production Group',
+    path: '/unit-head/production-group',
+    icon: Users,
+    module: 'unitManager',
+    feature: 'productionGroup'
+  },
+  {
     label: 'User Management',
     path: '/unit-head/role-permission-management',
     icon: Shield,
@@ -212,10 +219,17 @@ const unitManagerMenuItems = [
   },
   {
     label: 'Indent Summary ',
-    path: '/sales-approval',
+    path: '/indent-summary',
     icon: Shield,
     module: 'unitManager',
     feature: 'salesApproval'
+  },
+  {
+    label: 'Production Group',
+    path: '/unit-manager/production-group',
+    icon: Users,
+    module: 'unitManager',
+    feature: 'productionGroup'
   },
   {
     label: 'Orders',
@@ -245,34 +259,6 @@ const productionMenuItems = [
     module: 'production'
   },
   {
-    label: 'Batch Planning',
-    path: '/production/batch-planning',
-    icon: Calendar,
-    module: 'production',
-    feature: 'batchPlanning'
-  },
-  {
-    label: 'Production Execution',
-    path: '/production/execution',
-    icon: Play,
-    module: 'production',
-    feature: 'productionExecution'
-  },
-  {
-    label: 'Batch Register',
-    path: '/production/register',
-    icon: FileText,
-    module: 'production',
-    feature: 'productionRegister'
-  },
-  {
-    label: 'Verification & Approval',
-    path: '/production/verification',
-    icon: CheckCircle,
-    module: 'production',
-    feature: 'verificationApproval'
-  },
-  {
     label: 'Production Reports',
     path: '/production/reports',
     icon: BarChart,
@@ -285,13 +271,6 @@ const productionMenuItems = [
     icon: Users,
     module: 'production',
     feature: 'productionGroup'
-  },
-  {
-    label: 'Quantity Batch',
-    path: '/production/quantity-batch',
-    icon: Package,
-    module: 'production',
-    feature: 'quantityBatch'
   },
   {
     label: 'Production Shift',
@@ -506,6 +485,13 @@ export default function Sidebar({ isOpen, onClose }) {
       
       // Always show items without module restriction
       if (!item.module) return true;
+      
+      // Special handling for Unit Head role with unitManager module features
+      if (user?.role === 'Unit Head' && item.module === 'unitManager' && item.feature) {
+        // For Unit Head, check feature access directly without module access check
+        const hasFeature = hasFeatureAccess(item.module, item.feature, 'view');
+        return hasFeature;
+      }
       
       // Check if user has access to the module
       const hasAccess = hasModuleAccess(item.module);

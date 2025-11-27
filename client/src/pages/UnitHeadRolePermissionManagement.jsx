@@ -69,7 +69,8 @@ const UNIT_HEAD_MODULES = [
     label: 'Unit Manager',
     features: [
       { key: 'salesApproval', label: 'Sales Approval' },
-      { key: 'salesOrderList', label: 'Sales Order List' }
+      { key: 'salesOrderList', label: 'Sales Order List' },
+      { key: 'productionGroup', label: 'Production Group' }
     ]
   },
   {
@@ -88,13 +89,8 @@ const UNIT_HEAD_MODULES = [
     label: 'Production',
     features: [
       { key: 'productionDashboard', label: 'Production Dashboard' },
-      { key: 'batchPlanning', label: 'Batch Planning' },
-      { key: 'productionExecution', label: 'Production Execution' },
-      { key: 'productionRegister', label: 'Batch Production Register' },
-      { key: 'verificationApproval', label: 'Verification & Approval' },
       { key: 'productionReports', label: 'Production Reports' },
       { key: 'productionGroup', label: 'Production Group' },
-      { key: 'quantityBatch', label: 'Quantity Batch' },
       { key: 'productionShift', label: 'Production Shift' }
     ]
   },
@@ -126,6 +122,24 @@ const UNIT_HEAD_MODULES = [
       { key: 'packingList', label: 'Packing List' },
       { key: 'qualityCheck', label: 'Quality Check' },
       { key: 'packingReports', label: 'Packing Reports' }
+    ]
+  },
+  {
+    name: 'unitHead',
+    label: 'Unit Head',
+    features: [
+      { key: 'dashboard', label: 'Dashboard' },
+      { key: 'orders', label: 'Orders' },
+      { key: 'sales', label: 'Sales' },
+      { key: 'dispatches', label: 'Dispatches' },
+      { key: 'accounts', label: 'Accounts' },
+      { key: 'inventory', label: 'Inventory' },
+      { key: 'customers', label: 'Customers' },
+      { key: 'suppliers', label: 'Suppliers' },
+      { key: 'purchases', label: 'Purchases' },
+      { key: 'manufacturing', label: 'Manufacturing' },
+      { key: 'userManagement', label: 'User Management' },
+      { key: 'productionGroup', label: 'Production Group' }
     ]
   }
 ];
@@ -970,7 +984,7 @@ const UnitHeadRolePermissionManagement = () => {
                         if (formData.role === 'Accounts') return module.name === 'accounts';
                         if (formData.role === 'Dispatch') return module.name === 'dispatch';
                         if (formData.role === 'Packing') return module.name === 'packing';
-                        return true; // Show all by default
+                        return false; // Don't show any modules by default for unknown roles
                       })
                       .flatMap(module => 
                       module.features.map(feature => (

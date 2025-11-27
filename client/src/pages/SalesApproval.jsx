@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { CheckCircle, XCircle, ArrowRight, Package, User, Settings, Clock, TrendingUp, AlertTriangle, BarChart, Calendar, Filter } from 'lucide-react';
+import { CheckCircle, XCircle, ArrowRight, Package, User, Settings, Clock, TrendingUp, AlertTriangle, BarChart, Calendar, Filter, Search, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const SalesApproval = () => {
@@ -24,6 +24,12 @@ const SalesApproval = () => {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [filteredOrders, setFilteredOrders] = useState([]);
+  
+  // Search and Filter states
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filteredProducts, setFilteredProducts] = useState([]);
   
   // Production calculation states
   const [productionData, setProductionData] = useState({});
@@ -77,6 +83,15 @@ const SalesApproval = () => {
 
       const data = getProductionData(productName);
       const today = new Date().toISOString().split('T')[0];
+      
+      // Calculate dependent fields
+      const qtyPerBatch = data.qtyPerBatch || 1;
+      const productionFinalBatches = data.productionFinalBatches || 0;
+      const toBeProducedDay = data.toBeProducedDay || 0;
+      
+      // Auto-calculate dependent values
+      const batchAdjusted = Math.round((productionFinalBatches / qtyPerBatch) * 100) / 100;
+      const produceBatches = Math.round((toBeProducedDay / qtyPerBatch) * 100) / 100;
 
       const response = await fetch('/api/sales/update-product-summary', {
         method: 'POST',
@@ -88,17 +103,31 @@ const SalesApproval = () => {
           date: today,
           productId: product.productId || product._id,
           updates: {
-            packing: data.packing,
-            physicalStock: data.physicalStock,
-            batchAdjusted: data.batchAdjusted,
-            qtyPerBatch: data.qtyPerBatch
+            packing: data.packing || 0,
+            productionFinalBatches: productionFinalBatches,
+            physicalStock: data.physicalStock || 0,
+            batchAdjusted: batchAdjusted,
+            qtyPerBatch: data.qtyPerBatch || 0,
+            toBeProducedDay: toBeProducedDay,
+            produceBatches: produceBatches
           }
         })
       });
 
       if (response.ok) {
         const result = await response.json();
-        console.log('Production data saved:', result);
+        console.log('Production data saved with calculations:', result);
+        
+        // Update local state with calculated values
+        setProductionData(prev => ({
+          ...prev,
+          [productName]: {
+            ...prev[productName],
+            batchAdjusted: batchAdjusted,
+            produceBatches: produceBatches
+          }
+        }));
+        
         toast({
           title: 'Success',
           description: `Production data saved for ${productName}`
@@ -140,12 +169,18 @@ const SalesApproval = () => {
   // Calculate Produce / Batches = Production_with_final_batches - Packing
   const getProduceBatches = (productName) => {
     const data = getProductionData(productName);
-    // Use backend-calculated value if available, otherwise calculate
-    if (data.produceBatches !== undefined) {
-      return data.produceBatches;
-    }
-    const productionWithFinalBatches = getProductionWithFinalBatches(productName);
-    return Math.round((productionWithFinalBatches - data.packing) * 100) / 100;
+    // Calculate: produceBatches = toBeProducedDay / qtyPerBatch
+    const qtyPerBatch = data.qtyPerBatch || 1;
+    const toBeProducedDay = data.toBeProducedDay || 0;
+    return Math.round((toBeProducedDay / qtyPerBatch) * 100) / 100;
+  };
+
+  // Calculate Batch Adjusted = productionFinalBatches / qtyPerBatch
+  const getBatchAdjusted = (productName) => {
+    const data = getProductionData(productName);
+    const qtyPerBatch = data.qtyPerBatch || 1;
+    const productionFinalBatches = data.productionFinalBatches || getProductionWithFinalBatches(productName);
+    return Math.round((productionFinalBatches / qtyPerBatch) * 100) / 100;
   };
 
   // Calculate To be produced/Batches = To_be_produced_day / Qty_per_Batch
@@ -157,6 +192,83 @@ const SalesApproval = () => {
     }
     if (data.qtyPerBatch === 0) return 0;
     return Math.round((data.toBeProducedDay / data.qtyPerBatch) * 100) / 100; // Round to 2 decimals
+  };
+
+  // Filter and search functions
+  const applyFilters = () => {
+    let filtered = [...products];
+    
+    // Apply search filter
+    if (searchTerm.trim()) {
+      filtered = filtered.filter(product => 
+        product.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+    
+    setFilteredProducts(filtered);
+  };
+  
+  // Clear all filters
+  const clearFilters = () => {
+    setSearchTerm('');
+    setSelectedDate(new Date().toISOString().split('T')[0]);
+    setFilteredProducts(products);
+  };
+  
+  // Apply filters when search term or products change
+  useEffect(() => {
+    applyFilters();
+  }, [searchTerm, products]);
+  
+  // Load data for selected date
+  const loadDataForDate = async (date) => {
+    setLoading(true);
+    try {
+      // Update the date in fetchData logic
+      const productSummaryResponse = await fetch(`/api/sales/product-summary?date=${date}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (productSummaryResponse.ok) {
+        const productSummaryData = await productSummaryResponse.json();
+        // Update production data with new date's data
+        if (productSummaryData.success && productSummaryData.products) {
+          const newProductionData = {};
+          productSummaryData.products.forEach(product => {
+            newProductionData[product.productName] = {
+              packing: product.summary.packing || 0,
+              physicalStock: product.summary.physicalStock || 0,
+              batchAdjusted: product.summary.batchAdjusted || 0,
+              qtyPerBatch: product.qtyPerBatch || 0,
+              toBeProducedDay: product.summary.toBeProducedDay || 0,
+              productionFinalBatches: product.summary.productionFinalBatches || 0,
+              totalIndent: product.summary.totalIndent || 0,
+              toBeProducedBatches: product.summary.toBeProducedBatches || 0,
+              expiryShortage: product.summary.expiryShortage || 0,
+              produceBatches: product.summary.produceBatches || 0
+            };
+          });
+          setProductionData(newProductionData);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading data for date:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load data for selected date',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Handle date change
+  const handleDateChange = (newDate) => {
+    setSelectedDate(newDate);
+    loadDataForDate(newDate);
   };
 
   // Filter orders by date range
@@ -177,8 +289,8 @@ const SalesApproval = () => {
   // Load production summary data
   const loadProductionSummary = async () => {
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const response = await fetch(`/api/sales/product-summary?date=${today}`, {
+      const dateToUse = selectedDate || new Date().toISOString().split('T')[0];
+      const response = await fetch(`/api/sales/product-summary?date=${dateToUse}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -199,7 +311,6 @@ const SalesApproval = () => {
               productionFinalBatches: product.summary.productionFinalBatches || 0,
               // Add calculated fields for display
               totalIndent: product.summary.totalIndent || 0,
-              productionFinalBatches: product.summary.productionFinalBatches || 0,
               toBeProducedBatches: product.summary.toBeProducedBatches || 0,
               expiryShortage: product.summary.expiryShortage || 0,
               produceBatches: product.summary.produceBatches || 0
@@ -279,10 +390,9 @@ const SalesApproval = () => {
     try {
       setLoading(true);
       
-      // Use product summary API instead of unit-manager orders
-      // Get current date for product summary
-      const today = new Date().toISOString().split('T')[0];
-      const productSummaryResponse = await fetch(`/api/sales/product-summary?date=${today}`, {
+      // Use selectedDate instead of hardcoded today
+      const dateToUse = selectedDate || new Date().toISOString().split('T')[0];
+      const productSummaryResponse = await fetch(`/api/sales/product-summary?date=${dateToUse}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -473,7 +583,7 @@ const SalesApproval = () => {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [selectedDate]); // Add selectedDate as dependency
 
   const handleBulkStatusUpdate = async () => {
     if (!selectedProductOrders.length || !selectedStatus) return;
@@ -555,8 +665,58 @@ const SalesApproval = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-lg text-gray-600">Loading sales approval grid...</div>
+      <div className="p-2 lg:p-6 bg-gray-50 min-h-screen">
+        {/* Header Skeleton */}
+        <div className="mb-3 lg:mb-6">
+          <div className="h-8 bg-gray-200 rounded-lg w-80 mb-2 animate-pulse"></div>
+          <div className="h-4 bg-gray-200 rounded w-60 animate-pulse"></div>
+        </div>
+
+        {/* Summary Cards Skeleton */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-4 mb-4 lg:mb-6">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="bg-white p-3 lg:p-4 rounded-lg border">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="h-8 bg-gray-200 rounded w-12 mb-2 animate-pulse"></div>
+                  <div className="h-4 bg-gray-200 rounded w-20 animate-pulse"></div>
+                </div>
+                <div className="w-10 h-10 bg-gray-200 rounded-full animate-pulse"></div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Table Skeleton */}
+        <div className="bg-white rounded-lg border">
+          <div className="h-16 bg-gray-100 border-b p-6">
+            <div className="h-6 bg-gray-200 rounded w-48 animate-pulse"></div>
+          </div>
+          <div className="p-0">
+            <div className="overflow-x-auto">
+              <div className="w-full min-w-[1200px]">
+                {/* Header Row Skeleton */}
+                <div className="border-b bg-gray-50 p-2">
+                  <div className="grid grid-cols-10 gap-4">
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => (
+                      <div key={i} className="h-12 bg-gray-200 rounded animate-pulse"></div>
+                    ))}
+                  </div>
+                </div>
+                {/* Data Rows Skeleton */}
+                {[1, 2, 3, 4].map((row) => (
+                  <div key={row} className="border-b p-2">
+                    <div className="grid grid-cols-10 gap-4">
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((col) => (
+                        <div key={col} className="h-10 bg-gray-100 rounded animate-pulse"></div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -569,13 +729,15 @@ const SalesApproval = () => {
         <p className="text-sm lg:text-base text-gray-600">Manage product orders by sales person</p>
       </div>
 
+
+
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-4 mb-4 lg:mb-6">
         <Card>
           <CardContent className="p-3 lg:p-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-lg lg:text-2xl font-bold text-yellow-600">
+                <div className="text-xl font-bold text-yellow-600">
                   {getStatusCounts().pending}
                 </div>
                 <div className="text-xs lg:text-sm text-gray-600">Pending Approval</div>
@@ -591,7 +753,7 @@ const SalesApproval = () => {
           <CardContent className="p-3 lg:p-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-lg lg:text-2xl font-bold text-green-600">
+                <div className="text-xl font-bold text-green-600">
                   {getStatusCounts().approved}
                 </div>
                 <div className="text-xs lg:text-sm text-gray-600">Approved</div>
@@ -607,7 +769,7 @@ const SalesApproval = () => {
           <CardContent className="p-3 lg:p-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-lg lg:text-2xl font-bold text-blue-600">
+                <div className="text-xl font-bold text-blue-600">
                   {getStatusCounts().in_production}
                 </div>
                 <div className="text-xs lg:text-sm text-gray-600">In Production</div>
@@ -623,7 +785,7 @@ const SalesApproval = () => {
           <CardContent className="p-3 lg:p-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-lg lg:text-2xl font-bold text-red-600">
+                <div className="text-xl font-bold text-red-600">
                   {getStatusCounts().rejected}
                 </div>
                 <div className="text-xs lg:text-sm text-gray-600">Rejected</div>
@@ -638,9 +800,89 @@ const SalesApproval = () => {
 
       {/* Grid Container */}
       <Card className="shadow-sm border-0">
-        <CardHeader className="border-b bg-gray-50/50 px-6 py-4">
+        <CardHeader className="border-b bg-gray-50/50 px-3 lg:px-6 py-4">
           <CardTitle className="text-lg font-semibold text-gray-900">
-            Product Sales Management
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+              {/* Left Side - Title */}
+              <div>
+                Product Sales Management
+              </div>
+              
+              {/* Right Side - Filter Controls */}
+              <div className="flex flex-col lg:flex-row items-start lg:items-center gap-3 lg:gap-4">
+                {/* Mobile Filter Toggle */}
+                <div className="lg:hidden w-full">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setShowFilters(!showFilters)}
+                    className="w-full flex items-center justify-center gap-2"
+                    size="sm"
+                  >
+                    <Filter className="h-4 w-4" />
+                    {showFilters ? 'Hide Filters' : 'Show Filters'}
+                  </Button>
+                </div>
+                
+                {/* Filter Controls */}
+                <div className={`flex flex-col lg:flex-row items-start lg:items-center gap-3 lg:gap-4 w-full lg:w-auto ${showFilters || 'hidden lg:flex'}`}>
+                  {/* Date Picker */}
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-gray-600" />
+                    <span className="text-sm font-medium text-gray-600">Date:</span>
+                    <Input
+                      type="date"
+                      value={selectedDate}
+                      onChange={(e) => handleDateChange(e.target.value)}
+                      className="w-full lg:w-auto text-sm"
+                      size="sm"
+                    />
+                  </div>
+                  
+                  {/* Search */}
+                  <div className="flex items-center gap-2">
+                    <Search className="h-4 w-4 text-gray-600" />
+                    <span className="text-sm font-medium text-gray-600">Search:</span>
+                    <div className="relative">
+                      <Input
+                        type="text"
+                        placeholder="Search products..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full lg:w-48 pr-8 text-sm"
+                        size="sm"
+                      />
+                      {searchTerm && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSearchTerm('')}
+                          className="absolute right-1 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Clear Button and Results */}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={clearFilters}
+                      className="flex items-center gap-1"
+                    >
+                      <X className="h-3 w-3" />
+                      Clear
+                    </Button>
+                    
+                    <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                      {filteredProducts.length} of {products.length}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -731,7 +973,7 @@ const SalesApproval = () => {
               </thead>
 
               <tbody>
-                {products.map((product) => {
+                {filteredProducts.map((product) => {
                   // Get product data from our new API structure
                   const productData = orders.find(p => p.productName === product);
                   const totalQuantity = productData ? productData.totalQuantity : 0;
@@ -759,7 +1001,7 @@ const SalesApproval = () => {
                       {/* 2. Packing Column */}
                       <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
                         <div className="text-center">
-                          <div className="text-base lg:text-lg font-bold text-blue-600">
+                          <div className="text-sm font-bold text-blue-600">
                             {getProductionData(product).packing || 0}
                           </div>
                         </div>
@@ -770,13 +1012,13 @@ const SalesApproval = () => {
                         <div className="text-center">
                           <Input
                             type="number"
-                            value={getProductionData(product).productionFinalBatches || getProductionWithFinalBatches(product)}
+                            value={getProductionData(product).productionFinalBatches || ''}
                             onChange={(e) => updateProductionField(product, 'productionFinalBatches', e.target.value)}
                             onBlur={() => saveProductionData(product)}
-                            className="w-16 h-8 text-center text-sm font-bold text-green-600 border-none bg-transparent focus:ring-1 focus:ring-green-300"
+                            className="w-24 h-8 text-center text-sm font-bold text-green-600 border-none bg-transparent focus:ring-1 focus:ring-green-300"
                             min="0"
                             step="0.01"
-                            placeholder="Auto"
+                            placeholder="0"
                           />
                         </div>
                       </td>
@@ -784,49 +1026,63 @@ const SalesApproval = () => {
                       {/* 4. Produce / Batches Column */}
                       <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
                         <div className="text-center">
-                          <div className="text-base lg:text-lg font-bold text-green-600">
+                          <div className="text-sm font-bold text-green-600">
                             {getProduceBatches(product)}
                           </div>
                         </div>
                       </td>
 
-                      {/* 5. Physical Stock Column */}
+                      {/* 5. Physical Stock Column - EDITABLE */}
                       <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
                         <div className="text-center">
-                          <div className="text-base lg:text-lg font-bold text-purple-600">
-                            {getProductionData(product).physicalStock || 0}
+                          <Input
+                            type="number"
+                            value={getProductionData(product).physicalStock || ''}
+                            onChange={(e) => updateProductionField(product, 'physicalStock', e.target.value)}
+                            onBlur={() => saveProductionData(product)}
+                            className="w-24 h-8 text-center text-lg font-bold text-purple-600 border-none bg-transparent focus:ring-1 focus:ring-purple-300"
+                            min="0"
+                            step="0.01"
+                            placeholder="0"
+                          />
+                        </div>
+                      </td>
+
+                      {/* 6. Batch Adjusted Column - AUTO CALCULATED */}
+                      <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
+                        <div className="text-center">
+                          <div className="text-sm font-bold text-cyan-600">
+                            {getBatchAdjusted(product)}
                           </div>
                         </div>
                       </td>
 
-                      {/* 6. Batch Adjusted Column */}
+                      {/* 7. To be Produced/Day Column - EDITABLE */}
                       <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
                         <div className="text-center">
-                          <div className="text-base lg:text-lg font-bold text-cyan-600">
-                            {getProductionData(product).batchAdjusted || 0}
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* 7. To be Produced/Day Column */}
-                      <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
-                        <div className="text-center">
-                          <div className="text-base lg:text-lg font-bold text-amber-600">
-                            {getProductionData(product).toBeProducedDay || 0}
-                          </div>
+                          <Input
+                            type="number"
+                            value={getProductionData(product).toBeProducedDay || ''}
+                            onChange={(e) => updateProductionField(product, 'toBeProducedDay', e.target.value)}
+                            onBlur={() => saveProductionData(product)}
+                            className="w-24 h-8 text-center text-sm font-bold text-amber-600 border-none bg-transparent focus:ring-1 focus:ring-amber-300"
+                            min="0"
+                            step="0.01"
+                            placeholder="0"
+                          />
                         </div>
                       </td>
 
                       {/* 8. CutesBoy.ai Column */}
                       <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
                         {cutesBoyData.length === 0 ? (
-                          <span className="text-gray-400 text-sm lg:text-base">0</span>
+                          <span className="text-gray-400 text-sm">0</span>
                         ) : (
                           <div className="text-center">
-                            <div className="text-base lg:text-lg font-bold text-orange-600">
+                            <div className="text-sm font-bold text-orange-600">
                               {cutesBoyData.reduce((sum, order) => sum + (order.quantity || 0), 0)}
                             </div>
-                            <div className="text-xs text-gray-500">
+                            <div className="text-sm text-gray-500">
                               {cutesBoyData.length} order{cutesBoyData.length !== 1 ? 's' : ''}
                             </div>
                           </div>
@@ -836,7 +1092,7 @@ const SalesApproval = () => {
                       {/* 9. Total Indent Salesman Column */}
                       <td className="p-1 lg:p-2 border-r align-middle bg-gradient-to-r from-green-50 to-green-100 text-center">
                         <div className="text-center">
-                          <div className="text-base lg:text-lg font-bold text-blue-600">
+                          <div className="text-sm font-bold text-blue-600">
                             {totalQuantity}
                           </div>
                           <div className="text-xs text-gray-500">
@@ -848,7 +1104,7 @@ const SalesApproval = () => {
                       {/* 10. Qty/Batch Column - LAST COLUMN */}
                       <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
                         <div className="text-center">
-                          <div className="text-base lg:text-lg font-bold text-orange-600">
+                          <div className="text-sm font-bold text-orange-600">
                             {getProductionData(product).qtyPerBatch || 0}
                           </div>
                         </div>
@@ -860,11 +1116,25 @@ const SalesApproval = () => {
             </table>
 
             {/* Empty State */}
-            {products.length === 0 || salesPersons.length === 0 ? (
+            {filteredProducts.length === 0 ? (
               <div className="text-center py-12">
-                <div className="text-gray-500 text-lg mb-2">No data available</div>
+                <div className="text-gray-500 text-lg mb-2">
+                  {searchTerm ? 'No products found matching your search' : 'No data available'}
+                </div>
                 <div className="text-gray-400 text-sm">
-                  {products.length === 0 ? 'No products found' : 'No sales persons found'}
+                  {searchTerm ? (
+                    <>
+                      Try adjusting your search term: "{searchTerm}" or{' '}
+                      <button 
+                        onClick={clearFilters} 
+                        className="text-blue-500 hover:text-blue-700 underline"
+                      >
+                        clear filters
+                      </button>
+                    </>
+                  ) : (
+                    products.length === 0 ? 'No products found' : 'No sales persons found'
+                  )}
                 </div>
               </div>
             ) : null}

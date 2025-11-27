@@ -48,11 +48,14 @@ import SuperAdminSettings from "@/pages/super-admin/SuperAdminSettings";
 import SuperAdminCompanies from "@/pages/super-admin/SuperAdminCompanies";
 import ProductionDashboard from "@/pages/ProductionDashboard";
 import ProductionModule from "@/components/production/ProductionModule";
+import ProductionShift from "@/pages/ProductionShift";
 import PackingDashboard from "@/pages/PackingDashboard";
 import DispatchDashboard from "@/pages/DispatchDashboard";
 import AccountsDashboard from "@/pages/AccountsDashboard";
 import SalesApproval from "@/pages/SalesApproval";
 import SalesOrderList from "@/pages/SalesOrderList";
+import UnitHeadProductionGroup from "@/components/unit-head/UnitHeadProductionGroup";
+import UnitManagerProductionGroup from "@/pages/unit-manager/UnitManagerProductionGroup";
 import UnitManagerLayout from "@/components/layout/UnitManagerLayout";
 import RoleBasedLayout from "@/components/layout/RoleBasedLayout";
 function ProtectedRoute({ children, requiredRole = null }) {
@@ -355,6 +358,11 @@ function Router() {
           <UnitHeadRolePermissionManagement />
         </ProtectedRoute>
       </Route>
+      <Route path="/unit-head/production-group">
+        <ProtectedRoute requiredRole="Unit Head">
+          <UnitHeadProductionGroup />
+        </ProtectedRoute>
+      </Route>
       
       {/* Unit Manager specific routes with dedicated layout */}
       <Route path="/unit-manager-dashboard">
@@ -363,7 +371,7 @@ function Router() {
         </UnitManagerProtectedRoute>
       </Route>
       
-      <Route path="/sales-approval">
+      <Route path="/indent-summary">
         <UnitManagerProtectedRoute requiredRole="Unit Manager">
           <SalesApproval />
         </UnitManagerProtectedRoute>
@@ -372,6 +380,11 @@ function Router() {
       <Route path="/sales-order-list">
         <UnitManagerProtectedRoute requiredRole="Unit Manager">
           <SalesOrderList />
+        </UnitManagerProtectedRoute>
+      </Route>
+      <Route path="/unit-manager/production-group">
+        <UnitManagerProtectedRoute requiredRole="Unit Manager">
+          <UnitManagerProductionGroup />
         </UnitManagerProtectedRoute>
       </Route>
       <Route path="/packing-dashboard">
@@ -387,6 +400,13 @@ function Router() {
       <Route path="/accounts-dashboard">
         <ProtectedRoute requiredRole="Accounts">
           <AccountsDashboard />
+        </ProtectedRoute>
+      </Route>
+      
+      {/* Production Routes */}
+      <Route path="/production/production-shift">
+        <ProtectedRoute>
+          <ProductionShift />
         </ProtectedRoute>
       </Route>
       

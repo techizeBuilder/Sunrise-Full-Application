@@ -28,7 +28,7 @@ const unitManagerMenuItems = [
   },
   {
     label: 'Sales Approval',
-    path: '/sales-approval',
+    path: '/indent-summary',
     icon: Shield,
     module: 'Sales Approval'
   },

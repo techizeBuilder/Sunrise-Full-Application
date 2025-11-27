@@ -44,17 +44,34 @@ export async function apiRequest(
   const baseURL = config.baseURL;
   const fullUrl = url.startsWith('http') ? url : `${baseURL}${url}`;
   
-  console.log(`API Request: ${method} ${fullUrl}`, data || '(no data)');
+  console.log(`API Request: ${method} ${fullUrl}`, data ? (data instanceof FormData ? 'FormData' : data) : '(no data)');
   console.log('Token available:', token ? 'Yes' : 'No');
+
+  // Prepare headers - different for FormData vs JSON
+  const headers: HeadersInit = {
+    "Accept": "application/json",
+    ...(token && { "Authorization": `Bearer ${token}` })
+  };
+
+  // Only add Content-Type for non-FormData requests
+  if (!(data instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
+  }
+
+  // Prepare body - different for FormData vs JSON
+  let body: string | FormData | undefined;
+  if (data) {
+    if (data instanceof FormData) {
+      body = data; // Send FormData directly
+    } else {
+      body = JSON.stringify(data); // Stringify other data
+    }
+  }
 
   const res = await fetch(fullUrl, {
     method,
-    headers: { 
-      "Content-Type": "application/json",
-      "Accept": "application/json",
-      ...(token && { "Authorization": `Bearer ${token}` })
-    },
-    body: data ? JSON.stringify(data) : undefined,
+    headers,
+    body,
     credentials: "include",
   });
 

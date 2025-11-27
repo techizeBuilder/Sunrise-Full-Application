@@ -64,47 +64,6 @@ export const getSalesSummary = async (req, res) => {
       .populate('companyId', 'name')
       .sort({ productName: 1 });
 
-    // If no summaries exist, get all products and create default summaries
-    if (summaries.length === 0 && filterCompanyId) {
-      console.log(`No summaries found for ${summaryDate.toISOString().split('T')[0]}, creating defaults...`);
-      
-      // Get all products (for company-specific or all)
-      const productFilter = {};
-      if (filterCompanyId) {
-        // For now, we'll create summaries for all products
-        // In a real scenario, you might want to filter products by company
-      }
-      
-      const products = await Item.find(productFilter).select('_id name');
-      
-      // Create default summaries
-      const defaultSummaries = [];
-      for (const product of products) {
-        const summary = new ProductDailySummary({
-          date: summaryDate,
-          companyId: filterCompanyId,
-          productId: product._id,
-          productName: product.name,
-          qtyPerBatch: 0,
-          packing: 0,
-          physicalStock: 0,
-          batchAdjusted: 0,
-          totalIndent: 0
-        });
-        summary.calculateFormulas();
-        await summary.save();
-        defaultSummaries.push(summary);
-      }
-      
-      // Re-query to get populated data
-      const newSummaries = await ProductDailySummary.find(filter)
-        .populate('productId', 'name')
-        .populate('companyId', 'name')
-        .sort({ productName: 1 });
-      
-      summaries.push(...newSummaries);
-    }
-
     // Format response data - filter out summaries with missing products
     console.log(`📊 Total summaries found: ${summaries.length}`);
     
@@ -201,7 +160,7 @@ export const updateSalesSummary = async (req, res) => {
     summaryDate.setUTCHours(0, 0, 0, 0);
 
     // Validate updates object
-    const allowedFields = ['packing', 'batchAdjusted', 'physicalStock', 'qtyPerBatch'];
+    const allowedFields = ['packing', 'productionFinalBatches', 'physicalStock', 'batchAdjusted', 'qtyPerBatch', 'toBeProducedDay', 'produceBatches'];
     const updateFields = {};
     
     for (const [field, value] of Object.entries(updates)) {
@@ -252,32 +211,37 @@ export const updateSalesSummary = async (req, res) => {
       });
     }
 
-    // Find or create summary document
-    let summary = await ProductDailySummary.findOneAndUpdate(
-      {
+    // Find existing summary document OR create if updating through API
+    let summary = await ProductDailySummary.findOne({
+      date: summaryDate,
+      companyId: summaryCompanyId,
+      productId: new mongoose.Types.ObjectId(productId)
+    });
+
+    if (!summary) {
+      // Create new summary when explicitly updating through API (legitimate business operation)
+      console.log(`Creating new product summary for ${product.name} on ${summaryDate.toISOString().split('T')[0]} via API update`);
+      
+      summary = new ProductDailySummary({
         date: summaryDate,
         companyId: summaryCompanyId,
-        productId: new mongoose.Types.ObjectId(productId)
-      },
-      {
-        $setOnInsert: {
-          productName: product.name,
-          totalIndent: 0,
-          // Only set default values for fields NOT being updated
-          ...(updateFields.qtyPerBatch === undefined && { qtyPerBatch: 0 }),
-          ...(updateFields.packing === undefined && { packing: 0 }),
-          ...(updateFields.physicalStock === undefined && { physicalStock: 0 }),
-          ...(updateFields.batchAdjusted === undefined && { batchAdjusted: 0 })
-        },
-        $set: updateFields
-      },
-      {
-        new: true,
-        upsert: true
-      }
-    );
+        productId: new mongoose.Types.ObjectId(productId),
+        productName: product.name,
+        totalIndent: 0,
+        // Set default values for fields NOT being updated
+        qtyPerBatch: updateFields.qtyPerBatch || 0,
+        packing: updateFields.packing || 0,
+        physicalStock: updateFields.physicalStock || 0,
+        batchAdjusted: updateFields.batchAdjusted || 0,
+        productionFinalBatches: updateFields.productionFinalBatches || 0,
+        toBeProducedDay: updateFields.toBeProducedDay || 0,
+        produceBatches: updateFields.produceBatches || 0
+      });
+    } else {
+      // Update existing summary
+      Object.assign(summary, updateFields);
+    }
 
-    // Recalculate formulas
     summary.calculateFormulas();
     await summary.save();
 

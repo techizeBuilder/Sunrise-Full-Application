@@ -79,22 +79,21 @@ productDailySummarySchema.index({ productId: 1, date: 1 });
 
 // Helper method to calculate formulas
 productDailySummarySchema.methods.calculateFormulas = function() {
-  // productionFinalBatches = batchAdjusted * qtyPerBatch
-  this.productionFinalBatches = Math.round((this.batchAdjusted * this.qtyPerBatch) * 100) / 100;
+  // batchAdjusted = productionFinalBatches / qtyPerBatch
+  if (this.qtyPerBatch > 0) {
+    this.batchAdjusted = Math.round((this.productionFinalBatches / this.qtyPerBatch) * 100) / 100;
+  }
   
-  // toBeProducedDay = totalIndent - physicalStock
-  this.toBeProducedDay = Math.round((this.totalIndent - this.physicalStock) * 100) / 100;
+  // produceBatches = toBeProducedDay / qtyPerBatch
+  if (this.qtyPerBatch > 0) {
+    this.produceBatches = Math.round((this.toBeProducedDay / this.qtyPerBatch) * 100) / 100;
+  }
   
-  // toBeProducedBatches = qtyPerBatch > 0 ? toBeProducedDay / qtyPerBatch : 0
-  this.toBeProducedBatches = this.qtyPerBatch > 0 
-    ? Math.round((this.toBeProducedDay / this.qtyPerBatch) * 100) / 100 
-    : 0;
+  // toBeProducedBatches = qtyPerBatch > 0 ? toBeProducedDay / qtyPerBatch : 0 (same as produceBatches)
+  this.toBeProducedBatches = this.produceBatches;
   
   // expiryShortage = productionFinalBatches - toBeProducedDay
   this.expiryShortage = Math.round((this.productionFinalBatches - this.toBeProducedDay) * 100) / 100;
-  
-  // produceBatches = productionFinalBatches - packing
-  this.produceBatches = Math.round((this.productionFinalBatches - this.packing) * 100) / 100;
   
   return this;
 };

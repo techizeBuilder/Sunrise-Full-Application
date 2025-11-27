@@ -165,27 +165,13 @@ const createSeedUsers = async () => {
               ]
             },
             {
-              name: 'manufacturing',
-              dashboard: true,
-              features: [
-                { key: 'allJobs', view: true, add: true, edit: true, delete: false, alter: true }
-              ]
-            },
-            {
               name: 'production',
               dashboard: true,
               features: [
-                { key: 'todaysIndents', view: true, add: false, edit: false, delete: false, alter: false },
-                { key: 'summaryPanel', view: true, add: false, edit: false, delete: false, alter: false },
-                { key: 'submitProductionData', view: true, add: true, edit: false, delete: false, alter: false },
-                { key: 'submissionHistory', view: true, add: false, edit: true, delete: false, alter: false }
-              ]
-            },
-            {
-              name: 'inventory',
-              dashboard: true,
-              features: [
-                { key: 'items', view: true, add: false, edit: true, delete: false, alter: false }
+                { key: 'productionDashboard', view: true, add: true, edit: true, delete: true, alter: true },
+                { key: 'productionReports', view: true, add: true, edit: true, delete: true, alter: true },
+                { key: 'productionGroup', view: true, add: true, edit: true, delete: true, alter: true },
+                { key: 'productionShift', view: true, add: true, edit: true, delete: true, alter: true }
               ]
             }
           ]

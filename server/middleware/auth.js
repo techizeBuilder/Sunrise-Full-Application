@@ -45,6 +45,13 @@ const authenticateToken = async (req, res, next) => {
         permissions: user.permissions || []
       };
       
+      console.log('🔑 Auth - User object created:', {
+        username: req.user.username,
+        role: req.user.role,
+        companyId: req.user.companyId,
+        permissions: req.user.permissions?.length || 0
+      });
+      
       next();
     } catch (jwtError) {
       return res.status(401).json({ message: 'Invalid or expired token.' });

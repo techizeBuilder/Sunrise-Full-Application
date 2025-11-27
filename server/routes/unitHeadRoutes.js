@@ -21,7 +21,14 @@ import {
   updateUnitHeadCustomer,
   deleteUnitHeadCustomer,
   getUnitHeadSalesPersonsList,
-  getUnitHeadDashboard
+  getUnitHeadDashboard,
+  // Production Groups functions
+  getUnitHeadProductionGroups,
+  getUnitHeadProductionGroupById,
+  createUnitHeadProductionGroup,
+  updateUnitHeadProductionGroup,
+  deleteUnitHeadProductionGroup,
+  getUnitHeadAvailableItems
 } from '../controllers/unitHeadController.js';
 
 // Import Unit User management functions (all unit roles)
@@ -369,6 +376,38 @@ router.get('/role-permission-management',
       }
     });
   }
+);
+
+// ============= PRODUCTION GROUPS ROUTES =============
+
+// Get all production groups with pagination and filtering
+router.get('/production-groups', 
+  getUnitHeadProductionGroups
+);
+
+// Get single production group with items
+router.get('/production-groups/:id', 
+  getUnitHeadProductionGroupById
+);
+
+// Create a new production group
+router.post('/production-groups', 
+  createUnitHeadProductionGroup
+);
+
+// Update a production group
+router.put('/production-groups/:id', 
+  updateUnitHeadProductionGroup
+);
+
+// Delete (soft delete) a production group
+router.delete('/production-groups/:id', 
+  deleteUnitHeadProductionGroup
+);
+
+// Get available inventory items for assignment
+router.get('/production-groups/items/available', 
+  getUnitHeadAvailableItems
 );
 
 export default router;

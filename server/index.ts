@@ -49,17 +49,31 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Serve static files from uploads directory
+// Serve static files from uploads directory (for company logos and other uploads)
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
-
-
-// Serve static files for profile pictures
-app.use('/uploads', express.static('uploads'));
 
 (async () => {
   try {
     // Connect to MongoDB
     await connectDB();
+
+    // Import all models to ensure they're registered with mongoose
+    console.log('🔄 Registering models...');
+    const User = (await import('./models/User.js')).default;
+    const { Item } = await import('./models/Inventory.js');
+    const ProductionGroup = (await import('./models/ProductionGroup.js')).default;
+    const Order = (await import('./models/Order.js')).default;
+    const Customer = (await import('./models/Customer.js')).default;
+    const Sale = (await import('./models/Sale.js')).default;
+    
+    console.log('✅ Models registered:', {
+      User: !!User,
+      Item: !!Item,
+      ProductionGroup: !!ProductionGroup,
+      Order: !!Order,
+      Customer: !!Customer,
+      Sale: !!Sale
+    });
 
     // Create seed users after database connection
     // await createSeedUsers();
@@ -80,10 +94,6 @@ app.use('/uploads', express.static('uploads'));
       credentials: true
     }));
     app.use(express.json());
-
-
-    // Static file serving for uploaded images
-    app.use('/uploads', express.static('uploads'));
 
     // Serve test file for debugging
     app.get('/test-profile', (req, res) => {

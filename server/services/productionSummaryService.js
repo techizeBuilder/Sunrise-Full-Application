@@ -52,34 +52,23 @@ export const updateProductSummary = async (productId, date, companyId) => {
 
     const totalIndent = aggregationResult.length > 0 ? aggregationResult[0].totalIndent : 0;
 
-    // Find or create summary document
-    let summary = await ProductDailySummary.findOneAndUpdate(
-      {
-        date: summaryDate,
-        companyId: new mongoose.Types.ObjectId(companyId),
-        productId: new mongoose.Types.ObjectId(productId)
-      },
-      {
-        $setOnInsert: {
-          productName: product.name,
-          qtyPerBatch: 0,
-          packing: 0,
-          physicalStock: 0,
-          batchAdjusted: 0
-        },
-        totalIndent: totalIndent
-      },
-      {
-        new: true,
-        upsert: true
-      }
-    );
+    // Find existing summary document (NO AUTO-CREATION)
+    let summary = await ProductDailySummary.findOne({
+      date: summaryDate,
+      companyId: new mongoose.Types.ObjectId(companyId),
+      productId: new mongoose.Types.ObjectId(productId)
+    });
 
-    // Recalculate formulas
-    summary.calculateFormulas();
-    await summary.save();
-
-    console.log(`Updated product summary for ${product.name} on ${summaryDate.toISOString().split('T')[0]}: totalIndent = ${totalIndent}`);
+    if (summary) {
+      // Update existing summary
+      summary.totalIndent = totalIndent;
+      summary.calculateFormulas();
+      await summary.save();
+      console.log(`Updated product summary for ${product.name} on ${summaryDate.toISOString().split('T')[0]}: totalIndent = ${totalIndent}`);
+    } else {
+      console.log(`No existing summary found for ${product.name} on ${summaryDate.toISOString().split('T')[0]}, skipping auto-creation`);
+      return null;
+    }
     
     return summary;
   } catch (error) {

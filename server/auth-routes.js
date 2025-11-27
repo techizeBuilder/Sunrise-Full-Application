@@ -15,8 +15,6 @@ import {
   getSettings,
   updateCompanySettings,
   updateSystemSettings,
-  updateEmailSettings,
-  updateModuleSettings,
   updateNotificationSettings,
   uploadCompanyLogo,
   upload
@@ -356,12 +354,13 @@ router.delete('/users/:id', verifyToken, deleteUser);
 router.post('/users/:id/reset-password', verifyToken, resetUserPassword);
 router.put('/users/:id/password', verifyToken, updateUserPassword);
 
-// Settings Routes (Super User Only)
+// Settings Routes (Super Admin Only)
 router.get('/settings', verifyToken, getSettings);
+router.get('/settings/debug', (req, res) => {
+  res.json({ message: 'Debug endpoint working', timestamp: new Date().toISOString() });
+});
 router.put('/settings/company', verifyToken, updateCompanySettings);
 router.put('/settings/system', verifyToken, updateSystemSettings);
-router.put('/settings/email', verifyToken, updateEmailSettings);
-router.put('/settings/modules', verifyToken, updateModuleSettings);
 router.put('/settings/notifications', verifyToken, updateNotificationSettings);
 router.post('/settings/company/logo', verifyToken, upload.single('logo'), uploadCompanyLogo);
 

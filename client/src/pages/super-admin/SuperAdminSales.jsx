@@ -31,7 +31,7 @@ import {
   TrendingUp,
   Search,
   Filter,
-  DollarSign,
+  IndianRupee,
   Receipt,
   User,
   Eye,
@@ -237,7 +237,7 @@ export default function SuperAdminSales() {
           <CardContent className="p-6">
             <div className="flex items-center space-x-4">
               <div className="p-3 bg-purple-100 rounded-lg">
-                <DollarSign className="h-6 w-6 text-purple-600" />
+                <IndianRupee className="h-6 w-6 text-purple-600" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{formatCurrency(summary.totalAmount)}</p>

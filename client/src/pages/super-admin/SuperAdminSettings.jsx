@@ -53,6 +53,10 @@ import { showSmartToast } from '@/lib/toast-utils';
 export default function SuperAdminSettings() {
   const [activeTab, setActiveTab] = useState('company');
   const [isLogoUploadOpen, setIsLogoUploadOpen] = useState(false);
+  const [formData, setFormData] = useState({}); // Store form changes
+  const [hasChanges, setHasChanges] = useState(false); // Track if there are unsaved changes
+  const [selectedLogo, setSelectedLogo] = useState(null); // Store selected logo file
+  const [logoPreview, setLogoPreview] = useState(null); // Store logo preview URL
   const queryClient = useQueryClient();
 
   // Fetch current settings
@@ -66,8 +70,16 @@ export default function SuperAdminSettings() {
 
   // Update settings mutation
   const updateSettingsMutation = useMutation({
-    mutationFn: ({ section, data }) => 
-      apiRequest('PUT', `/api/settings/${section}`, data),
+    mutationFn: ({ section, data }) => {
+      if (section === 'notifications') {
+        return apiRequest('PUT', '/api/settings/notifications', data);
+      } else if (section === 'company') {
+        return apiRequest('PUT', '/api/settings/company', data);
+      } else if (section === 'system') {
+        return apiRequest('PUT', '/api/settings/system', data);
+      }
+      return apiRequest('PUT', `/api/settings/${section}`, data);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries(['settings']);
       showSmartToast('success', 'Settings updated successfully');
@@ -79,31 +91,97 @@ export default function SuperAdminSettings() {
 
   // Company logo upload mutation
   const logoUploadMutation = useMutation({
-    mutationFn: (formData) => 
-      apiRequest('POST', '/api/settings/company/logo', formData, {
-        'Content-Type': 'multipart/form-data'
-      }),
-    onSuccess: () => {
+    mutationFn: async (file) => {
+      const formData = new FormData();
+      formData.append('logo', file);
+      
+      console.log('Uploading file:', file.name, file.size, file.type);
+      console.log('FormData created with file:', formData.get('logo'));
+      
+      // Use apiRequest without custom headers to let browser handle FormData headers
+      return apiRequest('POST', '/api/settings/company/logo', formData);
+    },
+    onSuccess: (response) => {
       queryClient.invalidateQueries(['settings']);
-      setIsLogoUploadOpen(false);
+      handleLogoDialogClose();
       showSmartToast('success', 'Company logo updated successfully');
+      console.log('Logo upload success:', response);
     },
     onError: (error) => {
+      console.error('Logo upload error:', error);
       showSmartToast('error', `Failed to upload logo: ${error.message}`);
     }
   });
 
   const handleUpdateSettings = (section, data) => {
     updateSettingsMutation.mutate({ section, data });
+    setFormData({});
+    setHasChanges(false);
+  };
+
+  const handleFieldChange = (section, field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [section]: {
+        ...prev[section],
+        [field]: value
+      }
+    }));
+    setHasChanges(true);
+  };
+
+  const handleUpdateButtonClick = () => {
+    if (activeTab === 'notifications') {
+      handleUpdateSettings('notifications', { roleNotifications: formData.notifications });
+    } else {
+      const sectionData = {
+        ...settings[activeTab],
+        ...formData[activeTab]
+      };
+      handleUpdateSettings(activeTab, sectionData);
+    }
   };
 
   const handleLogoUpload = (event) => {
     const file = event.target.files[0];
     if (file) {
-      const formData = new FormData();
-      formData.append('logo', file);
-      logoUploadMutation.mutate(formData);
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
+        showSmartToast('error', 'Invalid file type. Please select a JPEG, PNG, GIF, or WebP image.');
+        return;
+      }
+      
+      // Validate file size (5MB limit)
+      if (file.size > 5 * 1024 * 1024) {
+        showSmartToast('error', 'File size too large. Please select an image smaller than 5MB.');
+        return;
+      }
+      
+      setSelectedLogo(file);
+      
+      // Create preview URL
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setLogoPreview(e.target.result);
+      };
+      reader.readAsDataURL(file);
     }
+  };
+  
+  const handleLogoSubmit = () => {
+    if (selectedLogo) {
+      console.log('Submitting logo file:', selectedLogo);
+      logoUploadMutation.mutate(selectedLogo); // Pass the file directly
+    } else {
+      showSmartToast('error', 'Please select a file first');
+    }
+  };
+  
+  const handleLogoDialogClose = () => {
+    setIsLogoUploadOpen(false);
+    setSelectedLogo(null);
+    setLogoPreview(null);
   };
 
   if (isLoading) {
@@ -118,10 +196,7 @@ export default function SuperAdminSettings() {
   const tabs = [
     { id: 'company', label: 'Company', icon: Building2 },
     { id: 'system', label: 'System', icon: Database },
-    { id: 'email', label: 'Email', icon: Mail },
-    { id: 'modules', label: 'Modules', icon: Settings },
-    { id: 'notifications', label: 'Notifications', icon: Bell },
-    { id: 'security', label: 'Security', icon: Shield }
+    { id: 'notifications', label: 'Notifications', icon: Bell }
   ];
 
   return (
@@ -185,30 +260,17 @@ export default function SuperAdminSettings() {
                   <div className="space-y-2">
                     <Label>Company Name</Label>
                     <Input 
-                      value={settings.company?.name || ''} 
+                      value={formData.company?.name ?? settings.company?.name ?? ''} 
                       placeholder="Enter company name"
-                      onChange={(e) => {
-                        const updatedSettings = {
-                          ...settings.company,
-                          name: e.target.value
-                        };
-                        handleUpdateSettings('company', updatedSettings);
-                      }}
+                      onChange={(e) => handleFieldChange('company', 'name', e.target.value)}
                     />
                   </div>
                   <div className="space-y-2">
                     <Label>Email</Label>
                     <Input 
-                      type="email"
-                      value={settings.company?.email || ''} 
-                      placeholder="company@example.com"
-                      onChange={(e) => {
-                        const updatedSettings = {
-                          ...settings.company,
-                          email: e.target.value
-                        };
-                        handleUpdateSettings('company', updatedSettings);
-                      }}
+                      value={formData.company?.email ?? settings.company?.contact?.email ?? ''} 
+                      placeholder="Enter company email"
+                      onChange={(e) => handleFieldChange('company', 'email', e.target.value)}
                     />
                   </div>
                 </div>
@@ -216,15 +278,10 @@ export default function SuperAdminSettings() {
                 <div className="space-y-2">
                   <Label>Address</Label>
                   <Textarea 
-                    value={settings.company?.address || ''} 
+                    value={formData.company?.address ?? settings.company?.address?.street ?? ''} 
                     placeholder="Enter company address"
-                    onChange={(e) => {
-                      const updatedSettings = {
-                        ...settings.company,
-                        address: e.target.value
-                      };
-                      handleUpdateSettings('company', updatedSettings);
-                    }}
+                    onChange={(e) => handleFieldChange('company', 'address', e.target.value)}
+                    rows={3}
                   />
                 </div>
 
@@ -232,48 +289,61 @@ export default function SuperAdminSettings() {
                   <div className="space-y-2">
                     <Label>Phone</Label>
                     <Input 
-                      value={settings.company?.phone || ''} 
+                      value={formData.company?.phone ?? settings.company?.contact?.phone ?? ''} 
                       placeholder="Enter phone number"
-                      onChange={(e) => {
-                        const updatedSettings = {
-                          ...settings.company,
-                          phone: e.target.value
-                        };
-                        handleUpdateSettings('company', updatedSettings);
-                      }}
+                      onChange={(e) => handleFieldChange('company', 'phone', e.target.value)}
                     />
                   </div>
                   <div className="space-y-2">
                     <Label>Website</Label>
                     <Input 
-                      value={settings.company?.website || ''} 
+                      value={formData.company?.website ?? settings.company?.contact?.website ?? ''} 
                       placeholder="https://www.example.com"
-                      onChange={(e) => {
-                        const updatedSettings = {
-                          ...settings.company,
-                          website: e.target.value
-                        };
-                        handleUpdateSettings('company', updatedSettings);
-                      }}
+                      onChange={(e) => handleFieldChange('company', 'website', e.target.value)}
                     />
                   </div>
                 </div>
-
                 <div className="space-y-2">
                   <Label>Company Logo</Label>
-                  <div className="flex items-center space-x-4">
-                    {settings.company?.logo && (
-                      <img 
-                        src={settings.company.logo} 
-                        alt="Company Logo" 
-                        className="h-16 w-16 object-contain border rounded"
-                      />
+                  <div className="space-y-4">
+                    {/* Current Logo Display */}
+                    {settings.company?.logo ? (
+                      <div className="flex items-center space-x-4">
+                        <div className="text-sm text-muted-foreground">Current Logo:</div>
+                        <img 
+                          src={settings.company.logo.startsWith('/') ? `http://localhost:5000${settings.company.logo}` : settings.company.logo}
+                          alt="Company Logo" 
+                          className="h-20 w-20 object-contain border rounded-lg shadow-sm"
+                        />
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground">No logo uploaded yet</div>
                     )}
-                    <Button onClick={() => setIsLogoUploadOpen(true)}>
+                    
+                    {/* Upload Button */}
+                    <Button onClick={() => setIsLogoUploadOpen(true)} variant="outline">
                       <Upload className="h-4 w-4 mr-2" />
-                      Upload Logo
+                      {settings.company?.logo ? 'Change Logo' : 'Upload Logo'}
                     </Button>
                   </div>
+                </div>
+
+                {/* Update Button */}
+                <div className="flex justify-end pt-4">
+                  <Button 
+                    onClick={() => {
+                      const sectionData = {
+                        ...settings.company,
+                        ...formData.company
+                      };
+                      handleUpdateSettings('company', sectionData);
+                    }}
+                    disabled={updateSettingsMutation.isLoading}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    {updateSettingsMutation.isLoading ? 'Updating...' : 'Update Company'}
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -294,8 +364,22 @@ export default function SuperAdminSettings() {
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
+                    <Label>Currency</Label>
+                    <Select value={formData.system?.currency ?? settings.system?.currency ?? 'INR'} onValueChange={(value) => handleFieldChange('system', 'currency', value)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="INR">Indian Rupee (INR)</SelectItem>
+                        <SelectItem value="USD">US Dollar (USD)</SelectItem>
+                        <SelectItem value="EUR">Euro (EUR)</SelectItem>
+                        <SelectItem value="GBP">British Pound (GBP)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
                     <Label>Timezone</Label>
-                    <Select value={settings.system?.timezone || 'UTC'}>
+                    <Select value={formData.system?.timezone ?? settings.system?.timezone ?? 'Asia/Kolkata'} onValueChange={(value) => handleFieldChange('system', 'timezone', value)}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -309,7 +393,7 @@ export default function SuperAdminSettings() {
                   </div>
                   <div className="space-y-2">
                     <Label>Date Format</Label>
-                    <Select value={settings.system?.dateFormat || 'DD/MM/YYYY'}>
+                    <Select value={formData.system?.dateFormat ?? settings.system?.dateFormat ?? 'DD/MM/YYYY'} onValueChange={(value) => handleFieldChange('system', 'dateFormat', value)}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -324,79 +408,101 @@ export default function SuperAdminSettings() {
 
                 <div className="flex items-center space-x-2">
                   <Switch 
-                    checked={settings.system?.maintenanceMode || false}
-                    onCheckedChange={(checked) => {
-                      const updatedSettings = {
-                        ...settings.system,
-                        maintenanceMode: checked
-                      };
-                      handleUpdateSettings('system', updatedSettings);
-                    }}
+                    checked={formData.system?.maintenanceMode ?? settings.system?.maintenanceMode ?? false}
+                    onCheckedChange={(checked) => handleFieldChange('system', 'maintenanceMode', checked)}
                   />
                   <Label>Maintenance Mode</Label>
-                  <Badge variant={settings.system?.maintenanceMode ? 'destructive' : 'secondary'}>
-                    {settings.system?.maintenanceMode ? 'Enabled' : 'Disabled'}
+                  <Badge variant={(formData.system?.maintenanceMode ?? settings.system?.maintenanceMode) ? 'destructive' : 'secondary'}>
+                    {(formData.system?.maintenanceMode ?? settings.system?.maintenanceMode) ? 'Enabled' : 'Disabled'}
                   </Badge>
+                </div>
+
+                {/* Update Button */}
+                <div className="flex justify-end pt-4">
+                  <Button 
+                    onClick={() => {
+                      const sectionData = {
+                        ...settings.system,
+                        ...formData.system
+                      };
+                      handleUpdateSettings('system', sectionData);
+                    }}
+                    disabled={updateSettingsMutation.isLoading}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    {updateSettingsMutation.isLoading ? 'Updating...' : 'Update System'}
+                  </Button>
                 </div>
               </CardContent>
             </Card>
           )}
 
-          {/* Module Settings */}
-          {activeTab === 'modules' && (
+          {/* Notification Settings */}
+          {activeTab === 'notifications' && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center">
-                  <Settings className="h-5 w-5 mr-2" />
-                  Module Management
+                  <Bell className="h-5 w-5 mr-2" />
+                  Role-Based Notification Settings
                 </CardTitle>
                 <CardDescription>
-                  Enable or disable system modules
+                  Enable or disable notifications for each user role. When disabled, users of that role won't receive any notifications.
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
                   {[
-                    'Dashboard',
-                    'Orders',
-                    'Purchases',
-                    'Manufacturing',
-                    'Production',
-                    'Dispatches',
-                    'Sales',
-                    'Accounts',
-                    'Inventory',
-                    'Customers',
-                    'Suppliers',
-                    'Companies',
-                    'Settings'
-                  ].map((module) => (
-                    <div key={module} className="flex items-center justify-between p-4 border rounded">
-                      <div>
-                        <h4 className="font-medium">{module}</h4>
-                        <p className="text-sm text-muted-foreground">
-                          {module} module functionality
-                        </p>
+                    { role: 'Sales Person', key: 'salesPerson', description: 'Sales representatives and field agents' },
+                    { role: 'Unit Head', key: 'unitHead', description: 'Unit managers and supervisors' },
+                    { role: 'Unit Manager', key: 'unitManager', description: 'Department and unit managers' },
+                    { role: 'Production', key: 'production', description: 'Production staff and managers' },
+                    { role: 'Accounts', key: 'accounts', description: 'Accounting and finance team' },
+                    { role: 'Super Admin', key: 'superAdmin', description: 'System administrators' }
+                  ].map((roleInfo) => (
+                    <div key={roleInfo.key} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="flex-1">
+                        <h3 className="text-lg font-semibold">{roleInfo.role}</h3>
+                        <p className="text-sm text-muted-foreground">{roleInfo.description}</p>
                       </div>
-                      <Switch 
-                        checked={settings.modules?.[module.toLowerCase()] !== false}
-                        onCheckedChange={(checked) => {
-                          const updatedModules = {
-                            ...settings.modules,
-                            [module.toLowerCase()]: checked
-                          };
-                          handleUpdateSettings('modules', updatedModules);
-                        }}
-                      />
+                      <div className="flex items-center space-x-3">
+                        <Badge variant={
+                          (formData.notifications?.[roleInfo.key]?.enabled ?? settings.notifications?.roleSettings?.[roleInfo.key]?.enabled) !== false 
+                            ? 'default' 
+                            : 'secondary'
+                        }>
+                          {(formData.notifications?.[roleInfo.key]?.enabled ?? settings.notifications?.roleSettings?.[roleInfo.key]?.enabled) !== false ? 'Active' : 'Disabled'}
+                        </Badge>
+                        <Switch 
+                          checked={(formData.notifications?.[roleInfo.key]?.enabled ?? settings.notifications?.roleSettings?.[roleInfo.key]?.enabled) !== false}
+                          onCheckedChange={(checked) => {
+                            handleFieldChange('notifications', roleInfo.key, { enabled: checked });
+                          }}
+                        />
+                      </div>
                     </div>
                   ))}
+                </div>
+
+                {/* Update Button */}
+                <div className="flex justify-end pt-4">
+                  <Button 
+                    onClick={() => {
+                      handleUpdateSettings('notifications', { roleNotifications: formData.notifications });
+                    }}
+                    disabled={updateSettingsMutation.isLoading}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    {updateSettingsMutation.isLoading ? 'Updating...' : 'Update Notifications'}
+                  </Button>
                 </div>
               </CardContent>
             </Card>
           )}
 
-          {/* Other tabs can be implemented similarly */}
-          {activeTab !== 'company' && activeTab !== 'system' && activeTab !== 'modules' && (
+          {/* Other settings tabs */}
+          {!['company', 'system', 'notifications'].includes(activeTab) && (
             <Card>
               <CardHeader>
                 <CardTitle>Coming Soon</CardTitle>
@@ -408,7 +514,7 @@ export default function SuperAdminSettings() {
                 <div className="text-center py-12">
                   <Settings className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                   <p className="text-muted-foreground">
-                    {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} settings will be available soon.
+                    Security settings will be available soon.
                   </p>
                 </div>
               </CardContent>
@@ -418,26 +524,65 @@ export default function SuperAdminSettings() {
       </div>
 
       {/* Logo Upload Dialog */}
-      <Dialog open={isLogoUploadOpen} onOpenChange={setIsLogoUploadOpen}>
-        <DialogContent>
+      <Dialog open={isLogoUploadOpen} onOpenChange={handleLogoDialogClose}>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Upload Company Logo</DialogTitle>
             <DialogDescription>
               Select an image file to use as your company logo
             </DialogDescription>
           </DialogHeader>
+          
           <div className="space-y-4">
+            {/* Format and Size Info */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <div className="text-sm font-medium text-blue-900 mb-1">Supported formats:</div>
+              <div className="text-xs text-blue-700">JPEG, PNG, GIF, WebP</div>
+              <div className="text-xs text-blue-700 mt-1">Maximum size: 5MB</div>
+              <div className="text-xs text-blue-700">Recommended: 200x200px or larger</div>
+            </div>
+            
+            {/* File Input */}
             <Input
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
               onChange={handleLogoUpload}
               disabled={logoUploadMutation.isLoading}
             />
+            
+            {/* Preview */}
+            {logoPreview && (
+              <div className="space-y-2">
+                <Label>Preview:</Label>
+                <div className="flex justify-center p-4 border rounded-lg bg-gray-50">
+                  <img 
+                    src={logoPreview} 
+                    alt="Logo Preview" 
+                    className="h-24 w-24 object-contain"
+                  />
+                </div>
+                {selectedLogo && (
+                  <div className="text-xs text-muted-foreground text-center">
+                    {selectedLogo.name} ({(selectedLogo.size / 1024).toFixed(1)} KB)
+                  </div>
+                )}
+              </div>
+            )}
           </div>
+          
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsLogoUploadOpen(false)}>
+            <Button variant="outline" onClick={handleLogoDialogClose}>
               Cancel
             </Button>
+            {selectedLogo && (
+              <Button 
+                onClick={handleLogoSubmit}
+                disabled={logoUploadMutation.isLoading}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {logoUploadMutation.isLoading ? 'Uploading...' : 'Upload Logo'}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

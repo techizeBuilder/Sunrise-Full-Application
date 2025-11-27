@@ -215,6 +215,15 @@ export const getUserPermissions = (user) => {
           ]
         },
         {
+          name: 'unitManager',
+          dashboard: true,
+          features: [
+            { key: 'salesApproval', view: true, add: false, edit: true, delete: false, alter: true },
+            { key: 'salesOrderList', view: true, add: false, edit: true, delete: false, alter: true },
+            { key: 'productionGroup', view: true, add: true, edit: true, delete: true, alter: false }
+          ]
+        },
+        {
           name: 'sales_approval',
           dashboard: true,
           features: [

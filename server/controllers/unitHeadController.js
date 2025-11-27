@@ -3,8 +3,16 @@ import Customer from '../models/Customer.js';
 import Sale from '../models/Sale.js';
 import { Item } from '../models/Inventory.js';
 import User from '../models/User.js';
+import ProductionGroup from '../models/ProductionGroup.js';
 import { USER_ROLES } from '../../shared/schema.js';
 import { updateProductSummary } from '../services/productionSummaryService.js';
+
+// Debug: Ensure models are loaded
+console.log('📦 Models loaded:', {
+  Item: !!Item,
+  ProductionGroup: !!ProductionGroup,
+  User: !!User
+});
 
 // Unit Head Orders Management
 export const getUnitHeadOrders = async (req, res) => {
@@ -1760,5 +1768,593 @@ export const deleteUnitHeadSalesPerson = async (req, res) => {
       message: 'Error deleting sales person',
       error: error.message
     });
+  }
+};
+
+// ============= PRODUCTION GROUPS MANAGEMENT =============
+
+// Get all production groups with pagination and filtering
+export const getUnitHeadProductionGroups = async (req, res) => {
+  try {
+    console.log('🔍 Production Groups - User Check:', {
+      role: req.user.role,
+      username: req.user.username,
+      companyId: req.user.companyId
+    });
+    
+    // Check if user is Unit Head or Unit Manager
+    if (!['Unit Head', 'Unit Manager'].includes(req.user.role)) {
+      return res.status(403).json({ success: false, message: `Access denied. Unit Head or Unit Manager role required. Current role: ${req.user.role}` });
+    }
+
+    const { page = 1, limit = 10, search = '', sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
+    const skip = (page - 1) * limit;
+
+    // Build filter query
+    const filter = {
+      company: req.user.companyId,
+      isActive: true
+    };
+
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Get total count for pagination
+    const totalGroups = await ProductionGroup.countDocuments(filter);
+
+    // Get groups with populated data
+    const groups = await ProductionGroup.find(filter)
+      .populate('createdBy', 'username email')
+      .populate('company', 'name')
+      .sort({ [sortBy]: parseInt(sortOrder) === 1 ? 1 : -1 })
+      .skip(skip)
+      .limit(parseInt(limit))
+      .lean();
+
+    // Calculate pagination metadata
+    const totalPages = Math.ceil(totalGroups / limit);
+    const hasNextPage = page < totalPages;
+    const hasPrevPage = page > 1;
+
+    res.json({
+      success: true,
+      data: {
+        groups,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages,
+          totalGroups,
+          limit: parseInt(limit),
+          hasNextPage,
+          hasPrevPage
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching production groups:', error);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+// Get single production group with items
+export const getUnitHeadProductionGroupById = async (req, res) => {
+  try {
+    console.log('🔍 Get Production Group By ID:', {
+      id: req.params.id,
+      user: {
+        userId: req.user?.userId,
+        companyId: req.user?.companyId,
+        role: req.user?.role
+      }
+    });
+
+    // Check if user is Unit Head or Unit Manager
+    if (!['Unit Head', 'Unit Manager'].includes(req.user.role)) {
+      return res.status(403).json({ success: false, message: 'Access denied. Unit Head or Unit Manager role required.' });
+    }
+
+    console.log('🔎 Searching for production group:', { id: req.params.id, companyId: req.user.companyId });
+
+    // First get the production group
+    const group = await ProductionGroup.findOne({
+      _id: req.params.id,
+      company: req.user.companyId,
+      isActive: true
+    })
+      .populate('createdBy', 'username email')
+      .populate('company', 'name')
+      .lean();
+
+    if (!group) {
+      console.log('❌ Production group not found');
+      return res.status(404).json({ success: false, message: 'Production group not found' });
+    }
+
+    console.log('📋 Raw group data:', {
+      id: group._id,
+      name: group.name,
+      itemIds: group.items,
+      itemCount: group.items?.length || 0
+    });
+
+    // Manually populate items to ensure proper loading
+    let populatedItems = [];
+    if (group.items && group.items.length > 0) {
+      console.log('🔍 Manually populating items:', group.items);
+      
+      populatedItems = await Item.find({
+        _id: { $in: group.items },
+        store: req.user.companyId
+      })
+        .select('name code category subCategory qty unit price image description')
+        .lean();
+      
+      console.log('📦 Found items for group:', populatedItems.length);
+      
+      // Format items with image URLs
+      populatedItems = populatedItems.map(item => ({
+        _id: item._id,
+        name: item.name || 'Unnamed Item',
+        code: item.code || 'No Code', 
+        category: item.category || 'No Category',
+        subCategory: item.subCategory || '',
+        qty: item.qty || 0,
+        unit: item.unit || '',
+        price: item.price || 0,
+        description: item.description || '',
+        image: item.image ? (item.image.startsWith('/uploads/data:') ? item.image.replace('/uploads/', '') : item.image) : null
+      }));
+    }
+
+    // Create response with populated items
+    const response = {
+      ...group,
+      items: populatedItems
+    };
+
+    console.log('📤 Returning group with items:', {
+      groupId: response._id,
+      itemCount: response.items.length,
+      sampleItem: response.items[0] || 'None'
+    });
+
+    res.json({
+      success: true,
+      data: response
+    });
+  } catch (error) {
+    console.error('Error fetching production group:', error);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+// Create a new production group
+export const createUnitHeadProductionGroup = async (req, res) => {
+  try {
+    console.log('🚀 Create Production Group Request:', {
+      body: req.body,
+      user: {
+        userId: req.user?.userId,
+        companyId: req.user?.companyId,
+        role: req.user?.role,
+        username: req.user?.username
+      }
+    });
+
+    // Check if user is Unit Head or Unit Manager
+    if (!['Unit Head', 'Unit Manager'].includes(req.user.role)) {
+      return res.status(403).json({ success: false, message: 'Access denied. Unit Head or Unit Manager role required.' });
+    }
+
+    // Validate user object has required fields
+    if (!req.user.userId) {
+      console.error('❌ User object missing userId:', req.user);
+      return res.status(400).json({ success: false, message: 'Invalid user session. Missing userId.' });
+    }
+
+    if (!req.user.companyId) {
+      console.error('❌ User object missing companyId:', req.user);
+      return res.status(400).json({ success: false, message: 'Invalid user session. Missing companyId.' });
+    }
+
+    const { name, description, items = [] } = req.body;
+
+    // Validation
+    if (!name || name.trim().length === 0) {
+      return res.status(400).json({ success: false, message: 'Group name is required' });
+    }
+
+    if (name.trim().length > 100) {
+      return res.status(400).json({ success: false, message: 'Group name cannot exceed 100 characters' });
+    }
+
+    // Check if group name already exists for this company
+    const existingGroup = await ProductionGroup.findOne({
+      name: { $regex: new RegExp(`^${name.trim()}$`, 'i') },
+      company: req.user.companyId,
+      isActive: true
+    });
+
+    if (existingGroup) {
+      return res.status(400).json({ success: false, message: 'Production group with this name already exists' });
+    }
+
+    // Validate items if provided
+    let validatedItems = [];
+    if (items.length > 0) {
+      // Check if items exist and belong to the same company
+      const inventoryItems = await Item.find({
+        _id: { $in: items },
+        store: req.user.companyId
+      }).select('_id');
+
+      validatedItems = inventoryItems.map(item => item._id);
+
+      // Check if any items are already assigned to other groups
+      const existingAssignments = await ProductionGroup.find({
+        company: req.user.companyId,
+        isActive: true,
+        items: { $in: validatedItems }
+      }).select('name items');
+
+      if (existingAssignments.length > 0) {
+        const conflictItems = existingAssignments.flatMap(group => 
+          group.items.filter(item => validatedItems.some(vItem => vItem.toString() === item.toString()))
+        );
+        return res.status(400).json({ 
+          success: false,
+          message: 'Some items are already assigned to other production groups',
+          conflictItems: conflictItems
+        });
+      }
+    }
+
+    // Create new production group
+    console.log('📝 Creating production group with data:', {
+      name: name.trim(),
+      company: req.user.companyId,
+      createdBy: req.user.userId,
+      itemsCount: validatedItems.length
+    });
+
+    const productionGroup = new ProductionGroup({
+      name: name.trim(),
+      description: description?.trim() || '',
+      company: req.user.companyId,
+      createdBy: req.user.userId,
+      items: validatedItems
+    });
+
+    console.log('💾 Saving production group...');
+    await productionGroup.save();
+    console.log('✅ Production group saved successfully:', productionGroup._id);
+
+    // Populate and return the created group
+    console.log('🔄 Populating production group data...');
+    try {
+      await productionGroup.populate('createdBy', 'username email');
+      await productionGroup.populate('company', 'name');
+      await productionGroup.populate({
+        path: 'items',
+        select: 'name code category subCategory qty unit price image description'
+      });
+      console.log('✅ Population completed successfully');
+    } catch (populateError) {
+      console.warn('⚠️ Population error (non-critical):', populateError.message);
+      // Continue without population if there's an issue
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Production group created successfully',
+      data: productionGroup
+    });
+  } catch (error) {
+    console.error('Error creating production group:', error);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+// Update a production group
+export const updateUnitHeadProductionGroup = async (req, res) => {
+  try {
+    console.log('🔄 UPDATE PRODUCTION GROUP:', {
+      id: req.params.id,
+      body: req.body,
+      user: {
+        userId: req.user.userId,
+        companyId: req.user.companyId,
+        role: req.user.role
+      }
+    });
+
+    // Check if user is Unit Head or Unit Manager
+    if (!['Unit Head', 'Unit Manager'].includes(req.user.role)) {
+      return res.status(403).json({ success: false, message: 'Access denied. Unit Head or Unit Manager role required.' });
+    }
+
+    const { name, description, items = [] } = req.body;
+    console.log('📝 Update data:', { name, description, itemsCount: items.length, items });
+
+    // Validation
+    if (!name || name.trim().length === 0) {
+      return res.status(400).json({ success: false, message: 'Group name is required' });
+    }
+
+    if (name.trim().length > 100) {
+      return res.status(400).json({ success: false, message: 'Group name cannot exceed 100 characters' });
+    }
+
+    // Find the group to update
+    const existingGroup = await ProductionGroup.findOne({
+      _id: req.params.id,
+      company: req.user.companyId,
+      isActive: true
+    });
+
+    console.log('🔍 Found existing group:', {
+      found: !!existingGroup,
+      currentItems: existingGroup?.items?.length || 0
+    });
+
+    if (!existingGroup) {
+      return res.status(404).json({ success: false, message: 'Production group not found' });
+    }
+
+    // Check if name is unique (excluding current group)
+    if (name.trim() !== existingGroup.name) {
+      const duplicateGroup = await ProductionGroup.findOne({
+        name: { $regex: new RegExp(`^${name.trim()}$`, 'i') },
+        company: req.user.companyId,
+        isActive: true,
+        _id: { $ne: req.params.id }
+      });
+
+      if (duplicateGroup) {
+        return res.status(400).json({ success: false, message: 'Production group with this name already exists' });
+      }
+    }
+
+    // Validate items if provided
+    let validatedItems = [];
+    if (items.length > 0) {
+      console.log('🔍 Validating items:', items);
+      
+      // Check if items exist and belong to the same company - USE 'store' FIELD
+      const inventoryItems = await Item.find({
+        _id: { $in: items },
+        store: req.user.companyId  // FIXED: Use 'store' field not 'company'
+      }).select('_id name code');
+
+      console.log('📦 Found inventory items:', {
+        requested: items.length,
+        found: inventoryItems.length,
+        items: inventoryItems.map(item => ({ id: item._id, name: item.name }))
+      });
+
+      validatedItems = inventoryItems.map(item => item._id);
+
+      if (validatedItems.length !== items.length) {
+        console.log('❌ Item validation failed:', {
+          requested: items.length,
+          validated: validatedItems.length
+        });
+        return res.status(400).json({
+          success: false,
+          message: 'Some selected items are invalid or do not belong to your company'
+        });
+      }
+
+      // Check if any NEW items are already assigned to other groups
+      const newItems = validatedItems.filter(item => 
+        !existingGroup.items.some(existingItem => existingItem.toString() === item.toString())
+      );
+
+      if (newItems.length > 0) {
+        const existingAssignments = await ProductionGroup.find({
+          company: req.user.companyId,
+          isActive: true,
+          _id: { $ne: req.params.id },
+          items: { $in: newItems }
+        }).select('name items');
+
+        if (existingAssignments.length > 0) {
+          const conflictItems = existingAssignments.flatMap(group => 
+            group.items.filter(item => newItems.some(newItem => newItem.toString() === item.toString()))
+          );
+          return res.status(400).json({ 
+            success: false,
+            message: 'Some items are already assigned to other production groups',
+            conflictItems: conflictItems
+          });
+        }
+      }
+    }
+
+    // Update the group
+    console.log('💾 Updating group with:', {
+      name: name.trim(),
+      description: description?.trim() || '',
+      itemCount: validatedItems.length,
+      items: validatedItems
+    });
+
+    existingGroup.name = name.trim();
+    existingGroup.description = description?.trim() || '';
+    existingGroup.items = validatedItems;
+    existingGroup.metadata = {
+      totalItems: validatedItems.length,
+      lastUpdated: new Date()
+    };
+
+    console.log('💾 Saving group to database...');
+    const savedGroup = await existingGroup.save();
+    console.log('✅ Group saved successfully:', {
+      id: savedGroup._id,
+      itemCount: savedGroup.items.length
+    });
+
+    // Populate and return the updated group
+    console.log('🔄 Populating group data...');
+    await existingGroup.populate('createdBy', 'username email');
+    await existingGroup.populate('company', 'name');
+    await existingGroup.populate({
+      path: 'items',
+      model: 'Item',
+      select: 'name code category subCategory qty unit price image description'
+    });
+
+    console.log('📤 Returning updated group:', {
+      id: existingGroup._id,
+      name: existingGroup.name,
+      itemCount: existingGroup.items.length,
+      populatedItems: existingGroup.items.map(item => ({ id: item._id, name: item.name }))
+    });
+
+    res.json({
+      success: true,
+      message: 'Production group updated successfully',
+      data: existingGroup
+    });
+  } catch (error) {
+    console.error('Error updating production group:', error);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+// Delete (soft delete) a production group
+export const deleteUnitHeadProductionGroup = async (req, res) => {
+  try {
+    // Check if user is Unit Head or Unit Manager
+    if (!['Unit Head', 'Unit Manager'].includes(req.user.role)) {
+      return res.status(403).json({ success: false, message: 'Access denied. Unit Head or Unit Manager role required.' });
+    }
+
+    const group = await ProductionGroup.findOne({
+      _id: req.params.id,
+      company: req.user.companyId,
+      isActive: true
+    });
+
+    if (!group) {
+      return res.status(404).json({ success: false, message: 'Production group not found' });
+    }
+
+    // Soft delete
+    group.isActive = false;
+    await group.save();
+
+    res.json({
+      success: true,
+      message: 'Production group deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting production group:', error);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+// Get available inventory items for assignment
+export const getUnitHeadAvailableItems = async (req, res) => {
+  try {
+    console.log('🔍 Available Items Request:', {
+      role: req.user.role,
+      username: req.user.username,
+      companyId: req.user.companyId,
+      query: req.query
+    });
+    
+    // Check if user is Unit Head or Unit Manager
+    if (!['Unit Head', 'Unit Manager'].includes(req.user.role)) {
+      return res.status(403).json({ success: false, message: `Access denied. Unit Head or Unit Manager role required. Current role: ${req.user.role}` });
+    }
+
+    const { search = '', excludeGroupId = '' } = req.query;
+    console.log('📝 Search params:', { search, excludeGroupId });
+
+    // Get total items in company
+    const totalCompanyItems = await Item.countDocuments({ store: req.user.companyId });
+    console.log('🔢 Total items in company:', totalCompanyItems);
+
+    // Get items already assigned to ALL production groups (including current one)
+    const assignedGroupsFilter = {
+      company: req.user.companyId,
+      isActive: true
+    };
+    
+    console.log('🔄 Getting all assigned items (including current group)');
+
+    const assignedGroups = await ProductionGroup.find(assignedGroupsFilter).select('items');
+    const assignedItemIds = assignedGroups.flatMap(group => 
+      group.items.map(item => item.toString())
+    );
+    console.log('🚫 Total assigned items count:', assignedItemIds.length);
+
+    // Build filter for available items
+    const filter = {
+      store: req.user.companyId,
+      _id: { $nin: assignedItemIds }
+    };
+
+    // Add search filter
+    if (search && search.trim()) {
+      filter.$or = [
+        { name: { $regex: search.trim(), $options: 'i' } },
+        { code: { $regex: search.trim(), $options: 'i' } },
+        { category: { $regex: search.trim(), $options: 'i' } }
+      ];
+    }
+
+    console.log('🔍 Filter object:', JSON.stringify(filter, null, 2));
+
+    // Get ALL available items (no pagination)
+    const items = await Item.find(filter)
+      .select('name code category subCategory qty unit price image description store')
+      .sort({ name: 1 })
+      .lean();
+
+    console.log('📦 Retrieved items:', items.length);
+
+    // Format items with proper image URLs
+    const formattedItems = items.map(item => {
+      const imageUrl = item.image ? (item.image.startsWith('/uploads/data:') ? item.image.replace('/uploads/', '') : item.image) : null;
+      console.log('🖼️ Image processing:', { original: item.image, processed: imageUrl });
+      
+      return {
+        _id: item._id,
+        name: item.name || 'Unnamed Item',
+        code: item.code || 'No Code',
+        category: item.category || 'No Category',
+        subCategory: item.subCategory || '',
+        qty: item.qty || 0,
+        unit: item.unit || '',
+        price: item.price || 0,
+        description: item.description || '',
+        image: imageUrl
+      };
+    });
+
+    console.log('📤 Returning formatted items:', {
+      total: formattedItems.length,
+      withImages: formattedItems.filter(item => item.image).length,
+      sampleItem: formattedItems[0] || 'None'
+    });
+
+    res.json({
+      success: true,
+      data: {
+        items: formattedItems,
+        totalItems: formattedItems.length,
+        assignedItemsCount: assignedItemIds.length,
+        companyItemsCount: totalCompanyItems
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching available items:', error);
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
   }
 };

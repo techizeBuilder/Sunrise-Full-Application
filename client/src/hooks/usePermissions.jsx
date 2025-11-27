@@ -12,12 +12,17 @@ export const usePermissions = () => {
     
     // Special handling for Unit Head role
     if (user.role === 'Unit Head') {
-      // Unit Head has permissions stored in unitHead module with features representing different modules
-      const unitHeadModule = user.permissions.modules?.find(module => module.name === 'unitHead');
+      // Unit Head permissions can be stored in either 'unitHead' or 'unitManager' module
+      const unitHeadModule = user.permissions.modules?.find(module => 
+        module.name === 'unitHead' || module.name === 'unitManager'
+      );
       if (unitHeadModule) {
+        console.log(`[DEBUG] Unit Head hasModuleAccess: Looking for module '${moduleName}' in:`, unitHeadModule);
         // Check if the requested module exists as a feature with at least view permission
         const moduleFeature = unitHeadModule.features?.find(feature => feature.key === moduleName);
-        return moduleFeature && moduleFeature.view;
+        const hasAccess = moduleFeature && moduleFeature.view;
+        console.log(`[DEBUG] Unit Head hasModuleAccess result for '${moduleName}':`, hasAccess, moduleFeature);
+        return hasAccess;
       }
     }
     
@@ -58,12 +63,29 @@ export const usePermissions = () => {
     
     // Special handling for Unit Head role
     if (user.role === 'Unit Head') {
-      const unitHeadModule = user.permissions.modules?.find(module => module.name === 'unitHead');
+      // Unit Head permissions can be stored in either 'unitHead' or 'unitManager' module
+      const unitHeadModule = user.permissions.modules?.find(module => 
+        module.name === 'unitHead' || module.name === 'unitManager'
+      );
       if (unitHeadModule) {
-        // For Unit Head, the module names are stored as feature keys
-        const moduleFeature = unitHeadModule.features?.find(feature => feature.key === moduleName);
-        if (moduleFeature) {
-          return moduleFeature[action] || false;
+        console.log(`[DEBUG] Unit Head hasFeatureAccess: Looking for module '${moduleName}', feature '${featureKey}' in:`, unitHeadModule);
+        // If the module is 'unitHead' or we're looking for unitManager features, look for the specific feature within it
+        if (moduleName === 'unitHead' || moduleName === 'unitManager') {
+          const feature = unitHeadModule.features?.find(feature => feature.key === featureKey);
+          if (feature) {
+            const hasAccess = feature[action] || false;
+            console.log(`[DEBUG] Unit Head hasFeatureAccess result for '${moduleName}.${featureKey}.${action}':`, hasAccess, feature);
+            return hasAccess;
+          }
+        } else {
+          // For other modules, treat module names as feature keys (legacy behavior)
+          const moduleFeature = unitHeadModule.features?.find(feature => feature.key === moduleName);
+          if (moduleFeature) {
+            const hasAccess = moduleFeature[action] || false;
+            console.log(`[DEBUG] Unit Head hasFeatureAccess (legacy) result for '${moduleName}.${action}':`, hasAccess, moduleFeature);
+            return hasAccess;
+            return moduleFeature[action] || false;
+          }
         }
       }
     }
@@ -110,7 +132,9 @@ export const usePermissions = () => {
     
     // Special handling for Unit Head role
     if (user.role === 'Unit Head') {
-      const unitHeadModule = user.permissions.modules?.find(module => module.name === 'unitHead');
+      const unitHeadModule = user.permissions.modules?.find(module => 
+        module.name === 'unitHead' || module.name === 'unitManager'
+      );
       if (unitHeadModule) {
         // Return the feature keys (which represent module names) that have at least view permission
         return unitHeadModule.features
