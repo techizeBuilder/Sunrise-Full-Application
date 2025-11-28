@@ -97,7 +97,7 @@ const orderSchema = new mongoose.Schema({
     updatedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: true
+      required: false  // Made optional to handle legacy data
     },
     updatedAt: {
       type: Date,

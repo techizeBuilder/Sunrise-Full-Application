@@ -239,7 +239,7 @@ app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
       console.log('Admin routes registered at /api/admin');
 
       // Production routes
-      const productionRoutes = (await import('./controllers/production/productionRoutes.js')).default;
+      const productionRoutes = (await import('./routes/productionRoutes.js')).default;
       app.use('/api/production', productionRoutes);
       console.log('Production routes registered at /api/production');
 

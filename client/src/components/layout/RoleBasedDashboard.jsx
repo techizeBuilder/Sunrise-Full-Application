@@ -26,7 +26,7 @@ export default function RoleBasedDashboard() {
           setLocation('/unit-head-dashboard');
           return;
         case 'Unit Manager':
-          setLocation('/unit-manager-dashboard');
+          setLocation('/unit-manager/dashboard');
           return;
         case 'Sales':
           setLocation('/sales-dashboard');

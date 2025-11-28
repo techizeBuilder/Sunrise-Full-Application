@@ -141,6 +141,12 @@ export const updateSalesSummary = async (req, res) => {
     const userRole = req.user.role;
     const userCompanyId = req.user.companyId;
 
+    console.log('🔍 UPDATE SALES SUMMARY REQUEST:');
+    console.log('  📅 Requested Date:', date);
+    console.log('  🏢 User Company ID:', userCompanyId);
+    console.log('  📦 Product ID:', productId);
+    console.log('  📝 Updates:', updates);
+
     // Validation
     if (!date || !productId || !updates) {
       return res.status(400).json({
@@ -149,7 +155,7 @@ export const updateSalesSummary = async (req, res) => {
       });
     }
 
-    // Date validation
+    // Date validation - PRESERVE THE ORIGINAL DATE from request
     const summaryDate = new Date(date);
     if (isNaN(summaryDate.getTime())) {
       return res.status(400).json({
@@ -158,6 +164,9 @@ export const updateSalesSummary = async (req, res) => {
       });
     }
     summaryDate.setUTCHours(0, 0, 0, 0);
+    
+    console.log('  🎯 Parsed Summary Date (UTC):', summaryDate.toISOString());
+    console.log('  📅 Summary Date (Local):', summaryDate.toISOString().split('T')[0]);
 
     // Validate updates object
     const allowedFields = ['packing', 'productionFinalBatches', 'physicalStock', 'batchAdjusted', 'qtyPerBatch', 'toBeProducedDay', 'produceBatches'];
@@ -212,18 +221,29 @@ export const updateSalesSummary = async (req, res) => {
     }
 
     // Find existing summary document OR create if updating through API
+    console.log('🔍 Searching for existing summary with:');
+    console.log('  📅 Date:', summaryDate.toISOString());
+    console.log('  🏢 Company ID:', summaryCompanyId);
+    console.log('  📦 Product ID:', productId);
+    
     let summary = await ProductDailySummary.findOne({
       date: summaryDate,
       companyId: summaryCompanyId,
       productId: new mongoose.Types.ObjectId(productId)
     });
 
+    console.log('📋 Found existing summary:', summary ? 'YES' : 'NO');
+    if (summary) {
+      console.log('  📅 Existing summary date:', summary.date.toISOString());
+      console.log('  📅 Existing summary date (local):', summary.date.toISOString().split('T')[0]);
+    }
+
     if (!summary) {
       // Create new summary when explicitly updating through API (legitimate business operation)
-      console.log(`Creating new product summary for ${product.name} on ${summaryDate.toISOString().split('T')[0]} via API update`);
+      console.log(`✨ Creating new product summary for ${product.name} on ${summaryDate.toISOString().split('T')[0]} via API update`);
       
       summary = new ProductDailySummary({
-        date: summaryDate,
+        date: summaryDate, // IMPORTANT: Use the exact date from request, not current date
         companyId: summaryCompanyId,
         productId: new mongoose.Types.ObjectId(productId),
         productName: product.name,
@@ -237,13 +257,29 @@ export const updateSalesSummary = async (req, res) => {
         toBeProducedDay: updateFields.toBeProducedDay || 0,
         produceBatches: updateFields.produceBatches || 0
       });
+      
+      console.log('📅 New summary will have date:', summary.date.toISOString());
     } else {
-      // Update existing summary
+      // Update existing summary - PRESERVE the original date
+      console.log('🔄 Updating existing summary, preserving original date:', summary.date.toISOString());
       Object.assign(summary, updateFields);
+      // DO NOT modify the date - keep original date
+      console.log('📅 After update, summary date remains:', summary.date.toISOString());
     }
 
     summary.calculateFormulas();
+    
+    console.log('💾 About to save summary with date:', summary.date.toISOString());
+    console.log('📊 Summary fields before save:', {
+      date: summary.date.toISOString(),
+      productName: summary.productName,
+      ...updateFields
+    });
+    
     await summary.save();
+    
+    console.log('✅ Summary saved successfully with date:', summary.date.toISOString());
+    console.log('📅 Final saved date (local):', summary.date.toISOString().split('T')[0]);
 
     res.json({
       success: true,

@@ -163,7 +163,6 @@ const MODULES = [
     features: [
       { key: 'productionDashboard', label: 'Production Dashboard' },
       { key: 'productionReports', label: 'Production Reports' },
-      { key: 'productionGroup', label: 'Production Group' },
       { key: 'productionShift', label: 'Production Shift' }
     ]
   },

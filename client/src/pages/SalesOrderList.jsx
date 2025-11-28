@@ -48,7 +48,7 @@ import {
   CheckCircle,
   XCircle,
   Clock,
-  Truck,
+  List,
   Edit,
   Settings,
   FilterX,
@@ -68,28 +68,20 @@ const statusColors = {
   pending: 'bg-yellow-100 text-yellow-800',
   approved: 'bg-green-100 text-green-800',
   rejected: 'bg-red-100 text-red-800',
-  disapproved: 'bg-red-100 text-red-800',
-  in_production: 'bg-blue-100 text-blue-800',
-  completed: 'bg-purple-100 text-purple-800',
-  cancelled: 'bg-gray-100 text-gray-800'
+  disapproved: 'bg-red-100 text-red-800'
 };
 
 const statusIcons = {
   pending: Clock,
   approved: CheckCircle,
   rejected: XCircle,
-  disapproved: XCircle,
-  in_production: Package,
-  completed: Truck,
-  cancelled: XCircle
+  disapproved: XCircle
 };
 
 const statusOptions = [
   { value: 'pending', label: 'Pending', icon: Clock, color: 'bg-yellow-100 text-yellow-800' },
   { value: 'approved', label: 'Approved', icon: CheckCircle, color: 'bg-green-100 text-green-800' },
-  { value: 'rejected', label: 'Rejected', icon: XCircle, color: 'bg-red-100 text-red-800' },
-  { value: 'in_production', label: 'In Production', icon: Package, color: 'bg-blue-100 text-blue-800' },
-  { value: 'completed', label: 'Completed', icon: Truck, color: 'bg-purple-100 text-purple-800' }
+  { value: 'rejected', label: 'Rejected', icon: XCircle, color: 'bg-red-100 text-red-800' }
 ];
 
 export default function SalesOrderList() {
@@ -193,9 +185,11 @@ export default function SalesOrderList() {
   };
 
   const handleOpenStatusUpdate = (orderId, currentStatus) => {
+    // Ensure the current status is valid, default to pending if not
+    const validStatus = ['pending', 'approved', 'rejected'].includes(currentStatus) ? currentStatus : 'pending';
     setStatusUpdateForm({
       orderId: orderId,
-      newStatus: currentStatus,
+      newStatus: validStatus,
       notes: ''
     });
     setIsStatusUpdateOpen(true);
@@ -310,74 +304,50 @@ export default function SalesOrderList() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <Card>
-          <CardContent className="p-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-6 mb-6">
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="p-6">
             <div className="flex items-center">
-              <Package className="h-8 w-8 text-blue-600" />
-              <div className="ml-3">
+              <Package className="h-10 w-10 text-blue-600" />
+              <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Total</p>
-                <p className="text-2xl font-bold">{summary.total || 0}</p>
+                <p className="text-3xl font-bold">{summary.total || 0}</p>
               </div>
             </div>
           </CardContent>
         </Card>
         
-        <Card>
-          <CardContent className="p-4">
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="p-6">
             <div className="flex items-center">
-              <Clock className="h-8 w-8 text-yellow-600" />
-              <div className="ml-3">
+              <Clock className="h-10 w-10 text-yellow-600" />
+              <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Pending</p>
-                <p className="text-2xl font-bold">{summary.pending || 0}</p>
+                <p className="text-3xl font-bold">{summary.pending || 0}</p>
               </div>
             </div>
           </CardContent>
         </Card>
         
-        <Card>
-          <CardContent className="p-4">
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="p-6">
             <div className="flex items-center">
-              <CheckCircle className="h-8 w-8 text-green-600" />
-              <div className="ml-3">
+              <CheckCircle className="h-10 w-10 text-green-600" />
+              <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Approved</p>
-                <p className="text-2xl font-bold">{summary.approved || 0}</p>
+                <p className="text-3xl font-bold">{summary.approved || 0}</p>
               </div>
             </div>
           </CardContent>
         </Card>
         
-        <Card>
-          <CardContent className="p-4">
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="p-6">
             <div className="flex items-center">
-              <Package className="h-8 w-8 text-blue-600" />
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-600">Production</p>
-                <p className="text-2xl font-bold">{summary.in_production || 0}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center">
-              <Truck className="h-8 w-8 text-purple-600" />
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-600">Completed</p>
-                <p className="text-2xl font-bold">{summary.completed || 0}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center">
-              <XCircle className="h-8 w-8 text-red-600" />
-              <div className="ml-3">
+              <XCircle className="h-10 w-10 text-red-600" />
+              <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Rejected</p>
-                <p className="text-2xl font-bold">{summary.disapproved || 0}</p>
+                <p className="text-3xl font-bold">{summary.disapproved || 0}</p>
               </div>
             </div>
           </CardContent>
@@ -440,9 +410,6 @@ export default function SalesOrderList() {
                   <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="approved">Approved</SelectItem>
                   <SelectItem value="rejected">Rejected</SelectItem>
-                  <SelectItem value="in_production">In Production</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                  <SelectItem value="cancelled">Cancelled</SelectItem>
                 </SelectContent>
               </Select>
             </div>

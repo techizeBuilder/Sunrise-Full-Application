@@ -26,33 +26,52 @@ const checkInventoryPermission = (user, action) => {
 // Helper function to update qtyPerBatch in product summary
 const updateProductSummaryQtyPerBatch = async (productId, productName, qtyPerBatch, date, companyId) => {
   try {
-    const summaryDate = new Date(date);
-    summaryDate.setUTCHours(0, 0, 0, 0);
+    console.log('🔄 Updating qtyPerBatch for product:', productName);
+    console.log('  📦 Product ID:', productId);
+    console.log('  🏢 Company ID:', companyId);
+    console.log('  📊 New qtyPerBatch:', qtyPerBatch);
+    
+    // Find existing summary by PRODUCT + COMPANY only (ignore date)
+    // We want ONE record per product, not per date
+    let existingSummary = await ProductDailySummary.findOne({
+      companyId: new mongoose.Types.ObjectId(companyId),
+      productId: new mongoose.Types.ObjectId(productId)
+    });
 
-    // Find or create/update the product summary with qtyPerBatch
-    await ProductDailySummary.findOneAndUpdate(
-      {
+    console.log('📋 Found existing summary:', existingSummary ? 'YES' : 'NO');
+
+    if (existingSummary) {
+      // Update existing summary - keep original date
+      console.log('  📅 Existing date (keeping):', existingSummary.date.toISOString().split('T')[0]);
+      existingSummary.qtyPerBatch = qtyPerBatch;
+      existingSummary.calculateFormulas(); // Recalculate dependent fields
+      await existingSummary.save();
+      console.log('✅ Updated existing product summary qtyPerBatch');
+    } else {
+      // Create new summary only if product doesn't exist
+      const summaryDate = new Date(date);
+      summaryDate.setUTCHours(0, 0, 0, 0);
+      
+      console.log('  📅 Creating new summary with date:', summaryDate.toISOString().split('T')[0]);
+      
+      const newSummary = new ProductDailySummary({
         date: summaryDate,
         companyId: new mongoose.Types.ObjectId(companyId),
-        productId: new mongoose.Types.ObjectId(productId)
-      },
-      {
-        $setOnInsert: {
-          productName: productName,
-          totalIndent: 0,
-          packing: 0,
-          physicalStock: 0,
-          batchAdjusted: 0
-        },
-        $set: {
-          qtyPerBatch: qtyPerBatch
-        }
-      },
-      {
-        upsert: true,
-        new: true
-      }
-    );
+        productId: new mongoose.Types.ObjectId(productId),
+        productName: productName,
+        qtyPerBatch: qtyPerBatch,
+        totalIndent: 0,
+        packing: 0,
+        physicalStock: 0,
+        batchAdjusted: 0,
+        productionFinalBatches: 0,
+        toBeProducedDay: 0,
+        produceBatches: 0
+      });
+      
+      await newSummary.save();
+      console.log('✅ Created new product summary with qtyPerBatch');
+    }
 
     console.log(`Product summary qtyPerBatch updated for ${productName}: ${qtyPerBatch}`);
   } catch (error) {

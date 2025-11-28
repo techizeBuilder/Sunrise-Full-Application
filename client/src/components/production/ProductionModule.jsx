@@ -3,7 +3,7 @@ import { Switch, Route, Redirect } from 'wouter';
 import ProductionDashboard from '@/pages/production/ProductionDashboard';
 import ProductionReports from '@/pages/production/ProductionReports';
 import ProductionGroup from '@/pages/production/ProductionGroup';
-import ProductionShift from '@/pages/ProductionShift';
+import ProductionShift from '@/pages/production/ProductionShift';
 
 export default function ProductionModule() {
   return (

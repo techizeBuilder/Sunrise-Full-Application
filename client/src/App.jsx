@@ -48,7 +48,7 @@ import SuperAdminSettings from "@/pages/super-admin/SuperAdminSettings";
 import SuperAdminCompanies from "@/pages/super-admin/SuperAdminCompanies";
 import ProductionDashboard from "@/pages/ProductionDashboard";
 import ProductionModule from "@/components/production/ProductionModule";
-import ProductionShift from "@/pages/ProductionShift";
+import ProductionShift from "@/pages/production/ProductionShift";
 import PackingDashboard from "@/pages/PackingDashboard";
 import DispatchDashboard from "@/pages/DispatchDashboard";
 import AccountsDashboard from "@/pages/AccountsDashboard";
@@ -365,19 +365,19 @@ function Router() {
       </Route>
       
       {/* Unit Manager specific routes with dedicated layout */}
-      <Route path="/unit-manager-dashboard">
+      <Route path="/unit-manager/dashboard">
         <UnitManagerProtectedRoute requiredRole="Unit Manager">
           <UnitManagerDashboard />
         </UnitManagerProtectedRoute>
       </Route>
       
-      <Route path="/indent-summary">
+      <Route path="/unit-manager/indent-summary">
         <UnitManagerProtectedRoute requiredRole="Unit Manager">
           <SalesApproval />
         </UnitManagerProtectedRoute>
       </Route>
       
-      <Route path="/sales-order-list">
+      <Route path="/unit-manager/sales-order-list">
         <UnitManagerProtectedRoute requiredRole="Unit Manager">
           <SalesOrderList />
         </UnitManagerProtectedRoute>

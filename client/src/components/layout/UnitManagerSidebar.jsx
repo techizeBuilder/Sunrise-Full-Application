@@ -16,21 +16,34 @@ import {
   Building2,
   ChevronDown,
   ChevronRight,
-  User
+  User,
+  FileText
 } from 'lucide-react';
 
 const unitManagerMenuItems = [
   {
     label: 'Dashboard',
-    path: '/unit-manager-dashboard',
+    path: '/unit-manager/dashboard',
     icon: LayoutDashboard,
     module: 'dashboard'
   },
   {
     label: 'Sales Approval',
-    path: '/indent-summary',
+    path: '/unit-manager/indent-summary',
     icon: Shield,
     module: 'Sales Approval'
+  },
+  {
+    label: 'Sales Order List',
+    path: '/unit-manager/sales-order-list',
+    icon: FileText,
+    module: 'Sales Orders'
+  },
+  {
+    label: 'Production Group',
+    path: '/unit-manager/production-group',
+    icon: Package,
+    module: 'Production'
   },
 //   {
 //     label: 'Manufacturing',
