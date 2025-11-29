@@ -76,8 +76,8 @@ export default function ProductionShift() {
             unloadingTime: group.unloadingTime || '',
             // Keep existing production loss value, don't default to 0 if empty
             productionLoss: group.productionLoss !== undefined && group.productionLoss !== null ? group.productionLoss : '',
-            qtyBatch: group.totalQuantity,
-            qtyAchieved: group.totalQuantity - (group.productionLoss || 0)
+            qtyBatch: group.totalBatchQuantity || 0, // Use sum of qtyPerBatch values
+            qtyAchieved: (group.totalBatchQuantity || 0) - (group.productionLoss || 0)
           };
         });
         
@@ -219,8 +219,8 @@ export default function ProductionShift() {
       mouldingTime: batch.mouldingTime || '00:00',
       unloadingTime: batch.unloadingTime || '00:00',
       productionLoss: batch.productionLoss || 0,
-      totalQty: group.totalQuantity,
-      qtyAchieved: (batch.qtyBatch || group.totalQuantity) - (batch.productionLoss || 0),
+      totalQty: group.totalBatchQuantity || 0, // Use batch quantity
+      qtyAchieved: (group.totalBatchQuantity || 0) - (batch.productionLoss || 0),
       totalItems: group.totalItems,
       description: group.description || 'No description',
       createdBy: group.createdBy,
@@ -327,18 +327,21 @@ export default function ProductionShift() {
           />
         </TableCell>
         
-        {/* Total Qty/Batch for entire group */}
+        {/* Total Qty/Batch for entire group - Sum of all item qtyPerBatch values */}
         <TableCell className="text-center">
-          {group.totalQuantity}
+          <div className="font-medium">{group.totalBatchQuantity || 0}</div>
+          <div className="text-xs text-gray-500">
+            Total Value: ₹{group.items?.reduce((sum, item) => sum + ((item.price || 0) * (item.qty || 0)), 0).toLocaleString() || '0'}
+          </div>
         </TableCell>
         
-        {/* Qty Achieved/Batch (auto-calculated) - Simple green text */}
+        {/* Qty Achieved/Batch (auto-calculated) - Use batch quantity in calculation */}
         <TableCell className="text-center">
           <span className="text-green-600 font-medium">
-            {(batch.qtyBatch || group.totalQuantity) - (batch.productionLoss || 0)}
+            {(group.totalBatchQuantity || 0) - (batch.productionLoss || 0)}
           </span>
           <div className="text-xs text-green-500">
-            {group.totalQuantity} - {batch.productionLoss || 0}
+            {group.totalBatchQuantity || 0} - {batch.productionLoss || 0}
           </div>
         </TableCell>
         
@@ -404,13 +407,16 @@ export default function ProductionShift() {
         
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Quantity</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Batch Quantity</CardTitle>
             <Users className="h-4 w-4 text-purple-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {productionGroups.reduce((sum, group) => sum + group.totalQuantity, 0)}
+              {productionGroups.reduce((sum, group) => sum + (group.totalBatchQuantity || 0), 0)}
             </div>
+            <p className="text-xs text-muted-foreground">
+              Sum of all qtyPerBatch values
+            </p>
           </CardContent>
         </Card>
         
@@ -509,11 +515,15 @@ export default function ProductionShift() {
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-500">Total Qty/Batch</label>
-                  <p className="text-lg font-semibold">{selectedBatch.totalQty}</p>
+                  <p className="text-lg font-semibold">{selectedBatch.group?.totalBatchQuantity || 0}</p>
+                  <p className="text-xs text-gray-500">Sum of all item qtyPerBatch values</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-500">Qty Achieved</label>
-                  <p className="text-lg font-semibold text-green-600">{selectedBatch.qtyAchieved}</p>
+                  <p className="text-lg font-semibold text-green-600">
+                    {(selectedBatch.group?.totalBatchQuantity || 0) - (selectedBatch.productionLoss || 0)}
+                  </p>
+                  <p className="text-xs text-gray-500">Batch quantity - Production loss</p>
                 </div>
               </div>
 
@@ -555,7 +565,7 @@ export default function ProductionShift() {
                           </div>
                           <div className="text-sm text-gray-600">
                             <strong>Qty:</strong> {item.qty} {item.unit} | 
-                            <strong> Price:</strong> ${item.price}
+                            <strong> Qty/Batch:</strong> <span className="text-blue-600 font-medium">{item.qtyPerBatch || 0}</span>
                           </div>
                         </div>
                       </div>

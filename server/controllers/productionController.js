@@ -217,13 +217,97 @@ export const getProductionShiftData = async (req, res) => {
 
     console.log(`Found ${productionGroups.length} production groups`);
 
+    // Get ProductDailySummary data for batch quantities
+    const ProductDailySummary = (await import('../models/ProductDailySummary.js')).default;
+    
     // Transform data for production shift display
-    const shiftData = productionGroups.map(group => {
-      const totalQuantity = group.items?.reduce((sum, item) => sum + (item.qty || 0), 0) || 0;
+    const shiftData = await Promise.all(productionGroups.map(async (group) => {
+      // Calculate total batch quantity by summing qtyPerBatch from ProductDailySummary
+      let totalBatchQuantity = 0;
+      const itemsWithBatchQty = [];
+      
+      if (group.items && group.items.length > 0) {
+        for (const item of group.items) {
+          let itemQtyPerBatch = 0;
+          try {
+            // Find the ProductDailySummary for this item - try multiple query approaches
+            console.log(`🔍 Searching qtyPerBatch for item: ${item.name}`);
+            
+            // Try different query strategies
+            let summary = await ProductDailySummary.findOne({
+              productName: item.name,
+              companyId: req.user.companyId
+            }).lean();
+            
+            // If not found by exact name, try case-insensitive search
+            if (!summary) {
+              console.log(`   Trying case-insensitive search for: ${item.name}`);
+              summary = await ProductDailySummary.findOne({
+                productName: { $regex: new RegExp(`^${item.name}$`, 'i') },
+                companyId: req.user.companyId
+              }).lean();
+            }
+            
+            // If still not found, try searching by productId
+            if (!summary && item._id) {
+              console.log(`   Trying productId search for: ${item._id}`);
+              summary = await ProductDailySummary.findOne({
+                productId: item._id,
+                companyId: req.user.companyId
+              }).lean();
+            }
+            
+            // If still not found, try without company filter (in case data exists without company)
+            if (!summary) {
+              console.log(`   Trying search without company filter for: ${item.name}`);
+              summary = await ProductDailySummary.findOne({
+                productName: item.name
+              }).lean();
+            }
+            
+            if (summary && summary.qtyPerBatch) {
+              itemQtyPerBatch = summary.qtyPerBatch;
+              totalBatchQuantity += summary.qtyPerBatch;
+              console.log(`✅ Found qtyPerBatch for ${item.name}: ${summary.qtyPerBatch}`);
+            } else if (summary) {
+              console.log(`⚠️  Found summary for ${item.name} but qtyPerBatch is: ${summary.qtyPerBatch}`);
+            } else {
+              console.log(`❌ No ProductDailySummary found for ${item.name}`);
+              
+              // Check what ProductDailySummary records exist
+              const allSummaries = await ProductDailySummary.find({ 
+                companyId: req.user.companyId 
+              }).select('productName productId qtyPerBatch').lean();
+              console.log(`   Available ProductDailySummary records:`, 
+                allSummaries.map(s => ({ name: s.productName, id: s.productId, qtyPerBatch: s.qtyPerBatch }))
+              );
+            }
+          } catch (error) {
+            console.log(`❌ Error getting qtyPerBatch for ${item.name}:`, error.message);
+          }
+          
+          // Add item with qtyPerBatch
+          itemsWithBatchQty.push({
+            _id: item._id,
+            name: item.name,
+            code: item.code,
+            category: item.category,
+            qty: item.qty || 0,
+            unit: item.unit || '',
+            price: item.price || 0,
+            image: item.image,
+            qtyPerBatch: itemQtyPerBatch
+          });
+        }
+      }
+      
       const totalItems = group.items?.length || 0;
+      const totalCurrentQuantity = group.items?.reduce((sum, item) => sum + (item.qty || 0), 0) || 0;
 
-      // Debug log to see the actual values
       console.log(`Group ${group.name}:`, {
+        totalItems,
+        totalCurrentQuantity,
+        totalBatchQuantity,
         mouldingTime: group.mouldingTime,
         unloadingTime: group.unloadingTime, 
         productionLoss: group.productionLoss
@@ -234,28 +318,20 @@ export const getProductionShiftData = async (req, res) => {
         name: group.name,
         description: group.description || '',
         totalItems: totalItems,
-        totalQuantity: totalQuantity,
+        totalQuantity: totalCurrentQuantity, // Keep for backward compatibility
+        totalBatchQuantity: totalBatchQuantity, // NEW: Sum of all qtyPerBatch values
         // Format time fields properly for frontend
         mouldingTime: group?.mouldingTime ? 
           group.mouldingTime.toISOString().slice(0, 16) : null,
         unloadingTime: group?.unloadingTime ? 
           group.unloadingTime.toISOString().slice(0, 16) : null,
         productionLoss: group?.productionLoss !== undefined ? group.productionLoss : 0,
-        items: group.items?.map(item => ({
-          _id: item._id,
-          name: item.name,
-          code: item.code,
-          category: item.category,
-          qty: item.qty || 0,
-          unit: item.unit || '',
-          price: item.price || 0,
-          image: item.image
-        })) || [],
+        items: itemsWithBatchQty,
         createdBy: group.createdBy?.username || 'Unknown',
         createdAt: group.createdAt,
         isActive: group.isActive !== false
       };
-    });
+    }));
 
     res.json({
       success: true,
@@ -448,6 +524,65 @@ export const updateProductionShiftTiming = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to update production shift timing',
+      error: error.message
+    });
+  }
+};
+
+// Debug endpoint to check ProductDailySummary data
+export const debugProductSummaryData = async (req, res) => {
+  try {
+    console.log('🔍 Debug: Checking ProductDailySummary data...');
+    
+    const ProductDailySummary = (await import('../models/ProductDailySummary.js')).default;
+    
+    // Get all ProductDailySummary records for this company
+    const summaries = await ProductDailySummary.find({
+      companyId: req.user.companyId
+    }).lean();
+    
+    console.log(`Found ${summaries.length} ProductDailySummary records for company: ${req.user.companyId}`);
+    
+    // Also get summaries without company filter to see all data
+    const allSummaries = await ProductDailySummary.find({}).lean();
+    console.log(`Total ProductDailySummary records in database: ${allSummaries.length}`);
+    
+    // Get production groups to compare
+    const ProductionGroup = (await import('../models/ProductionGroup.js')).default;
+    const groups = await ProductionGroup.find({ 
+      company: req.user.companyId,
+      isActive: true 
+    }).populate('items', 'name code').lean();
+    
+    const itemNames = groups.flatMap(g => g.items?.map(i => i.name) || []);
+    console.log('Production group item names:', itemNames);
+    
+    res.json({
+      success: true,
+      data: {
+        companyId: req.user.companyId,
+        companySummaries: summaries.map(s => ({
+          productName: s.productName,
+          productId: s.productId,
+          qtyPerBatch: s.qtyPerBatch,
+          date: s.date
+        })),
+        allSummaries: allSummaries.map(s => ({
+          productName: s.productName,
+          productId: s.productId,
+          qtyPerBatch: s.qtyPerBatch,
+          companyId: s.companyId,
+          date: s.date
+        })),
+        productionGroupItems: itemNames,
+        matches: summaries.filter(s => itemNames.includes(s.productName))
+      }
+    });
+  } catch (error) {
+    console.error('Debug endpoint error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Debug failed',
       error: error.message
     });
   }

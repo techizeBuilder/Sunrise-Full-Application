@@ -4,7 +4,8 @@ import {
   getProductionShiftData,
   getProductionGroupShiftDetails,
   updateProductionShiftTiming,
-  getProductionDashboard
+  getProductionDashboard,
+  debugProductSummaryData
 } from '../controllers/productionController.js';
 
 const router = express.Router();
@@ -28,5 +29,8 @@ router.put('/production-shift/:groupId', updateProductionShiftTiming);
 
 // PUT /api/production/production-shift - Update production shift field (auto-save)
 router.put('/production-shift', updateProductionShiftTiming);
+
+// Debug endpoint to check ProductDailySummary data
+router.get('/debug-summary', debugProductSummaryData);
 
 export default router;

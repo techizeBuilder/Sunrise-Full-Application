@@ -500,11 +500,29 @@ export const getUnitHeadCustomers = async (req, res) => {
     const { page = 1, limit = 10, search, active } = req.query;
     const skip = (page - 1) * limit;
 
+    console.log('🚀 getUnitHeadCustomers called by:', req.user?.username);
+    console.log('User details:', {
+      id: req.user?.id,
+      role: req.user?.role,
+      companyId: req.user?.companyId,
+      unit: req.user?.unit
+    });
+
+    // STRICT VALIDATION: Unit Head MUST have a company assignment
+    if (req.user.role === 'Unit Head' && !req.user.companyId) {
+      console.error('❌ Unit Head has no company assignment:', req.user.username);
+      return res.status(400).json({
+        success: false,
+        message: 'Unit Head is not assigned to any company/location. Please contact system administrator.'
+      });
+    }
+
     let query = {};
 
-    // Add company filtering for Unit Head users
-    if (req.user.role === 'Unit Head' && req.user.companyId) {
+    // MANDATORY company filtering for Unit Head users - NO BYPASS
+    if (req.user.role === 'Unit Head') {
       query.companyId = req.user.companyId;
+      console.log('✅ Filtering customers by companyId:', req.user.companyId);
     }
 
     if (search) {
@@ -530,10 +548,11 @@ export const getUnitHeadCustomers = async (req, res) => {
 
     const total = await Customer.countDocuments(query);
 
-    // Calculate summary statistics for the UI
+    // Calculate summary statistics for the UI - MUST use same company filtering
     let summaryQuery = {};
-    if (req.user.role === 'Unit Head' && req.user.companyId) {
+    if (req.user.role === 'Unit Head') {
       summaryQuery.companyId = req.user.companyId;
+      console.log('📊 Summary statistics filtered by companyId:', req.user.companyId);
     }
 
     const totalCustomers = await Customer.countDocuments(summaryQuery);
@@ -549,6 +568,14 @@ export const getUnitHeadCustomers = async (req, res) => {
       inactiveCustomers,
       cityDistribution: cityDistribution.filter(city => city) // Remove null/empty cities
     };
+
+    console.log('📈 Customer summary for company:', {
+      companyId: req.user.companyId,
+      totalCustomers,
+      activeCustomers,
+      inactiveCustomers,
+      cities: cityDistribution.length
+    });
 
     res.json({
       success: true,
@@ -614,6 +641,23 @@ export const getUnitHeadCustomerById = async (req, res) => {
 export const getUnitHeadDashboard = async (req, res) => {
   try {
     const { period = 'current-month' } = req.query;
+
+    console.log('📊 Unit Head Dashboard request by:', req.user?.username);
+    console.log('User details:', {
+      id: req.user?.id,
+      role: req.user?.role,
+      companyId: req.user?.companyId
+    });
+
+    // STRICT VALIDATION: Unit Head MUST have a company assignment
+    if (req.user.role === 'Unit Head' && !req.user.companyId) {
+      console.error('❌ Unit Head has no company assignment for dashboard:', req.user.username);
+      return res.status(400).json({
+        success: false,
+        message: 'Unit Head is not assigned to any company/location. Please contact system administrator.'
+      });
+    }
+
     let matchQuery = {};
     let dateFilter = {};
 
@@ -630,8 +674,8 @@ export const getUnitHeadDashboard = async (req, res) => {
       };
     }
 
-    // COMPANY FILTERING for dashboard stats - Only show data from same unit/location
-    if (req.user.companyId) {
+    // MANDATORY COMPANY FILTERING for dashboard stats - Only show data from same unit/location
+    if (req.user.role === 'Unit Head') {
       const companySalesPersons = await User.find({ 
         companyId: req.user.companyId,
         role: { $in: ['Sales', 'Unit Manager', 'Unit Head'] }
@@ -639,6 +683,7 @@ export const getUnitHeadDashboard = async (req, res) => {
       
       const salesPersonIds = companySalesPersons.map(sp => sp._id);
       matchQuery.salesPerson = { $in: salesPersonIds };
+      console.log('✅ Dashboard filtering by company salesPersons:', salesPersonIds.length);
     }
 
     // Combine date filter with company filter
@@ -660,14 +705,22 @@ export const getUnitHeadDashboard = async (req, res) => {
       { $group: { _id: null, total: { $sum: '$totalAmount' } } }
     ]);
 
-    // Get basic counts for this unit only
-    const totalCustomers = req.user.companyId 
+    // Get basic counts for this unit only - MANDATORY company filtering
+    const totalCustomers = req.user.role === 'Unit Head'
       ? await Customer.countDocuments({ active: true, companyId: req.user.companyId })
-      : await Customer.countDocuments({ active: true });
+      : 0;
     
-    const activeSalesPersons = req.user.companyId 
+    const activeSalesPersons = req.user.role === 'Unit Head'
       ? await User.countDocuments({ companyId: req.user.companyId, role: 'Sales', isActive: true })
       : 0;
+
+    console.log('📈 Dashboard metrics for company:', {
+      companyId: req.user.companyId,
+      totalCustomers,
+      activeSalesPersons,
+      monthlyOrders,
+      monthlyRevenue: monthlyRevenue[0]?.total || 0
+    });
 
     res.json({
       success: true,

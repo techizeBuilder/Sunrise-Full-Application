@@ -143,9 +143,23 @@ export const getCustomers = [
       // Build filter object
       const filter = {};
       
-      // Add company filtering based on user role
-      if (req.user.role !== 'Super Admin' && req.user.companyId) {
+      console.log('🔍 getCustomers called by user:', req.user?.username, 'Role:', req.user?.role);
+      
+      // STRICT company filtering based on user role
+      if (req.user.role === 'Super Admin') {
+        // Super Admin can see all customers
+        console.log('🔐 Super Admin access - no company filtering');
+      } else {
+        // ALL other roles MUST have company filtering
+        if (!req.user.companyId) {
+          console.error('❌ User has no company assignment:', req.user.username);
+          return res.status(400).json({
+            success: false,
+            message: 'User is not assigned to any company/location. Please contact system administrator.'
+          });
+        }
         filter.companyId = req.user.companyId;
+        console.log('✅ Company filtering applied for role', req.user.role, ':', req.user.companyId);
       }
       
       if (status) {
