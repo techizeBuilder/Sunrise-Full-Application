@@ -30,23 +30,49 @@ const updateProductSummaryQtyPerBatch = async (productId, productName, qtyPerBat
     console.log('  📦 Product ID:', productId);
     console.log('  🏢 Company ID:', companyId);
     console.log('  📊 New qtyPerBatch:', qtyPerBatch);
+    console.log('  📅 Date:', date);
+    
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(companyId)) {
+      console.error('❌ Invalid company ID format:', companyId);
+      return;
+    }
+    
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      console.error('❌ Invalid product ID format:', productId);
+      return;
+    }
     
     // Find existing summary by PRODUCT + COMPANY only (ignore date)
     // We want ONE record per product, not per date
-    let existingSummary = await ProductDailySummary.findOne({
+    const query = {
       companyId: new mongoose.Types.ObjectId(companyId),
       productId: new mongoose.Types.ObjectId(productId)
-    });
+    };
+    
+    console.log('🔍 Query for existing summary:', query);
+    
+    let existingSummary = await ProductDailySummary.findOne(query);
 
     console.log('📋 Found existing summary:', existingSummary ? 'YES' : 'NO');
+    
+    if (existingSummary) {
+      console.log('📋 Existing summary details:', {
+        id: existingSummary._id,
+        productName: existingSummary.productName,
+        currentQtyPerBatch: existingSummary.qtyPerBatch,
+        newQtyPerBatch: qtyPerBatch
+      });
+    }
 
     if (existingSummary) {
       // Update existing summary - keep original date
       console.log('  📅 Existing date (keeping):', existingSummary.date.toISOString().split('T')[0]);
+      const oldValue = existingSummary.qtyPerBatch;
       existingSummary.qtyPerBatch = qtyPerBatch;
       existingSummary.calculateFormulas(); // Recalculate dependent fields
       await existingSummary.save();
-      console.log('✅ Updated existing product summary qtyPerBatch');
+      console.log('✅ Updated existing product summary qtyPerBatch from', oldValue, 'to', qtyPerBatch);
     } else {
       // Create new summary only if product doesn't exist
       const summaryDate = new Date(date);
@@ -433,13 +459,16 @@ export const createItem = async (req, res) => {
 
     // Initialize production summary for new product
     try {
-      if (req.user.companyId) {
+      // Get company ID from user (for Unit Head) or from item's store field (for Super Admin)
+      const companyId = req.user.companyId ? req.user.companyId.toString() : (sanitizedData.store || item.store);
+      
+      if (companyId) {
         await initializeProductSummary(
           item._id.toString(),
           item.name,
-          req.user.companyId.toString()
+          companyId
         );
-        console.log('Production summary initialized for new product:', item.name);
+        console.log('Production summary initialized for new product:', item.name, 'Company:', companyId);
         
         // Sync qtyPerBatch if batch field is provided
         if (item.batch && !isNaN(parseFloat(item.batch))) {
@@ -449,10 +478,12 @@ export const createItem = async (req, res) => {
             item.name,
             parseFloat(item.batch),
             today,
-            req.user.companyId.toString()
+            companyId
           );
-          console.log('QtyPerBatch synced for new product:', item.name, 'Value:', item.batch);
+          console.log('QtyPerBatch synced for new product:', item.name, 'Value:', item.batch, 'Company:', companyId);
         }
+      } else {
+        console.log('No company ID available for production summary initialization');
       }
     } catch (summaryError) {
       console.error('Failed to initialize production summary:', summaryError);
@@ -628,6 +659,14 @@ const sanitizeItemData = (data) => {
 
 export const updateItem = async (req, res) => {
   try {
+    console.log('🔧 UPDATE ITEM - Debug user info:', {
+      userId: req.user._id,
+      username: req.user.username,
+      role: req.user.role,
+      companyId: req.user.companyId,
+      companyObject: req.user.company
+    });
+    
     if (!checkInventoryPermission(req.user, 'edit')) {
       return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
     }
@@ -673,16 +712,35 @@ export const updateItem = async (req, res) => {
 
     // Sync qtyPerBatch if batch field was updated
     try {
-      if (item.batch && !isNaN(parseFloat(item.batch)) && req.user.companyId) {
+      if (item.batch && !isNaN(parseFloat(item.batch))) {
         const today = new Date().toISOString().split('T')[0];
-        await updateProductSummaryQtyPerBatch(
-          item._id.toString(),
-          item.name,
-          parseFloat(item.batch),
-          today,
-          req.user.companyId.toString()
-        );
-        console.log('QtyPerBatch synced for updated product:', item.name, 'Value:', item.batch);
+        // Get company ID from user (for Unit Head) or from item's store field (for Super Admin)
+        const companyId = req.user.companyId ? req.user.companyId.toString() : item.store;
+        
+        console.log('🔧 Debug sync info:', {
+          itemBatch: item.batch,
+          itemName: item.name,
+          itemId: item._id,
+          itemStore: item.store,
+          userCompanyId: req.user.companyId,
+          finalCompanyId: companyId,
+          userRole: req.user.role
+        });
+        
+        if (companyId) {
+          await updateProductSummaryQtyPerBatch(
+            item._id.toString(),
+            item.name,
+            parseFloat(item.batch),
+            today,
+            companyId
+          );
+          console.log('QtyPerBatch synced for updated product:', item.name, 'Value:', item.batch, 'Company:', companyId);
+        } else {
+          console.log('❌ No company ID available for qtyPerBatch sync');
+        }
+      } else {
+        console.log('❌ Batch sync skipped - invalid batch value:', item.batch);
       }
     } catch (syncError) {
       console.error('Failed to sync qtyPerBatch:', syncError);

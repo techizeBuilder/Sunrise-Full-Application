@@ -86,11 +86,6 @@ const initialFormData = {
   username: '',
   fullName: '',
   email: '',
-  mobile: '',
-  address: '',
-  city: '',
-  state: '',
-  pincode: '',
   password: '',
   confirmPassword: ''
 };
@@ -343,12 +338,7 @@ export default function UnitHeadSales() {
     setFormData({
       username: salesPerson.username || '',
       fullName: salesPerson.fullName || '',
-      email: salesPerson.email || '',
-      mobile: salesPerson.mobile || '',
-      address: salesPerson.address || '',
-      city: salesPerson.city || '',
-      state: salesPerson.state || '',
-      pincode: salesPerson.pincode || ''
+      email: salesPerson.email || ''
     });
     setIsEditModalOpen(true);
   };
@@ -368,7 +358,7 @@ export default function UnitHeadSales() {
     e.preventDefault();
     
     // Required field validation
-    const requiredFields = ['username', 'fullName', 'email', 'mobile', 'address', 'city', 'state', 'pincode'];
+    const requiredFields = ['username', 'fullName', 'email'];
     const missingFields = requiredFields.filter(field => !formData[field] || formData[field].trim() === '');
     
     if (missingFields.length > 0) {
@@ -388,30 +378,6 @@ export default function UnitHeadSales() {
         variant: 'destructive',
         title: 'Validation Error',
         description: 'Please enter a valid email address',
-        duration: 5000
-      });
-      return;
-    }
-
-    // Mobile number validation - must be exactly 10 digits
-    const mobileRegex = /^\d{10}$/;
-    if (!mobileRegex.test(formData.mobile.replace(/\s+/g, ''))) {
-      toast({
-        variant: 'destructive',
-        title: 'Validation Error',
-        description: 'Mobile number must be exactly 10 digits',
-        duration: 5000
-      });
-      return;
-    }
-
-    // Pincode validation - must be numeric
-    const pincodeRegex = /^\d{6}$/;
-    if (!pincodeRegex.test(formData.pincode)) {
-      toast({
-        variant: 'destructive',
-        title: 'Validation Error',
-        description: 'Pincode must be exactly 6 digits',
         duration: 5000
       });
       return;
@@ -1025,58 +991,7 @@ export default function UnitHeadSales() {
                   required
                 />
               </div>
-              <div>
-                <Label htmlFor="mobile">Mobile *</Label>
-                <Input
-                  id="mobile"
-                  type="tel"
-                  value={formData.mobile}
-                  onChange={(e) => handleFormChange('mobile', e.target.value)}
-                  placeholder="Enter 10 digit mobile number"
-                  required
-                />
-              </div>
-              <div className="md:col-span-2">
-                <Label htmlFor="address">Address *</Label>
-                <Input
-                  id="address"
-                  value={formData.address}
-                  onChange={(e) => handleFormChange('address', e.target.value)}
-                  placeholder="Enter address"
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="city">City *</Label>
-                <Input
-                  id="city"
-                  value={formData.city}
-                  onChange={(e) => handleFormChange('city', e.target.value)}
-                  placeholder="Enter city"
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="state">State *</Label>
-                <Input
-                  id="state"
-                  value={formData.state}
-                  onChange={(e) => handleFormChange('state', e.target.value)}
-                  placeholder="Enter state"
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="pincode">PIN Code * (6 digits)</Label>
-                <Input
-                  id="pincode"
-                  type="tel"
-                  value={formData.pincode}
-                  onChange={(e) => handleFormChange('pincode', e.target.value)}
-                  placeholder="Enter 6-digit PIN code"
-                  required
-                />
-              </div>
+
               
               {/* Password fields - only show for create mode */}
               {isCreateModalOpen && (
@@ -1173,10 +1088,6 @@ export default function UnitHeadSales() {
                   <p className="text-sm text-muted-foreground">{selectedSalesPerson.email || 'N/A'}</p>
                 </div>
                 <div>
-                  <Label className="font-medium">Mobile</Label>
-                  <p className="text-sm text-muted-foreground">{selectedSalesPerson.mobile || 'N/A'}</p>
-                </div>
-                <div>
                   <Label className="font-medium">Status</Label>
                   <Badge variant={selectedSalesPerson.active === 'Yes' ? 'default' : 'secondary'}>
                     {selectedSalesPerson.active === 'Yes' ? 'Active' : 'Inactive'}
@@ -1186,17 +1097,6 @@ export default function UnitHeadSales() {
                   <Label className="font-medium">Created</Label>
                   <p className="text-sm text-muted-foreground">
                     {selectedSalesPerson.createdAt ? formatDate(selectedSalesPerson.createdAt) : 'N/A'}
-                  </p>
-                </div>
-                <div className="md:col-span-2">
-                  <Label className="font-medium">Address</Label>
-                  <p className="text-sm text-muted-foreground">
-                    {[
-                      selectedSalesPerson.address,
-                      selectedSalesPerson.city,
-                      selectedSalesPerson.state,
-                      selectedSalesPerson.pincode
-                    ].filter(Boolean).join(', ') || 'N/A'}
                   </p>
                 </div>
               </div>

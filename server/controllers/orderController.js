@@ -1,8 +1,8 @@
 import Order from '../models/Order.js';
 import Customer from '../models/Customer.js';
 import { Item } from '../models/Inventory.js';
+import ProductDailySummary from '../models/ProductDailySummary.js';
 import notificationService from '../services/notificationService.js';
-import { updateProductSummary } from '../services/productionSummaryService.js';
 
 // Create new order
 const createOrder = async (req, res) => {
@@ -118,20 +118,6 @@ const createOrder = async (req, res) => {
 
     // Populate order with customer details for notification
     await order.populate('customer', 'name email');
-
-    // Update production summary for each product in the order
-    try {
-      for (const productItem of orderProducts) {
-        await updateProductSummary(
-          productItem.product.toString(), 
-          order.orderDate, 
-          order.companyId.toString()
-        );
-      }
-    } catch (summaryError) {
-      console.error('Failed to update production summary:', summaryError);
-      // Don't fail the order creation if summary update fails
-    }
 
     // Trigger notification for new order
     try {
@@ -410,32 +396,6 @@ const updateOrder = async (req, res) => {
 
     await order.save();
 
-    // Update production summaries for affected products
-    try {
-      // Update summary for all products in the updated order
-      if (products && products.length > 0) {
-        for (const productItem of orderProducts) {
-          await updateProductSummary(
-            productItem.product.toString(),
-            order.orderDate,
-            order.companyId.toString()
-          );
-        }
-      } else {
-        // If products weren't changed, update for existing products
-        for (const productItem of order.products) {
-          await updateProductSummary(
-            productItem.product.toString(),
-            order.orderDate,
-            order.companyId.toString()
-          );
-        }
-      }
-    } catch (summaryError) {
-      console.error('Failed to update production summary:', summaryError);
-      // Don't fail the order update if summary update fails
-    }
-
     // Populate the updated order
     const updatedOrder = await Order.findById(id)
       .populate('customer', 'name email mobile address city state')
@@ -477,20 +437,6 @@ const deleteOrder = async (req, res) => {
 
     // Delete the order
     await Order.findByIdAndDelete(id);
-
-    // Update production summaries for all products in the deleted order
-    try {
-      for (const productItem of orderProducts) {
-        await updateProductSummary(
-          productItem.product.toString(),
-          orderDate,
-          companyId.toString()
-        );
-      }
-    } catch (summaryError) {
-      console.error('Failed to update production summary after order deletion:', summaryError);
-      // Don't fail the order deletion if summary update fails
-    }
 
     res.json({
       success: true,
@@ -570,14 +516,74 @@ const updateOrderStatus = async (req, res) => {
     const oldStatus = order.status;
     order.status = status;
     
-    if (status === 'Approved') {
+    if (status === 'approved') {
       order.approvedBy = req.user._id;
       order.approvedAt = new Date();
-    } else if (status === 'Disapproved') {
+      
+      // 🎯 CREATE PRODUCTDAILYSUMMARY ENTRIES WHEN ORDER IS APPROVED
+      console.log('📊 Creating ProductDailySummary entries for approved order...');
+      
+      try {
+        for (const productItem of order.products) {
+          // Get complete product details including qtyPerBatch
+          console.log(`📦 Fetching complete product details from database...`);
+          const product = await Item.findById(productItem.product).select('name qtyPerBatch qty unit price').lean();
+          if (!product) {
+            console.log(`⚠️ Product not found: ${productItem.product}`);
+            continue;
+          }
+          
+          const qtyPerBatch = product.qtyPerBatch || product.qty || 1; // Fallback to qty or 1
+          console.log(`Product ${product.name}: qtyPerBatch=${qtyPerBatch}, qty=${product.qty}`);
+          
+          // Check if ProductDailySummary entry already exists for this product and date
+          const existingSummary = await ProductDailySummary.findOne({
+            productId: productItem.product,
+            date: order.orderDate,
+            companyId: order.companyId
+          });
+
+          if (existingSummary) {
+            // Update existing entry - add the ordered quantity to productionFinalBatches
+            existingSummary.productionFinalBatches += productItem.quantity;
+            
+            // Update qtyPerBatch if it was 0 or not set
+            if (!existingSummary.qtyPerBatch || existingSummary.qtyPerBatch === 0) {
+              existingSummary.qtyPerBatch = qtyPerBatch;
+            }
+            
+            await existingSummary.save();
+            console.log(`✅ Updated ProductDailySummary: Product ${product.name}, Added ${productItem.quantity} batches, qtyPerBatch=${existingSummary.qtyPerBatch}`);
+          } else {
+            // Create new ProductDailySummary entry with proper qtyPerBatch
+            const newSummary = new ProductDailySummary({
+              productId: productItem.product,
+              productName: product.name, // ✅ REQUIRED FIELD ADDED
+              date: order.orderDate,
+              companyId: order.companyId,
+              productionFinalBatches: productItem.quantity,
+              qtyPerBatch: qtyPerBatch, // ✅ SET FROM ITEM DATA
+              totalRequirements: productItem.quantity,
+              createdAt: new Date(),
+              updatedAt: new Date()
+            });
+            
+            await newSummary.save();
+            console.log(`✅ Created new ProductDailySummary: Product ${product.name}, Batches ${productItem.quantity}, qtyPerBatch=${qtyPerBatch}`);
+          }
+        }
+        
+        console.log(`🎉 Successfully updated ProductDailySummary for order ${order.orderCode}`);
+      } catch (summaryError) {
+        console.error('❌ Failed to update ProductDailySummary:', summaryError);
+        // Log error but don't fail the order approval
+      }
+      
+    } else if (status === 'rejected') {
       order.rejectionReason = remarks;
-    } else if (status === 'In_Production') {
+    } else if (status === 'in_production') {
       order.productionStartDate = new Date();
-    } else if (status === 'Completed') {
+    } else if (status === 'completed') {
       order.productionEndDate = new Date();
       if (!order.actualDeliveryDate) {
         order.actualDeliveryDate = new Date();

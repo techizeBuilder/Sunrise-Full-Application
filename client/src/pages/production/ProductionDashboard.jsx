@@ -4,7 +4,6 @@ import { apiRequest } from '@/lib/queryClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import {
   Table,
   TableBody,
@@ -15,21 +14,9 @@ import {
 } from '@/components/ui/table';
 import {
   BarChart3,
-  Clock,
-  CheckCircle,
-  AlertTriangle,
-  Play,
-  Plus,
-  Package,
-  Activity,
-  Target,
-  AlertCircle,
-  Calendar,
-  Users,
-  TrendingUp,
-  Factory,
   RefreshCw,
-  Eye
+  Package,
+  Factory
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -50,19 +37,16 @@ export default function ProductionDashboard() {
     refetchInterval: 30000 // Auto-refresh
   });
 
-  const stats = dashboardData?.data?.stats || {
-    totalBatches: 0,
-    pendingTasks: 0,
-    completedToday: 0,
-    damages: 0
+  const productGroups = dashboardData?.data || [];
+  const stats = dashboardData?.stats || {
+    totalGroups: 0,
+    totalItems: 0
   };
 
-  const recentGroups = dashboardData?.data?.recentGroups || [];
-  const summary = dashboardData?.data?.summary || {
-    totalGroups: 0,
-    activeGroups: 0,
-    inactiveGroups: 0
-  };
+  // Debug logging
+  console.log('Dashboard Data:', dashboardData);
+  console.log('Product Groups:', productGroups);
+  console.log('Stats:', stats);
 
   if (error) {
     return (
@@ -93,89 +77,57 @@ export default function ProductionDashboard() {
         </Button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* Simple Stats Cards - Only Total Groups and Total Items */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20">
           <CardContent className="p-6">
             <div className="flex items-center space-x-4">
               <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                <Package className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                <Factory className="h-6 w-6 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
                 <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">
-                  {isLoading ? '...' : stats.totalBatches}
+                  {isLoading ? '...' : stats.totalGroups}
                 </p>
-                <p className="text-sm text-blue-600 dark:text-blue-300">Total Batches Today</p>
+                <p className="text-sm text-blue-600 dark:text-blue-300">Total Production Groups</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-r from-orange-50 to-yellow-50 dark:from-orange-950/20 dark:to-yellow-950/20">
+        <Card className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20">
           <CardContent className="p-6">
             <div className="flex items-center space-x-4">
-              <div className="p-3 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
-                <Clock className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+              <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                <Package className="h-6 w-6 text-green-600 dark:text-green-400" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-orange-900 dark:text-orange-100">
-                  {isLoading ? '...' : stats.pendingTasks}
+                <p className="text-2xl font-bold text-green-900 dark:text-green-100">
+                  {isLoading ? '...' : stats.totalItems}
                 </p>
-                <p className="text-sm text-orange-600 dark:text-orange-300">Pending Tasks</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-950/20 dark:to-pink-950/20">
-          <CardContent className="p-6">
-            <div className="flex items-center space-x-4">
-              <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
-                <CheckCircle className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">
-                  {isLoading ? '...' : stats.completedToday}
-                </p>
-                <p className="text-sm text-purple-600 dark:text-purple-300">Completed Today</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-950/20 dark:to-rose-950/20">
-          <CardContent className="p-6">
-            <div className="flex items-center space-x-4">
-              <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-lg">
-                <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-red-900 dark:text-red-100">
-                  {isLoading ? '...' : stats.damages}
-                </p>
-                <p className="text-sm text-red-600 dark:text-red-300">Damages/Wastage</p>
+                <p className="text-sm text-green-600 dark:text-green-300">Total Items in Production</p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Production Groups Table */}
+      {/* Product Groups with Batch Counts */}
       <div>
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Factory className="h-5 w-5" />
-              Recent Production Groups
+              <BarChart3 className="h-5 w-5" />
+              Product Sales Management - Production with Final Batches
             </CardTitle>
           </CardHeader>
           <CardContent>
             {isLoading ? (
               <div className="flex items-center justify-center py-8">
                 <RefreshCw className="h-6 w-6 animate-spin text-gray-500" />
-                <span className="ml-2 text-gray-500">Loading production groups...</span>
+                <span className="ml-2 text-gray-500">Loading production data...</span>
               </div>
-            ) : recentGroups.length === 0 ? (
+            ) : productGroups.length === 0 ? (
               <div className="text-center py-8">
                 <Factory className="h-12 w-12 mx-auto text-gray-400 mb-4" />
                 <p className="text-gray-500">No production groups found</p>
@@ -184,33 +136,21 @@ export default function ProductionDashboard() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Group Name</TableHead>
-                    <TableHead>Batches</TableHead>
-                    <TableHead>Total Items</TableHead>
-                    <TableHead>Total Quantity</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Created By</TableHead>
-                    <TableHead>Created</TableHead>
+                    <TableHead>Product Group</TableHead>
+                    <TableHead className="text-center">No. Of Batches for Production</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {recentGroups.map((group) => (
-                    <TableRow key={group._id}>
-                      <TableCell className="font-medium">{group.name}</TableCell>
-                      <TableCell>{group.batches}</TableCell>
-                      <TableCell>{group.items}</TableCell>
-                      <TableCell>{group.totalQuantity}</TableCell>
-                      <TableCell>
+                  {productGroups.map((group, index) => (
+                    <TableRow key={index}>
+                      <TableCell className="font-medium">{group.productGroup}</TableCell>
+                      <TableCell className="text-center">
                         <Badge 
-                          variant={group.status === 'Active' ? 'default' : 'secondary'}
-                          className={group.status === 'Active' ? 'bg-green-100 text-green-800' : ''}
+                          variant="outline" 
+                          className="bg-green-50 text-green-700 border-green-200"
                         >
-                          {group.status}
+                          {group.noOfBatchesForProduction}
                         </Badge>
-                      </TableCell>
-                      <TableCell>{group.createdBy}</TableCell>
-                      <TableCell>
-                        {new Date(group.createdAt).toLocaleDateString()}
                       </TableCell>
                     </TableRow>
                   ))}

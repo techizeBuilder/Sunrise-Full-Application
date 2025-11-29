@@ -13,8 +13,8 @@ export const getSalesSummary = async (req, res) => {
     const userRole = req.user.role;
     const userCompanyId = req.user.companyId;
 
-    // Date handling
-    let summaryDate;
+    // Date handling - if no date provided, get all data from all dates
+    let summaryDate = null;
     if (date) {
       summaryDate = new Date(date);
       if (isNaN(summaryDate.getTime())) {
@@ -23,10 +23,9 @@ export const getSalesSummary = async (req, res) => {
           message: 'Invalid date format. Use YYYY-MM-DD'
         });
       }
-    } else {
-      summaryDate = new Date(); // Today
+      summaryDate.setUTCHours(0, 0, 0, 0);
     }
-    summaryDate.setUTCHours(0, 0, 0, 0);
+    // If summaryDate is null, we'll get all dates
 
     // Company filtering based on user role
     let filterCompanyId;
@@ -53,16 +52,49 @@ export const getSalesSummary = async (req, res) => {
     }
 
     // Build query filter
-    const filter = { date: summaryDate };
+    const filter = {};
+    if (summaryDate !== null) {
+      filter.date = summaryDate; // Filter by specific date only if date was provided
+    }
+    // If summaryDate is null, no date filter = get all dates
     if (filterCompanyId) {
       filter.companyId = new mongoose.Types.ObjectId(filterCompanyId);
     }
+
+    console.log('🔍 Query filter being used:', filter);
+    console.log('📅 Summary date:', summaryDate);
+    console.log('🏢 Filter company ID:', filterCompanyId);
+    console.log('👤 User role:', userRole);
+    console.log('🏢 User company ID:', userCompanyId);
 
     // Get all summaries for the date
     const summaries = await ProductDailySummary.find(filter)
       .populate('productId', 'name')
       .populate('companyId', 'name')
       .sort({ productName: 1 });
+
+    console.log('📊 Raw summaries found:', summaries.length);
+    if (summaries.length > 0) {
+      console.log('📋 First few summaries:');
+      summaries.slice(0, 3).forEach((s, i) => {
+        console.log(`  ${i+1}. ${s.productName} | Date: ${s.date} | Company: ${s.companyId} | ProductId: ${s.productId ? 'exists' : 'NULL'}`);
+      });
+    } else {
+      console.log('❌ No summaries found with filter:', filter);
+      // Let's check if there are ANY records at all
+      const totalRecords = await ProductDailySummary.countDocuments();
+      console.log('🔍 Total ProductDailySummary records in database:', totalRecords);
+      
+      if (totalRecords > 0) {
+        const sampleRecord = await ProductDailySummary.findOne().lean();
+        console.log('📋 Sample record from database:', {
+          date: sampleRecord.date,
+          productName: sampleRecord.productName,
+          companyId: sampleRecord.companyId,
+          productId: sampleRecord.productId
+        });
+      }
+    }
 
     // Format response data - filter out summaries with missing products
     console.log(`📊 Total summaries found: ${summaries.length}`);
@@ -81,10 +113,10 @@ export const getSalesSummary = async (req, res) => {
     
     const products = await Promise.all(validSummaries.map(async (summary) => {
       try {
-        // Get sales breakdown
+        // Get sales breakdown using the summary's actual date
         const salesBreakdown = await getSalesBreakdown(
           summary.productId._id,
-          summaryDate,
+          summary.date, // Always use the summary's own date
           summary.companyId._id || summary.companyId
         );
 
@@ -116,7 +148,7 @@ export const getSalesSummary = async (req, res) => {
 
     res.json({
       success: true,
-      date: summaryDate.toISOString().split('T')[0],
+      date: summaryDate ? summaryDate.toISOString().split('T')[0] : 'all-dates',
       companyId: filterCompanyId,
       products: validProducts
     });

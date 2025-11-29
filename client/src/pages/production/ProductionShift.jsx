@@ -307,6 +307,7 @@ export default function ProductionShift() {
             step="0.01"
             placeholder="Enter loss amount"
             value={batch.productionLoss !== undefined && batch.productionLoss !== null ? batch.productionLoss : ''}
+            disabled={!batch.mouldingTime || !batch.unloadingTime}
             onChange={(e) => {
               // Update local state immediately for typing
               const value = e.target.value;
@@ -323,16 +324,17 @@ export default function ProductionShift() {
               const value = e.target.value;
               handleBatchDataChange(batchKey, 'productionLoss', value === '' ? 0 : parseFloat(value) || 0);
             }}
-            className="w-24"
+            className={`w-24 ${!batch.mouldingTime || !batch.unloadingTime ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+            title={!batch.mouldingTime || !batch.unloadingTime ? "Please enter both Moulding Time and Unloading Time first" : "Enter production loss"}
           />
         </TableCell>
         
         {/* Total Qty/Batch for entire group - Sum of all item qtyPerBatch values */}
         <TableCell className="text-center">
           <div className="font-medium">{group.totalBatchQuantity || 0}</div>
-          <div className="text-xs text-gray-500">
+          {/* <div className="text-xs text-gray-500">
             Total Value: ₹{group.items?.reduce((sum, item) => sum + ((item.price || 0) * (item.qty || 0)), 0).toLocaleString() || '0'}
-          </div>
+          </div> */}
         </TableCell>
         
         {/* Qty Achieved/Batch (auto-calculated) - Use batch quantity in calculation */}

@@ -69,18 +69,16 @@ const MODULES = [
     features: [
       { key: 'dashboard', label: 'Dashboard' },
       { key: 'orders', label: 'Orders' },
-      { key: 'purchases', label: 'Purchases' },
-      { key: 'manufacturing', label: 'Manufacturing' },
       { key: 'production', label: 'Production' },
       { key: 'dispatches', label: 'Dispatches' },
       { key: 'sales', label: 'Sales' },
       { key: 'accounts', label: 'Accounts' },
       { key: 'inventory', label: 'Inventory' },
       { key: 'customers', label: 'Customers' },
-      { key: 'suppliers', label: 'Suppliers' },
       { key: 'companies', label: 'Companies' },
       { key: 'rolePermissions', label: 'Role Permissions' },
-      { key: 'userManagement', label: 'User Management' }
+      { key: 'userManagement', label: 'User Management' },
+      { key: 'setting', label: 'Settings' }
     ]
   },
   {
@@ -103,40 +101,28 @@ const MODULES = [
       { key: 'accounts', label: 'Accounts' },
       { key: 'inventory', label: 'Inventory' },
       { key: 'customers', label: 'Customers' },
-      { key: 'suppliers', label: 'Suppliers' },
-      { key: 'purchases', label: 'Purchases' },
-      { key: 'manufacturing', label: 'Manufacturing' },
       { key: 'productionGroup', label: 'Production Group' },
       { key: 'userManagement', label: 'User Management' }
     ]
   },
-  {
-    name: 'dashboard',
-    label: 'Dashboard',
-    features: [
-      { key: 'overview', label: 'Overview' },
-      { key: 'analytics', label: 'Analytics' },
-      { key: 'reports', label: 'Reports' }
-    ]
-  },
-  {
-    name: 'orders',
-    label: 'Orders',
-    features: [
-      { key: 'allOrders', label: 'All Orders' },
-      { key: 'createOrder', label: 'Create Order' },
-      { key: 'orderReports', label: 'Order Reports' }
-    ]
-  },
-  {
-    name: 'purchases',
-    label: 'Purchases',
-    features: [
-      { key: 'allPurchases', label: 'All Purchases' },
-      { key: 'createPurchase', label: 'Create Purchase' },
-      { key: 'purchaseReports', label: 'Purchase Reports' }
-    ]
-  },
+  // {
+  //   name: 'dashboard',
+  //   label: 'Dashboard',
+  //   features: [
+  //     { key: 'overview', label: 'Overview' },
+  //     { key: 'analytics', label: 'Analytics' },
+  //     { key: 'reports', label: 'Reports' }
+  //   ]
+  // },
+  // {
+  //   name: 'orders',
+  //   label: 'Orders',
+  //   features: [
+  //     { key: 'allOrders', label: 'All Orders' },
+  //     { key: 'createOrder', label: 'Create Order' },
+  //     { key: 'orderReports', label: 'Order Reports' }
+  //   ]
+  // },
   {
     name: 'sales',
     label: 'Sales',
@@ -167,15 +153,6 @@ const MODULES = [
     ]
   },
   {
-    name: 'manufacturing',
-    label: 'Manufacturing',
-    features: [
-      { key: 'allJobs', label: 'All Jobs' },
-      { key: 'productionSchedule', label: 'Production Schedule' },
-      { key: 'qualityControl', label: 'Quality Control' }
-    ]
-  },
-  {
     name: 'accounts',
     label: 'Accounts',
     features: [
@@ -201,15 +178,6 @@ const MODULES = [
       { key: 'allCustomers', label: 'All Customers' },
       { key: 'createCustomer', label: 'Create Customer' },
       { key: 'customerReports', label: 'Customer Reports' }
-    ]
-  },
-  {
-    name: 'suppliers',
-    label: 'Suppliers',
-    features: [
-      { key: 'allSuppliers', label: 'All Suppliers' },
-      { key: 'createSupplier', label: 'Create Supplier' },
-      { key: 'supplierReports', label: 'Supplier Reports' }
     ]
   },
   {
@@ -539,47 +507,21 @@ export default function RolePermissionManagement() {
             name: 'superAdmin',
             dashboard: true,
             features: [
-              { key: 'dashboard', view: true, add: true, edit: true, delete: true, alter: true },
-              { key: 'orders', view: true, add: true, edit: true, delete: true, alter: true },
-              { key: 'purchases', view: true, add: true, edit: true, delete: true, alter: true },
-              { key: 'manufacturing', view: true, add: true, edit: true, delete: true, alter: true },
-              { key: 'production', view: true, add: true, edit: true, delete: true, alter: true },
-              { key: 'dispatches', view: true, add: true, edit: true, delete: true, alter: true },
-              { key: 'sales', view: true, add: true, edit: true, delete: true, alter: true },
-              { key: 'accounts', view: true, add: true, edit: true, delete: true, alter: true },
-              { key: 'inventory', view: true, add: true, edit: true, delete: true, alter: true },
-              { key: 'customers', view: true, add: true, edit: true, delete: true, alter: true },
-              { key: 'suppliers', view: true, add: true, edit: true, delete: true, alter: true },
-              { key: 'companies', view: true, add: true, edit: true, delete: true, alter: true },
-              { key: 'rolePermissions', view: true, add: true, edit: true, delete: true, alter: true },
-              { key: 'userManagement', view: true, add: true, edit: true, delete: true, alter: true }
-            ]
-          },
-          {
-            name: 'production',
-            dashboard: true,
-            features: [
-              { key: 'productionDashboard', view: true, add: true, edit: true, delete: true, alter: true },
-              { key: 'batchPlanning', view: true, add: true, edit: true, delete: true, alter: true },
-              { key: 'productionExecution', view: true, add: true, edit: true, delete: true, alter: true },
-              { key: 'productionRegister', view: true, add: true, edit: true, delete: true, alter: true },
-              { key: 'verificationApproval', view: true, add: true, edit: true, delete: true, alter: true },
-              { key: 'productionReports', view: true, add: true, edit: true, delete: true, alter: true }
+              { key: 'dashboard', view: true, add: true, edit: true, delete: true },
+              { key: 'orders', view: true, add: true, edit: true, delete: true },
+              { key: 'production', view: true, add: true, edit: true, delete: true },
+              { key: 'dispatches', view: true, add: true, edit: true, delete: true },
+              { key: 'sales', view: true, add: true, edit: true, delete: true },
+              { key: 'accounts', view: true, add: true, edit: true, delete: true },
+              { key: 'inventory', view: true, add: true, edit: true, delete: true },
+              { key: 'customers', view: true, add: true, edit: true, delete: true },
+              { key: 'companies', view: true, add: true, edit: true, delete: true },
+              { key: 'rolePermissions', view: true, add: true, edit: true, delete: true },
+              { key: 'userManagement', view: true, add: true, edit: true, delete: true },
+              { key: 'setting', view: true, add: true, edit: true, delete: true }
             ]
           }
         ];
-      case 'Super Admin':
-        return MODULES.map(module => ({
-          name: module.name,
-          dashboard: true,
-          features: module.features.map(feature => ({
-            key: feature.key,
-            view: true,
-            add: true,
-            edit: true,
-            delete: true
-          }))
-        }));
       case 'Unit Head':
         return [
           {
@@ -593,9 +535,6 @@ export default function RolePermissionManagement() {
               { key: 'accounts', view: true, add: true, edit: true, delete: true, alter: true },
               { key: 'inventory', view: true, add: true, edit: true, delete: true, alter: true },
               { key: 'customers', view: true, add: true, edit: true, delete: true, alter: true },
-              { key: 'suppliers', view: true, add: true, edit: true, delete: true, alter: true },
-              { key: 'purchases', view: true, add: true, edit: true, delete: true, alter: true },
-              { key: 'manufacturing', view: true, add: true, edit: true, delete: true, alter: true },
               { key: 'userManagement', view: true, add: true, edit: true, delete: true, alter: true },
               { key: 'productionGroup', view: true, add: true, edit: true, delete: true, alter: true }
             ]
@@ -724,16 +663,16 @@ export default function RolePermissionManagement() {
     if (checked) {
       // Enable all modules with full permissions
       const allModulesWithFullPermissions = MODULES.map(module => ({
-        name: module.name,
-        dashboard: true,
-        features: module.features.map(feature => ({
-          key: feature.key,
-          view: true,
-          add: true,
-          edit: true,
-          delete: true
-        }))
-      }));
+          name: module.name,
+          dashboard: true,
+          features: module.features.map(feature => ({
+            key: feature.key,
+            view: true,
+            add: true,
+            edit: true,
+            delete: true
+          }))
+        }));
       
       setFormData({
         ...formData,
@@ -759,16 +698,16 @@ export default function RolePermissionManagement() {
   const giveAllPermissions = () => {
     // Enable all modules with all permissions
     const allModulesWithFullPermissions = MODULES.map(module => ({
-      name: module.name,
-      dashboard: true,
-      features: module.features.map(feature => ({
-        key: feature.key,
-        view: true,
-        add: true,
-        edit: true,
-        delete: true
-      }))
-    }));
+        name: module.name,
+        dashboard: true,
+        features: module.features.map(feature => ({
+          key: feature.key,
+          view: true,
+          add: true,
+          edit: true,
+          delete: true
+        }))
+      }));
 
     setFormData({
       ...formData,
@@ -826,7 +765,7 @@ export default function RolePermissionManagement() {
               {/* Basic Information */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div>
-                  <Label htmlFor="username">Username</Label>
+                  <Label htmlFor="username">Username *</Label>
                   <Input
                     id="username"
                     value={formData.username}
@@ -835,7 +774,7 @@ export default function RolePermissionManagement() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="email">Email *</Label>
                   <Input
                     id="email"
                     type="email"
@@ -845,7 +784,7 @@ export default function RolePermissionManagement() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="fullName">Full Name</Label>
+                  <Label htmlFor="fullName">Full Name *</Label>
                   <Input
                     id="fullName"
                     value={formData.fullName}
@@ -859,7 +798,7 @@ export default function RolePermissionManagement() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="password">Password</Label>
+                  <Label htmlFor="password">Password *</Label>
                   <Input
                     id="password"
                     type="password"
@@ -868,7 +807,7 @@ export default function RolePermissionManagement() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="role">Role</Label>
+                  <Label htmlFor="role">Role *</Label>
                   <Select 
                     value={formData.role} 
                     onValueChange={(value) => {
@@ -915,15 +854,7 @@ export default function RolePermissionManagement() {
                 </select>
               </div>
 
-              {/* Can Access All Units */}
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="canAccessAllUnits"
-                  checked={formData.permissions.canAccessAllUnits}
-                  onCheckedChange={handleCanAccessAllUnitsChange}
-                />
-                <Label htmlFor="canAccessAllUnits">Can Access All Units</Label>
-              </div>
+           
 
               {/* Module Permissions */}
               <div>
@@ -941,7 +872,15 @@ export default function RolePermissionManagement() {
                   </Button>
                 </div>
                 <div className="space-y-4 mt-4">
-                  {MODULES.map((module) => {
+                  {MODULES
+                    .filter(module => {
+                      // Show Settings module only for Super Admin users
+                      if (module.name === 'settings') {
+                        return formData.role === 'Super Admin';
+                      }
+                      return true;
+                    })
+                    .map((module) => {
                     const moduleEnabled = isModuleEnabled(module.name);
                     return (
                       <Card key={module.name} className={moduleEnabled ? 'border-blue-200' : 'border-gray-200'}>
@@ -1081,7 +1020,14 @@ export default function RolePermissionManagement() {
                   <tr key={user._id} className="border-b hover:bg-gray-50 dark:hover:bg-gray-800/50">
                     <td className="py-4 px-4">
                       <div className="flex flex-col">
-                        <div className="font-medium text-sm">{user.fullName || user.username}</div>
+                        <div className="font-medium text-sm">
+                          <span className="text-gray-500 text-xs mr-1">@</span>{user.username}
+                        </div>
+                        {user.fullName && user.fullName.trim() && !user.fullName.includes('No full name') && (
+                          <div className="text-xs text-gray-600 dark:text-gray-400">
+                            <span className="text-gray-400 mr-1">Name:</span>{user.fullName}
+                          </div>
+                        )}
                         <div className="text-xs text-muted-foreground">{user.email}</div>
                       </div>
                     </td>
@@ -1171,8 +1117,13 @@ export default function RolePermissionManagement() {
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">
-                        {user.fullName || user.username}
+                        <span className="text-gray-500 text-xs mr-1">@</span>{user.username}
                       </div>
+                      {user.fullName && user.fullName.trim() && !user.fullName.includes('No full name') && (
+                        <div className="text-xs text-gray-600 dark:text-gray-400 truncate mt-1">
+                          <span className="text-gray-400 mr-1">Name:</span>{user.fullName}
+                        </div>
+                      )}
                       <div className="text-xs text-gray-500 dark:text-gray-400 truncate mt-1">
                         {user.email}
                       </div>
@@ -1355,15 +1306,6 @@ export default function RolePermissionManagement() {
                 />
                 <Label htmlFor="edit-active">Active</Label>
               </div>
-              
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="edit-canAccessAllUnits"
-                  checked={formData.permissions.canAccessAllUnits}
-                  onCheckedChange={handleCanAccessAllUnitsChange}
-                />
-                <Label htmlFor="edit-canAccessAllUnits">Can Access All Units</Label>
-              </div>
             </div>
 
             {/* Module Permissions - Same as create form */}
@@ -1382,7 +1324,15 @@ export default function RolePermissionManagement() {
                 </Button>
               </div>
               <div className="space-y-4 mt-4">
-                {MODULES.map((module) => {
+                {MODULES
+                  .filter(module => {
+                    // Show Settings module only for Super Admin users
+                    if (module.name === 'settings') {
+                      return formData.role === 'Super Admin';
+                    }
+                    return true;
+                  })
+                  .map((module) => {
                   const moduleEnabled = isModuleEnabled(module.name);
                   return (
                     <Card key={module.name} className={moduleEnabled ? 'border-blue-200' : 'border-gray-200'}>

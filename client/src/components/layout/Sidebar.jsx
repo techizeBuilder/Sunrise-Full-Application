@@ -60,18 +60,6 @@ const superAdminMenuItems = [
     module: 'sales'
   },
   {
-    label: 'Purchases',
-    path: '/super-admin/purchases',
-    icon: Building,
-    module: 'purchases'
-  },
-  {
-    label: 'Manufacturing',
-    path: '/super-admin/manufacturing',
-    icon: Cog,
-    module: 'manufacturing'
-  },
-  {
     label: 'Dispatches',
     path: '/super-admin/dispatches',
     icon: Truck,
@@ -94,12 +82,6 @@ const superAdminMenuItems = [
     path: '/super-admin/customers',
     icon: Users,
     module: 'customers'
-  },
-  {
-    label: 'Suppliers',
-    path: '/super-admin/suppliers',
-    icon: Handshake,
-    module: 'suppliers'
   },
   {
     label: 'Companies',
@@ -163,24 +145,6 @@ const unitHeadMenuItems = [
     path: '/unit-head/customers',
     icon: Users,
     module: 'customers'
-  },
-  {
-    label: 'Suppliers',
-    path: '/unit-head/suppliers',
-    icon: Handshake,
-    module: 'suppliers'
-  },
-  {
-    label: 'Purchases',
-    path: '/unit-head/purchases',
-    icon: Building,
-    module: 'purchases'
-  },
-  {
-    label: 'Manufacturing',
-    path: '/unit-head/manufacturing',
-    icon: Cog,
-    module: 'manufacturing'
   },
   {
     label: 'Production Group',
@@ -258,26 +222,19 @@ const productionMenuItems = [
     icon: Factory,
     module: 'production'
   },
+    {
+    label: 'Production Sheet',
+    path: '/production/production-sheet',
+    icon: Clock,
+    module: 'production',
+    feature: 'productionSheet'
+  },
   {
     label: 'Production Reports',
     path: '/production/reports',
     icon: BarChart,
     module: 'production',
     feature: 'productionReports'
-  },
-  {
-    label: 'Production Group',
-    path: '/production/production-group',
-    icon: Users,
-    module: 'production',
-    feature: 'productionGroup'
-  },
-  {
-    label: 'Production Sheet',
-    path: '/production/production-sheet',
-    icon: Clock,
-    module: 'production',
-    feature: 'productionSheet'
   }
 ];
 

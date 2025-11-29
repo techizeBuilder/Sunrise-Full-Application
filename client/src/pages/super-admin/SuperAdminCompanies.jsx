@@ -291,7 +291,7 @@ const SuperAdminCompanies = () => {
               Add Company
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px]">
+          <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
             <CompanyForm
               onSubmit={(data) => createCompanyMutation.mutate(data)}
               isLoading={createCompanyMutation.isPending}
@@ -569,7 +569,7 @@ const SuperAdminCompanies = () => {
 
       {/* Edit Modal */}
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
           {selectedCompany && (
             <CompanyForm
               company={selectedCompany}
@@ -706,7 +706,7 @@ const CompanyForm = ({ company, onSubmit, isLoading, onCancel }) => {
         {/* Company Information Section */}
         <div className="space-y-4">
           <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">Company Information</h4>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="unitName">Unit Name *</Label>
               <Input
@@ -766,7 +766,7 @@ const CompanyForm = ({ company, onSubmit, isLoading, onCancel }) => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="mobile">Mobile</Label>
               <Input
@@ -809,7 +809,7 @@ const CompanyForm = ({ company, onSubmit, isLoading, onCancel }) => {
             {errors.address && <p className="text-sm text-red-500">{errors.address}</p>}
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="city">City *</Label>
               <Input
@@ -851,7 +851,7 @@ const CompanyForm = ({ company, onSubmit, isLoading, onCancel }) => {
         {/* Legal Information Section */}
         <div className="space-y-4">
           <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">Legal Information</h4>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="pan">PAN Number</Label>
               <Input

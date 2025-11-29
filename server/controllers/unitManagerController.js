@@ -1,6 +1,7 @@
 import Order from '../models/Order.js';
 import { Item } from '../models/Inventory.js';
 import User from '../models/User.js';
+import ProductDailySummary from '../models/ProductDailySummary.js';
 import mongoose from 'mongoose';
 
 // Get items for Unit Manager (inventory access)
@@ -81,6 +82,11 @@ export const getItems = async (req, res) => {
 // Update order status (approve/reject/move to production)
 export const updateOrderStatus = async (req, res) => {
   try {
+    console.log('🚀 UNIT MANAGER updateOrderStatus called');
+    console.log('Request params:', req.params);
+    console.log('Request body:', req.body);
+    console.log('User:', { id: req.user._id, role: req.user.role, companyId: req.user.companyId });
+    
     const user = req.user;
     const { id: orderId } = req.params;
     const { status, notes } = req.body;
@@ -112,8 +118,11 @@ export const updateOrderStatus = async (req, res) => {
       baseFilter.unit = user.unit;
     }
 
-    // Find the order with company isolation
-    const order = await Order.findOne({ _id: orderId, ...baseFilter });
+    // Find the order with company isolation and populate products
+    const order = await Order.findOne({ _id: orderId, ...baseFilter })
+      .populate('products.product', 'name code');
+    console.log('🔍 Found order:', order ? `${order.orderCode} (${order.status})` : 'NOT FOUND');
+    
     if (!order) {
       return res.status(404).json({
         success: false,
@@ -123,6 +132,100 @@ export const updateOrderStatus = async (req, res) => {
 
     // Update order status and add new history entry without validating existing entries
     const previousStatus = order.status; // Store previous status before updating
+    
+    // 🎯 CREATE PRODUCTDAILYSUMMARY ENTRIES WHEN ORDER IS APPROVED
+    if (status === 'approved') {
+      console.log('📊 Creating ProductDailySummary entries for approved order by Unit Manager...');
+      console.log('Order details:', {
+        orderId: order._id,
+        orderCode: order.orderCode,
+        currentStatus: order.status,
+        newStatus: status,
+        productsCount: order.products?.length || 0,
+        orderDate: order.orderDate,
+        companyId: order.companyId
+      });
+      
+      try {
+        for (const productItem of order.products) {
+          console.log(`\n🔍 Processing product: ${productItem.product?.name || 'Unknown'}`);
+          console.log(`   Product ID: ${productItem.product?._id}`);
+          console.log(`   Quantity: ${productItem.quantity}`);
+          
+          // Get complete product details including qtyPerBatch
+          let productName = productItem.product?.name;
+          const productId = productItem.product?._id || productItem.product;
+          let qtyPerBatch = 0;
+          
+          // Always fetch complete product details for batch information
+          console.log(`📦 Fetching complete product details from database...`);
+          const productDetails = await Item.findById(productId).select('name batch qty unit price').lean();
+          if (!productDetails) {
+            console.log(`⚠️ Product not found in database: ${productId}`);
+            continue;
+          }
+          
+          // Use product details - batch field contains the batch value we need
+          productName = productName || productDetails.name;
+          // Use batch value if available, otherwise fallback to qty or 1
+          qtyPerBatch = productDetails.batch ? parseInt(productDetails.batch) || productDetails.qty || 1 : productDetails.qty || 1;
+          
+          console.log(`   Using product name: ${productName}`);
+          console.log(`   Product qtyPerBatch: ${qtyPerBatch}`);
+          console.log(`   Product details: batch=${productDetails.batch}, qty=${productDetails.qty}, unit=${productDetails.unit}, price=${productDetails.price}`);
+          
+          // Check if ProductDailySummary entry already exists for this product and date
+          const existingSummary = await ProductDailySummary.findOne({
+            productId: productId,
+            date: order.orderDate,
+            companyId: order.companyId
+          });
+
+          if (existingSummary) {
+            // Update existing entry - add the ordered quantity to productionFinalBatches
+            const oldBatches = existingSummary.productionFinalBatches;
+            existingSummary.productionFinalBatches += productItem.quantity;
+            
+            // Update qtyPerBatch if it was 0 or not set
+            if (!existingSummary.qtyPerBatch || existingSummary.qtyPerBatch === 0) {
+              existingSummary.qtyPerBatch = qtyPerBatch;
+              console.log(`   📝 Updated qtyPerBatch from ${existingSummary.qtyPerBatch} to ${qtyPerBatch}`);
+            }
+            
+            await existingSummary.save();
+            console.log(`   ✅ Updated ProductDailySummary: ${productName}, ${oldBatches} + ${productItem.quantity} = ${existingSummary.productionFinalBatches} batches`);
+          } else {
+            // Create new ProductDailySummary entry with proper qtyPerBatch
+            const newSummary = new ProductDailySummary({
+              productId: productId,
+              productName: productName,
+              date: order.orderDate,
+              companyId: order.companyId,
+              productionFinalBatches: productItem.quantity,
+              qtyPerBatch: qtyPerBatch, // ✅ SET FROM ITEM DATA
+              totalRequirements: productItem.quantity,
+              createdAt: new Date(),
+              updatedAt: new Date()
+            });
+            
+            await newSummary.save();
+            console.log(`   ✅ Created new ProductDailySummary: ${productName}`);
+            console.log(`      - ProductionFinalBatches: ${productItem.quantity}`);
+            console.log(`      - QtyPerBatch: ${qtyPerBatch}`);
+            console.log(`      - TotalRequirements: ${productItem.quantity}`);
+          }
+        }
+        
+        console.log(`🎉 Successfully updated ProductDailySummary for order ${order.orderCode}`);
+      } catch (summaryError) {
+        console.error('❌ Failed to update ProductDailySummary:', summaryError);
+        console.error('Error details:', summaryError.message);
+        console.error('Stack trace:', summaryError.stack);
+        // Log error but don't fail the order approval
+      }
+    } else {
+      console.log(`ℹ️ Order status '${status}' - ProductDailySummary creation skipped (only for 'approved' status)`);
+    }
     
     const newHistoryEntry = {
       status: status,

@@ -693,7 +693,7 @@ export default function SimpleInventoryForm({
                   </p>
                 )}
               </div>
-              <div>
+              {/* <div>
                 <Label htmlFor="leadTime" className="text-sm font-medium text-gray-700">Lead Time (days)</Label>
                 <Input
                   id="leadTime"
@@ -704,7 +704,7 @@ export default function SimpleInventoryForm({
                   placeholder="0"
                   className="mt-1"
                 />
-              </div>
+              </div> */}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
               <div className="flex items-center space-x-2">

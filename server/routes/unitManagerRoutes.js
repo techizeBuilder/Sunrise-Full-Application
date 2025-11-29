@@ -38,7 +38,8 @@ router.get('/test', (req, res) => {
       id: req.user.id,
       username: req.user.username,
       role: req.user.role
-    }
+    },
+    codeVersion: 'PRODUCTDAILYSUMMARY_FIX_v2.0'
   });
 });
 
@@ -142,6 +143,7 @@ router.get('/salespersons', async (req, res) => {
 router.get('/fix-orders', fixOrdersSalesPersonAssignment); // Utility to fix existing orders
 // router.get('/users', getSalesPersons); // Commented - data now included in /orders
 router.put('/orders/:id/status', updateOrderStatus);
+router.patch('/orders/:id/status', updateOrderStatus); // Add PATCH support
 router.get('/dashboard/stats', getDashboardStats);
 
 // Production Groups routes (shared with Unit Head)

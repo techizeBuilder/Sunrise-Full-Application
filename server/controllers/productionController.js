@@ -1,4 +1,5 @@
 import ProductionGroup from '../models/ProductionGroup.js';
+import ProductDailySummary from '../models/ProductDailySummary.js';
 import { Item } from '../models/Inventory.js';
 import User from '../models/User.js';
 
@@ -62,114 +63,73 @@ export const getProductionDashboard = async (req, res) => {
       allGroups = [];
     }
 
-    // Calculate dashboard statistics
-    const totalGroups = allGroups.length;
-    const activeGroups = allGroups.filter(group => group && group.isActive !== false);
-    const inactiveGroups = allGroups.filter(group => group && group.isActive === false);
+    // Calculate production batches for each group from ProductDailySummary
+    const dashBoardData = [];
     
-    // Calculate total batches and items
-    let totalBatches = 0;
-    let totalItems = 0;
-    let pendingTasks = 0;
-    let completedToday = 0;
-    let damages = 0;
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    activeGroups.forEach(group => {
+    for (const group of allGroups) {
       try {
-        // Count batches (considering each production group as a batch)
-        totalBatches += 1;
+        if (!group.items || group.items.length === 0) {
+          // If no items in group, add with 0 batches
+          dashBoardData.push({
+            productGroup: group.name,
+            noOfBatchesForProduction: 0
+          });
+          continue;
+        }
+
+        // Get all item IDs from this production group
+        const itemIds = group.items.map(item => item._id);
         
-        // Count total items in all groups
-        if (group && group.items && Array.isArray(group.items)) {
-          totalItems += group.items.reduce((sum, item) => sum + (item && item.qty ? item.qty : 0), 0);
+        // Query ProductDailySummary for all items in this group
+        let summaryQuery = {
+          productId: { $in: itemIds }
+        };
+        
+        // Add company filter if user has company
+        if (req.user.companyId) {
+          summaryQuery.companyId = req.user.companyId;
         }
         
-        // Mock data for pending tasks, completed today, and damages
-        // In a real production system, this would come from production records
-        pendingTasks += Math.floor(Math.random() * 3); // 0-2 pending per group
+        const productSummaries = await ProductDailySummary.find(summaryQuery);
         
-        // Check if group was created today for "completed today"
-        if (group && group.createdAt) {
-          const groupDate = new Date(group.createdAt);
-          groupDate.setHours(0, 0, 0, 0);
-          if (groupDate.getTime() === today.getTime()) {
-            completedToday += 1;
-          }
-        }
+        // Calculate total productionFinalBatches for all items in this group
+        const totalBatches = productSummaries.reduce((total, summary) => {
+          return total + (summary.productionFinalBatches || 0);
+        }, 0);
         
-        // Random damages (in real system, this would be tracked separately)
-        damages += Math.floor(Math.random() * 2); // 0-1 damage per group
+        dashBoardData.push({
+          productGroup: group.name,
+          noOfBatchesForProduction: totalBatches
+        });
+        
+        console.log(`Group "${group.name}": ${group.items.length} items, ${totalBatches} total batches`);
+        
       } catch (groupError) {
-        console.error('Error processing group:', group?._id, groupError);
-        // Continue with next group
+        console.error(`Error processing group "${group.name}":`, groupError);
+        // Add group with 0 batches if error occurs
+        dashBoardData.push({
+          productGroup: group.name,
+          noOfBatchesForProduction: 0
+        });
       }
-    });
+    }
 
-    // Get recent production groups for dashboard table
-    const recentGroups = activeGroups.slice(0, 10).map(group => {
-      try {
-        const totalQuantity = (group && group.items && Array.isArray(group.items)) 
-          ? group.items.reduce((sum, item) => sum + (item && item.qty ? item.qty : 0), 0) 
-          : 0;
-        
-        return {
-          _id: group?._id || '',
-          name: group?.name || 'Unknown Group',
-          batches: 1, // Each group represents a batch
-          totalQuantity: totalQuantity,
-          items: (group && group.items && Array.isArray(group.items)) ? group.items.length : 0,
-          status: (group && group.isActive !== false) ? 'Active' : 'Inactive',
-          createdAt: group?.createdAt || new Date(),
-          createdBy: group?.createdBy?.username || 'Unknown',
-        // Format time fields properly for frontend
-        mouldingTime: group?.mouldingTime ? 
-          group.mouldingTime.toISOString().slice(0, 16) : null,
-        unloadingTime: group?.unloadingTime ? 
-          group.unloadingTime.toISOString().slice(0, 16) : null,
-          productionLoss: group?.productionLoss || 0
-        };
-      } catch (mappingError) {
-        console.error('Error mapping group:', group?._id, mappingError);
-        return {
-          _id: group?._id || '',
-          name: 'Error Loading Group',
-          batches: 0,
-          totalQuantity: 0,
-          items: 0,
-          status: 'Error',
-          createdAt: new Date(),
-          createdBy: 'Unknown'
-        };
-      }
-    });
+    console.log('Dashboard data calculated:', dashBoardData);
 
-    // Dashboard statistics with validation
-    const dashboardStats = {
-      totalBatches: Math.max(0, totalBatches || 0),
-      pendingTasks: Math.max(0, pendingTasks || 0),
-      completedToday: Math.max(0, completedToday || 0),
-      damages: Math.max(0, damages || 0),
-      totalGroups: Math.max(0, activeGroups.length || 0),
-      totalItems: Math.max(0, totalItems || 0),
-      productionRate: activeGroups.length > 0 ? Math.round((completedToday / activeGroups.length) * 100) : 0
-    };
+    // Calculate simple summary stats
+    const totalGroups = allGroups.length;
+    const totalItems = allGroups.reduce((total, group) => {
+      return total + (group.items ? group.items.length : 0);
+    }, 0);
 
-    console.log('Dashboard stats calculated:', dashboardStats);
-
+    // Return the new dashboard format with simple stats
     res.json({
       success: true,
       message: 'Production dashboard data fetched successfully',
-      data: {
-        stats: dashboardStats,
-        recentGroups: recentGroups,
-        summary: {
-          totalGroups: totalGroups,
-          activeGroups: activeGroups.length,
-          inactiveGroups: inactiveGroups.length
-        }
+      data: dashBoardData,
+      stats: {
+        totalGroups: totalGroups,
+        totalItems: totalItems
       }
     });
 

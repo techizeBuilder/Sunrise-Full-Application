@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { CheckCircle, XCircle, ArrowRight, Package, User, Settings, Clock, TrendingUp, AlertTriangle, BarChart, Calendar, Filter, Search, X } from 'lucide-react';
+import { CheckCircle, XCircle, ArrowRight, Package, User, Settings, Clock, TrendingUp, AlertTriangle, BarChart, Filter, Search, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const SalesApproval = () => {
@@ -27,7 +27,6 @@ const SalesApproval = () => {
   
   // Search and Filter states
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [showFilters, setShowFilters] = useState(false);
   const [filteredProducts, setFilteredProducts] = useState([]);
   
@@ -219,57 +218,6 @@ const SalesApproval = () => {
   useEffect(() => {
     applyFilters();
   }, [searchTerm, products]);
-  
-  // Load data for selected date
-  const loadDataForDate = async (date) => {
-    setLoading(true);
-    try {
-      // Update the date in fetchData logic
-      const productSummaryResponse = await fetch(`/api/sales/product-summary?date=${date}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      
-      if (productSummaryResponse.ok) {
-        const productSummaryData = await productSummaryResponse.json();
-        // Update production data with new date's data
-        if (productSummaryData.success && productSummaryData.products) {
-          const newProductionData = {};
-          productSummaryData.products.forEach(product => {
-            newProductionData[product.productName] = {
-              packing: product.summary.packing || 0,
-              physicalStock: product.summary.physicalStock || 0,
-              batchAdjusted: product.summary.batchAdjusted || 0,
-              qtyPerBatch: product.qtyPerBatch || 0,
-              toBeProducedDay: product.summary.toBeProducedDay || 0,
-              productionFinalBatches: product.summary.productionFinalBatches || 0,
-              totalIndent: product.summary.totalIndent || 0,
-              toBeProducedBatches: product.summary.toBeProducedBatches || 0,
-              expiryShortage: product.summary.expiryShortage || 0,
-              produceBatches: product.summary.produceBatches || 0
-            };
-          });
-          setProductionData(newProductionData);
-        }
-      }
-    } catch (error) {
-      console.error('Error loading data for date:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load data for selected date',
-        variant: 'destructive'
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  // Handle date change
-  const handleDateChange = (newDate) => {
-    setSelectedDate(newDate);
-    loadDataForDate(newDate);
-  };
 
   // Filter orders by date range
   const filterOrdersByDate = (orders) => {
@@ -289,8 +237,7 @@ const SalesApproval = () => {
   // Load production summary data
   const loadProductionSummary = async () => {
     try {
-      const dateToUse = selectedDate || new Date().toISOString().split('T')[0];
-      const response = await fetch(`/api/sales/product-summary?date=${dateToUse}`, {
+      const response = await fetch(`/api/sales/product-summary`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -390,9 +337,7 @@ const SalesApproval = () => {
     try {
       setLoading(true);
       
-      // Use selectedDate instead of hardcoded today
-      const dateToUse = selectedDate || new Date().toISOString().split('T')[0];
-      const productSummaryResponse = await fetch(`/api/sales/product-summary?date=${dateToUse}`, {
+      const productSummaryResponse = await fetch(`/api/sales/product-summary`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -583,7 +528,7 @@ const SalesApproval = () => {
 
   useEffect(() => {
     fetchData();
-  }, [selectedDate]); // Add selectedDate as dependency
+  }, []); // Load data on mount
 
   const handleBulkStatusUpdate = async () => {
     if (!selectedProductOrders.length || !selectedStatus) return;
@@ -825,19 +770,6 @@ const SalesApproval = () => {
                 
                 {/* Filter Controls */}
                 <div className={`flex flex-col lg:flex-row items-start lg:items-center gap-3 lg:gap-4 w-full lg:w-auto ${showFilters || 'hidden lg:flex'}`}>
-                  {/* Date Picker */}
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-gray-600" />
-                    <span className="text-sm font-medium text-gray-600">Date:</span>
-                    <Input
-                      type="date"
-                      value={selectedDate}
-                      onChange={(e) => handleDateChange(e.target.value)}
-                      className="w-full lg:w-auto text-sm"
-                      size="sm"
-                    />
-                  </div>
-                  
                   {/* Search */}
                   <div className="flex items-center gap-2">
                     <Search className="h-4 w-4 text-gray-600" />
