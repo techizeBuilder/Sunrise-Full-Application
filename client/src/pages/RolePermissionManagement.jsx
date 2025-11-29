@@ -163,7 +163,7 @@ const MODULES = [
     features: [
       { key: 'productionDashboard', label: 'Production Dashboard' },
       { key: 'productionReports', label: 'Production Reports' },
-      { key: 'productionShift', label: 'Production Shift' }
+      { key: 'productionSheet', label: 'Production Sheet' }
     ]
   },
   {
@@ -622,7 +622,7 @@ export default function RolePermissionManagement() {
               createFeaturePermissions('production', 'productionDashboard', { view: true, add: true, edit: true, delete: true, alter: true }),
               createFeaturePermissions('production', 'productionReports', { view: true, add: true, edit: true, delete: true, alter: true }),
               createFeaturePermissions('production', 'productionGroup', { view: true, add: true, edit: true, delete: true, alter: true }),
-              createFeaturePermissions('production', 'productionShift', { view: true, add: true, edit: true, delete: true, alter: true })
+              createFeaturePermissions('production', 'productionSheet', { view: true, add: true, edit: true, delete: true, alter: true })
             ]
           }
         ];

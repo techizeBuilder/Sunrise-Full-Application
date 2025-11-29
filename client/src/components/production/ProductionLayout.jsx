@@ -85,10 +85,10 @@ const productionNavItems = [
   },
   {
     id: 'production-shift',
-    label: 'Production Shift',
-    path: '/production/production-shift',
+    label: 'Production Sheet',
+    path: '/production/production-sheet',
     icon: Clock,
-    description: 'Manage production shifts'
+    description: 'Manage production sheets'
   }
 ];
 

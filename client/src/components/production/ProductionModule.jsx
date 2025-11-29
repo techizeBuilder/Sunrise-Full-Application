@@ -17,7 +17,7 @@ export default function ProductionModule() {
       <Route path="/production/production-group">
         <ProductionGroup />
       </Route>
-      <Route path="/production/production-shift">
+      <Route path="/production/production-sheet">
         <ProductionShift />
       </Route>
       <Route path="/production">
@@ -33,7 +33,7 @@ export default function ProductionModule() {
       <Route path="/super-admin/production/production-group">
         <ProductionGroup />
       </Route>
-      <Route path="/super-admin/production/production-shift">
+      <Route path="/super-admin/production/production-sheet">
         <ProductionShift />
       </Route>
       <Route path="/super-admin/production">
@@ -49,7 +49,7 @@ export default function ProductionModule() {
       <Route path="/unit-head/production/production-group">
         <ProductionGroup />
       </Route>
-      <Route path="/unit-head/production/production-shift">
+      <Route path="/unit-head/production/production-sheet">
         <ProductionShift />
       </Route>
       <Route path="/unit-head/production">

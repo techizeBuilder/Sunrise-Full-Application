@@ -273,11 +273,11 @@ const productionMenuItems = [
     feature: 'productionGroup'
   },
   {
-    label: 'Production Shift',
-    path: '/production/production-shift',
+    label: 'Production Sheet',
+    path: '/production/production-sheet',
     icon: Clock,
     module: 'production',
-    feature: 'productionShift'
+    feature: 'productionSheet'
   }
 ];
 

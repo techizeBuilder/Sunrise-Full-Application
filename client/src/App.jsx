@@ -403,13 +403,6 @@ function Router() {
         </ProtectedRoute>
       </Route>
       
-      {/* Production Routes */}
-      <Route path="/production/production-shift">
-        <ProtectedRoute>
-          <ProductionShift />
-        </ProtectedRoute>
-      </Route>
-      
       <Route component={NotFound} />
     </Switch>
   );

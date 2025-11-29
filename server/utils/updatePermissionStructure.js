@@ -13,7 +13,7 @@ export const updatePermissionStructure = async () => {
         { key: 'productionDashboard', view: true, add: true, edit: true, delete: true, alter: true },
         { key: 'productionReports', view: true, add: true, edit: true, delete: true, alter: true },
         { key: 'productionGroup', view: true, add: true, edit: true, delete: true, alter: true },
-        { key: 'productionShift', view: true, add: true, edit: true, delete: true, alter: true }
+        { key: 'productionSheet', view: true, add: true, edit: true, delete: true, alter: true }
       ]
     };
 
@@ -76,7 +76,7 @@ export const updatePermissionStructure = async () => {
           { key: 'productionDashboard', view: true, add: true, edit: true, delete: true, alter: true },
           { key: 'productionReports', view: true, add: true, edit: true, delete: true, alter: true },
           { key: 'productionGroup', view: true, add: true, edit: true, delete: true, alter: true },
-          { key: 'productionShift', view: true, add: true, edit: true, delete: true, alter: true }
+          { key: 'productionSheet', view: true, add: true, edit: true, delete: true, alter: true }
         ];
         await user.save();
       }
@@ -92,7 +92,7 @@ export const updatePermissionStructure = async () => {
           { key: 'productionDashboard', view: true, add: true, edit: true, delete: true, alter: true },
           { key: 'productionReports', view: true, add: true, edit: true, delete: true, alter: true },
           { key: 'productionGroup', view: true, add: true, edit: true, delete: true, alter: true },
-          { key: 'productionShift', view: true, add: true, edit: true, delete: true, alter: true }
+          { key: 'productionSheet', view: true, add: true, edit: true, delete: true, alter: true }
         ];
         await user.save();
       }

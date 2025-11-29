@@ -57,7 +57,7 @@ export const cleanupUserPermissions = async () => {
             { key: 'productionReports', view: true, add: true, edit: true, delete: true, alter: true },
             { key: 'productionGroup', view: true, add: true, edit: true, delete: true, alter: true },
             { key: 'quantityBatch', view: true, add: true, edit: true, delete: true, alter: true },
-            { key: 'productionShift', view: true, add: true, edit: true, delete: true, alter: true }
+            { key: 'productionSheet', view: true, add: true, edit: true, delete: true, alter: true }
           ]
         });
       }

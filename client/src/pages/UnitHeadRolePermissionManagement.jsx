@@ -90,7 +90,7 @@ const UNIT_HEAD_MODULES = [
     features: [
       { key: 'productionDashboard', label: 'Production Dashboard' },
       { key: 'productionReports', label: 'Production Reports' },
-      { key: 'productionShift', label: 'Production Shift' }
+      { key: 'productionSheet', label: 'Production Sheet' }
     ]
   },
   {

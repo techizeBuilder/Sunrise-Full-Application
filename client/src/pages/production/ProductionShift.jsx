@@ -376,7 +376,7 @@ export default function ProductionShift() {
       {/* Header - WITH ADD NEW BATCH BUTTON */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Production Shift Management dsadass</h1>
+          <h1 className="text-3xl font-bold">Production Sheet Management</h1>
           <p className="text-gray-600">Manage production shift timings and batch performance</p>
         </div>
       </div>
@@ -438,7 +438,7 @@ export default function ProductionShift() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Clock className="w-5 h-5" />
-            Production Shift Data ({productionGroups.length} Batches)
+            Production Sheet Data ({productionGroups.length} Batches)
           </CardTitle>
         </CardHeader>
         <CardContent>
