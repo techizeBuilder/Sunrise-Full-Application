@@ -28,6 +28,20 @@ const ProductionGroupSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  // Production shift timing fields
+  mouldingTime: {
+    type: Date,
+    default: null
+  },
+  unloadingTime: {
+    type: Date,
+    default: null
+  },
+  productionLoss: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
   metadata: {
     totalItems: {
       type: Number,

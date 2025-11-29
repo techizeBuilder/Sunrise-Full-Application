@@ -57,21 +57,31 @@ export default function ProductionShift() {
         console.log('✅ API call successful, setting production groups:', data.data.groups);
         setProductionGroups(data.data.groups);
         
-        // Initialize batch data with default values
+        // Initialize batch data with proper values from database
         const initialBatchData = {};
         data.data.groups.forEach(group => {
-          group.items.forEach((item, index) => {
-            const batchKey = `${group._id}-${index}`;
-            initialBatchData[batchKey] = {
-              productGroup: group.name,
-              mouldingTime: '00:00',
-              unloadingTime: '00:00', 
-              productionLoss: 0,
-              qtyBatch: item.qty,
-              qtyAchieved: item.qty
-            };
+          const batchKey = `${group._id}`;
+          
+          console.log('🔍 Initializing group data:', {
+            name: group.name,
+            mouldingTime: group.mouldingTime,
+            unloadingTime: group.unloadingTime,
+            productionLoss: group.productionLoss
           });
+          
+          initialBatchData[batchKey] = {
+            productGroup: group.name,
+            // Keep existing datetime values if they exist
+            mouldingTime: group.mouldingTime || '',
+            unloadingTime: group.unloadingTime || '',
+            // Keep existing production loss value, don't default to 0 if empty
+            productionLoss: group.productionLoss !== undefined && group.productionLoss !== null ? group.productionLoss : '',
+            qtyBatch: group.totalQuantity,
+            qtyAchieved: group.totalQuantity - (group.productionLoss || 0)
+          };
         });
+        
+        console.log('📊 Final initialized batch data:', initialBatchData);
         setBatchData(initialBatchData);
 
       } else {
@@ -95,8 +105,9 @@ export default function ProductionShift() {
     }
   };
 
-  // Handle batch data changes
-  const handleBatchDataChange = (batchKey, field, value) => {
+  // Handle batch data changes with auto-save
+  const handleBatchDataChange = async (batchKey, field, value) => {
+    // Update local state immediately
     setBatchData(prev => ({
       ...prev,
       [batchKey]: {
@@ -104,6 +115,78 @@ export default function ProductionShift() {
         [field]: value
       }
     }));
+
+    // Auto-save to API
+    await handleAutoSave(batchKey, field, value);
+  };
+
+  // Auto-save function - calls API when field changes
+  const handleAutoSave = async (batchKey, field, value) => {
+    try {
+      console.log(`🔄 Auto-saving ${field} for group ${batchKey}:`, value);
+      
+      let processedValue = value;
+      
+      // Convert datetime strings to proper ISO format
+      if (field === 'mouldingTime' || field === 'unloadingTime') {
+        if (value && value.trim() !== '') {
+          // datetime-local input gives us format: "2024-11-28T14:30"
+          processedValue = new Date(value).toISOString();
+          console.log(`🕐 Converted datetime ${value} to ISO: ${processedValue}`);
+        } else {
+          processedValue = null;
+          console.log(`🕐 Setting ${field} to null (empty datetime)`);
+        }
+      }
+      
+      const updateData = {
+        groupId: batchKey,
+        field: field,
+        value: processedValue
+      };
+
+      console.log('📤 Sending auto-save API request:', updateData);
+      const response = await fetch('/api/production/production-shift', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify(updateData)
+      });
+
+      const result = await response.json();
+      console.log('✅ Auto-save API Response:', result);
+
+      if (result.success) {
+        console.log(`✅ Successfully auto-saved ${field}`);
+        toast({
+          title: "Auto-saved",
+          description: `${field} updated successfully`,
+          duration: 2000
+        });
+        
+        // Refetch the production shift data to get updated values
+        console.log('🔄 Refetching production shift data after successful update...');
+        fetchProductionShiftData();
+      } else {
+        console.error('❌ Auto-save failed:', result.message);
+        toast({
+          title: "Auto-save failed",
+          description: result.message || `Failed to update ${field}`,
+          variant: "destructive",
+          duration: 3000
+        });
+      }
+    } catch (error) {
+      console.error(`❌ Auto-save error for ${field}:`, error);
+      toast({
+        title: "Auto-save error",
+        description: `Failed to auto-save ${field}: ${error.message}`,
+        variant: "destructive",
+        duration: 3000
+      });
+    }
   };
 
   // Save all changes
@@ -179,20 +262,40 @@ export default function ProductionShift() {
         {/* Moulding Time */}
         <TableCell>
           <Input
-            type="time"
-            value={batch.mouldingTime || '00:00'}
-            onChange={(e) => handleBatchDataChange(batchKey, 'mouldingTime', e.target.value)}
-            className="w-24"
+            type="datetime-local"
+            value={batch.mouldingTime || ''}
+            onChange={(e) => {
+              // Update local state immediately
+              setBatchData(prev => ({
+                ...prev,
+                [batchKey]: {
+                  ...prev[batchKey],
+                  mouldingTime: e.target.value
+                }
+              }));
+            }}
+            onBlur={(e) => handleBatchDataChange(batchKey, 'mouldingTime', e.target.value)}
+            className="w-48"
           />
         </TableCell>
         
         {/* Unloading Time */}
         <TableCell>
           <Input
-            type="time"
-            value={batch.unloadingTime || '00:00'}
-            onChange={(e) => handleBatchDataChange(batchKey, 'unloadingTime', e.target.value)}
-            className="w-24"
+            type="datetime-local"
+            value={batch.unloadingTime || ''}
+            onChange={(e) => {
+              // Update local state immediately
+              setBatchData(prev => ({
+                ...prev,
+                [batchKey]: {
+                  ...prev[batchKey],
+                  unloadingTime: e.target.value
+                }
+              }));
+            }}
+            onBlur={(e) => handleBatchDataChange(batchKey, 'unloadingTime', e.target.value)}
+            className="w-48"
           />
         </TableCell>
         
@@ -201,9 +304,26 @@ export default function ProductionShift() {
           <Input
             type="number"
             min="0"
-            value={batch.productionLoss || 0}
-            onChange={(e) => handleBatchDataChange(batchKey, 'productionLoss', parseInt(e.target.value) || 0)}
-            className="w-20"
+            step="0.01"
+            placeholder="Enter loss amount"
+            value={batch.productionLoss !== undefined && batch.productionLoss !== null ? batch.productionLoss : ''}
+            onChange={(e) => {
+              // Update local state immediately for typing
+              const value = e.target.value;
+              setBatchData(prev => ({
+                ...prev,
+                [batchKey]: {
+                  ...prev[batchKey],
+                  productionLoss: value === '' ? '' : parseFloat(value) || 0
+                }
+              }));
+            }}
+            onBlur={(e) => {
+              // Save to API when done editing
+              const value = e.target.value;
+              handleBatchDataChange(batchKey, 'productionLoss', value === '' ? 0 : parseFloat(value) || 0);
+            }}
+            className="w-24"
           />
         </TableCell>
         
@@ -253,7 +373,7 @@ export default function ProductionShift() {
       {/* Header - WITH ADD NEW BATCH BUTTON */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Production Shift Management</h1>
+          <h1 className="text-3xl font-bold">Production Shift Management dsadass</h1>
           <p className="text-gray-600">Manage production shift timings and batch performance</p>
         </div>
       </div>

@@ -123,7 +123,13 @@ export const getProductionDashboard = async (req, res) => {
           items: (group && group.items && Array.isArray(group.items)) ? group.items.length : 0,
           status: (group && group.isActive !== false) ? 'Active' : 'Inactive',
           createdAt: group?.createdAt || new Date(),
-          createdBy: group?.createdBy?.username || 'Unknown'
+          createdBy: group?.createdBy?.username || 'Unknown',
+        // Format time fields properly for frontend
+        mouldingTime: group?.mouldingTime ? 
+          group.mouldingTime.toISOString().slice(0, 16) : null,
+        unloadingTime: group?.unloadingTime ? 
+          group.unloadingTime.toISOString().slice(0, 16) : null,
+          productionLoss: group?.productionLoss || 0
         };
       } catch (mappingError) {
         console.error('Error mapping group:', group?._id, mappingError);
@@ -216,12 +222,25 @@ export const getProductionShiftData = async (req, res) => {
       const totalQuantity = group.items?.reduce((sum, item) => sum + (item.qty || 0), 0) || 0;
       const totalItems = group.items?.length || 0;
 
+      // Debug log to see the actual values
+      console.log(`Group ${group.name}:`, {
+        mouldingTime: group.mouldingTime,
+        unloadingTime: group.unloadingTime, 
+        productionLoss: group.productionLoss
+      });
+
       return {
         _id: group._id,
         name: group.name,
         description: group.description || '',
         totalItems: totalItems,
         totalQuantity: totalQuantity,
+        // Format time fields properly for frontend
+        mouldingTime: group?.mouldingTime ? 
+          group.mouldingTime.toISOString().slice(0, 16) : null,
+        unloadingTime: group?.unloadingTime ? 
+          group.unloadingTime.toISOString().slice(0, 16) : null,
+        productionLoss: group?.productionLoss !== undefined ? group.productionLoss : 0,
         items: group.items?.map(item => ({
           _id: item._id,
           name: item.name,
@@ -338,11 +357,20 @@ export const getProductionGroupShiftDetails = async (req, res) => {
 // Update production shift timing data (moulding time, unloading time, etc.)
 export const updateProductionShiftTiming = async (req, res) => {
   try {
-    const { groupId } = req.params;
-    const { timingData } = req.body; // Array of timing data for each item
+    // Handle both URL param and body groupId
+    const groupId = req.params.groupId || req.body.groupId;
+    const { field, value, timingData } = req.body;
     
     console.log('⏱️ Updating production shift timing for group:', groupId);
+    console.log('Field:', field, 'Value:', value);
     
+    if (!groupId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Group ID is required'
+      });
+    }
+
     let query = { _id: groupId };
 
     // COMPANY FILTERING: Only allow updates for same company groups
@@ -359,20 +387,61 @@ export const updateProductionShiftTiming = async (req, res) => {
       });
     }
 
-    // Note: Since we're storing timing data separately from the ProductionGroup model,
-    // we would typically store this in a separate ProductionShift collection
-    // For now, we'll just return success as the timing data would be handled
-    // by a separate shift management system
-
-    res.json({
-      success: true,
-      message: 'Production shift timing updated successfully',
-      data: {
-        groupId: groupId,
-        updatedAt: new Date(),
-        timingData: timingData
+    // Handle auto-save field updates
+    if (field && value !== undefined) {
+      const updateData = {};
+      
+      switch (field) {
+        case 'mouldingTime':
+          // Frontend sends ISO string or null
+          updateData.mouldingTime = value ? new Date(value) : null;
+          break;
+        case 'unloadingTime':
+          // Frontend sends ISO string or null
+          updateData.unloadingTime = value ? new Date(value) : null;
+          break;
+        case 'productionLoss':
+          updateData.productionLoss = parseFloat(value) || 0;
+          break;
+        default:
+          return res.status(400).json({
+            success: false,
+            message: `Invalid field: ${field}`
+          });
       }
-    });
+
+      // Update the production group
+      await ProductionGroup.findOneAndUpdate(query, updateData, { new: true });
+
+      return res.json({
+        success: true,
+        message: `${field} updated successfully`,
+        data: {
+          groupId: groupId,
+          field: field,
+          value: value,
+          updatedAt: new Date()
+        }
+      });
+    }
+
+    // Handle bulk timing data updates (legacy)
+    if (timingData) {
+      res.json({
+        success: true,
+        message: 'Production shift timing updated successfully',
+        data: {
+          groupId: groupId,
+          updatedAt: new Date(),
+          timingData: timingData
+        }
+      });
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: 'Either field/value or timingData is required'
+      });
+    }
 
   } catch (error) {
     console.error('Error updating production shift timing:', error);

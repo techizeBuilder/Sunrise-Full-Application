@@ -26,4 +26,7 @@ router.get('/production-shift/:groupId', getProductionGroupShiftDetails);
 // PUT /api/production/production-shift/:groupId - Update production shift timing data
 router.put('/production-shift/:groupId', updateProductionShiftTiming);
 
+// PUT /api/production/production-shift - Update production shift field (auto-save)
+router.put('/production-shift', updateProductionShiftTiming);
+
 export default router;
