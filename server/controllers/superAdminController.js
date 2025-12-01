@@ -321,7 +321,11 @@ export const getSuperAdminOrders = async (req, res) => {
     }
 
     if (status && status !== 'all') {
-      query.status = status;
+      // Only allow the 3 valid order statuses
+      const validStatuses = ['pending', 'approved', 'rejected'];
+      if (validStatuses.includes(status)) {
+        query.status = status;
+      }
     }
 
     if (search) {

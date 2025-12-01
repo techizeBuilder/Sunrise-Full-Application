@@ -105,11 +105,8 @@ export default function SuperAdminOrders() {
   const getStatusBadge = (status) => {
     const statusMap = {
       'pending': 'bg-yellow-100 text-yellow-800',
-      'approved': 'bg-blue-100 text-blue-800',
-      'in_production': 'bg-purple-100 text-purple-800',
-      'completed': 'bg-green-100 text-green-800',
-      'cancelled': 'bg-red-100 text-red-800',
-      'delivered': 'bg-emerald-100 text-emerald-800'
+      'approved': 'bg-green-100 text-green-800',
+      'rejected': 'bg-red-100 text-red-800'
     };
     return statusMap[status] || 'bg-gray-100 text-gray-800';
   };
@@ -242,10 +239,7 @@ export default function SuperAdminOrders() {
                   <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="approved">Approved</SelectItem>
-                  <SelectItem value="in_production">In Production</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                  <SelectItem value="cancelled">Cancelled</SelectItem>
-                  <SelectItem value="delivered">Delivered</SelectItem>
+                  <SelectItem value="rejected">Rejected</SelectItem>
                 </SelectContent>
               </Select>
             </div>
