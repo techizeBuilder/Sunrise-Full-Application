@@ -1,4 +1,5 @@
 import { useAuthContext } from '@/contexts/AuthContext';
+import { useSettings } from '@/hooks/useSettings';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -9,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { 
   User, 
   Settings, 
@@ -20,6 +22,32 @@ import {
 
 export default function SimpleHeader({ title = "Dashboard", onSidebarToggle }) {
   const { user, logout } = useAuthContext();
+  const { settings } = useSettings();
+
+  // Check if notifications are enabled for this user's role
+  const isNotificationEnabled = () => {
+    if (!user || !settings?.notifications?.roleSettings) {
+      return true; // Default to enabled if no settings
+    }
+
+    // Role key mapping
+    const roleKeyMapping = {
+      'Sales': 'salesPerson',
+      'Unit Head': 'unitHead',
+      'Unit Manager': 'unitManager', 
+      'Production': 'production',
+      'Accounts': 'accounts',
+      'Super Admin': 'superAdmin'
+    };
+
+    const roleKey = roleKeyMapping[user.role];
+    if (!roleKey) {
+      return true; // Default to enabled for unknown roles
+    }
+
+    // Check if role notifications are enabled (default to true if not set)
+    return settings.notifications.roleSettings[roleKey]?.enabled !== false;
+  };
 
   const handleLogout = () => {
     logout();
@@ -41,14 +69,8 @@ export default function SimpleHeader({ title = "Dashboard", onSidebarToggle }) {
         </div>
 
         <div className="flex items-center space-x-4">
-          {/* Notifications */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <Bell className="h-5 w-5" />
-          </Button>
+          {/* Notifications - only show if enabled for user's role */}
+          {isNotificationEnabled() && <NotificationBell />}
 
           {/* Search */}
           <Button

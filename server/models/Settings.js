@@ -116,6 +116,10 @@ const settingsSchema = new mongoose.Schema({
     productionAlert: {
       type: Boolean,
       default: true
+    },
+    roleSettings: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {}
     }
   },
   backup: {

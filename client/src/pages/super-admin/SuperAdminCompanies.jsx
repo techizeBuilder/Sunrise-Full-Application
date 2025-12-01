@@ -275,18 +275,18 @@ const SuperAdminCompanies = () => {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Company Management</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Company Management</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">
             Manage all companies across different locations
           </p>
         </div>
         <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button className="w-full sm:w-auto">
               <Plus className="h-4 w-4 mr-2" />
               Add Company
             </Button>
@@ -302,7 +302,7 @@ const SuperAdminCompanies = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
         {isLoading ? (
           // Loading skeleton for stats
           <>
@@ -371,8 +371,8 @@ const SuperAdminCompanies = () => {
 
       {/* Filters */}
       <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-wrap gap-4">
+        <CardContent className="pt-4 sm:pt-6">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:gap-4">
             <div className="flex-1 min-w-[200px]">
               <div className="relative">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -389,7 +389,7 @@ const SuperAdminCompanies = () => {
               value={filters.city || 'all'}
               onValueChange={(value) => handleFilterChange('city', value)}
             >
-              <SelectTrigger className="w-[150px]">
+              <SelectTrigger className="w-full sm:w-[150px]">
                 <SelectValue placeholder="Filter by City" />
               </SelectTrigger>
               <SelectContent>
@@ -404,7 +404,7 @@ const SuperAdminCompanies = () => {
               value={filters.isActive === 'true' ? 'active' : filters.isActive === 'false' ? 'inactive' : 'all'}
               onValueChange={(value) => handleFilterChange('isActive', value)}
             >
-              <SelectTrigger className="w-[120px]">
+              <SelectTrigger className="w-full sm:w-[120px]">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
@@ -420,6 +420,7 @@ const SuperAdminCompanies = () => {
                 setFilters({ search: '', city: '', state: '', companyType: '', isActive: '' });
                 setPagination({ page: 1, limit: 10 });
               }}
+              className="w-full sm:w-auto"
             >
               <Filter className="h-4 w-4 mr-2" />
               Clear Filters
@@ -430,8 +431,9 @@ const SuperAdminCompanies = () => {
 
       {/* Companies Table */}
       <Card>
-        <CardContent>
-          <Table>
+        <CardContent className="p-3 sm:p-6">
+          <div className="overflow-x-auto">
+            <Table className="min-w-[600px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Company</TableHead>
@@ -459,39 +461,39 @@ const SuperAdminCompanies = () => {
               ) : (
                 companies.map((company) => (
                   <TableRow key={company._id}>
-                    <TableCell>
+                    <TableCell className="min-w-[200px]">
                       <div>
-                        <div className="font-medium">{company.name}</div>
-                        <div className="text-sm text-muted-foreground">{company.unitName}</div>
+                        <div className="font-medium text-sm sm:text-base">{company.name}</div>
+                        <div className="text-xs sm:text-sm text-muted-foreground">{company.unitName}</div>
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="min-w-[150px]">
                       <div className="flex items-center">
-                        <MapPin className="h-4 w-4 mr-1 text-muted-foreground" />
-                        <span>{company.city}, {company.state}</span>
+                        <MapPin className="h-3 w-3 sm:h-4 sm:w-4 mr-1 text-muted-foreground flex-shrink-0" />
+                        <span className="text-xs sm:text-sm">{company.city}, {company.state}</span>
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="min-w-[180px]">
                       <div className="space-y-1">
-                        <div className="flex items-center text-sm">
-                          <Phone className="h-3 w-3 mr-1 text-muted-foreground" />
-                          {company.mobile}
+                        <div className="flex items-center text-xs sm:text-sm">
+                          <Phone className="h-3 w-3 mr-1 text-muted-foreground flex-shrink-0" />
+                          <span className="truncate">{company.mobile}</span>
                         </div>
-                        <div className="flex items-center text-sm">
-                          <Mail className="h-3 w-3 mr-1 text-muted-foreground" />
-                          {company.email}
+                        <div className="flex items-center text-xs sm:text-sm">
+                          <Mail className="h-3 w-3 mr-1 text-muted-foreground flex-shrink-0" />
+                          <span className="truncate">{company.email}</span>
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <Badge variant={company.isActive ? "default" : "secondary"}>
+                    <TableCell className="min-w-[80px]">
+                      <Badge variant={company.isActive ? "default" : "secondary"} className="text-xs">
                         {company.isActive ? "Active" : "Inactive"}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right min-w-[60px]">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -532,16 +534,17 @@ const SuperAdminCompanies = () => {
               )}
             </TableBody>
           </Table>
+          </div>
 
           {/* Pagination */}
           {paginationInfo.total > 1 && (
-            <div className="flex items-center justify-between mt-4">
-              <div className="text-sm text-muted-foreground">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between mt-4 gap-2 sm:gap-0">
+              <div className="text-xs sm:text-sm text-muted-foreground text-center sm:text-left">
                 Showing {((paginationInfo.current - 1) * pagination.limit) + 1} to{' '}
                 {Math.min(paginationInfo.current * pagination.limit, paginationInfo.count)} of{' '}
                 {paginationInfo.count} companies
               </div>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center justify-center sm:justify-end space-x-2">
                 <Button
                   variant="outline"
                   size="sm"

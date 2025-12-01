@@ -1,6 +1,7 @@
 import Notification from '../models/Notification.js';
 import pusher from '../config/pusher.js';
 import User from '../models/User.js';
+import Settings from '../models/Settings.js';
 
 class NotificationService {
   
@@ -82,6 +83,35 @@ class NotificationService {
   // Get notifications for a user
   async getUserNotifications(userId, userRole, userUnit = null, userCompanyId = null, { page = 1, limit = 20, unreadOnly = false } = {}) {
     try {
+      // Check if notifications are enabled for this role
+      const settings = await Settings.getSettings();
+      
+      // Get the role key mapping for settings
+      const roleKeyMapping = {
+        'Sales': 'salesPerson',
+        'Unit Head': 'unitHead', 
+        'Unit Manager': 'unitManager',
+        'Production': 'production',
+        'Accounts': 'accounts',
+        'Super Admin': 'superAdmin'
+      };
+      
+      const roleKey = roleKeyMapping[userRole];
+      
+      // If role notifications are disabled, return empty result
+      if (roleKey && settings.notifications?.roleSettings?.[roleKey]?.enabled === false) {
+        return {
+          notifications: [],
+          pagination: {
+            page: parseInt(page),
+            limit: parseInt(limit),
+            total: 0,
+            pages: 0
+          },
+          unreadCount: 0
+        };
+      }
+      
       const skip = (page - 1) * limit;
       
       let query = {
@@ -144,7 +174,7 @@ class NotificationService {
       }));
 
       const total = await Notification.countDocuments(query);
-      const unreadCount = await Notification.getUnreadCount(userId, userRole, userUnit, userCompanyId);
+      const unreadCount = await this.getUnreadCount(userId, userRole, userUnit, userCompanyId);
 
       return {
         notifications: notificationsWithReadStatus,
@@ -194,6 +224,26 @@ class NotificationService {
   // Mark all notifications as read for a user
   async markAllAsRead(userId, userRole, userUnit = null, userCompanyId = null) {
     try {
+      // Check if notifications are enabled for this role
+      const settings = await Settings.getSettings();
+      
+      // Get the role key mapping for settings
+      const roleKeyMapping = {
+        'Sales': 'salesPerson',
+        'Unit Head': 'unitHead', 
+        'Unit Manager': 'unitManager',
+        'Production': 'production',
+        'Accounts': 'accounts',
+        'Super Admin': 'superAdmin'
+      };
+      
+      const roleKey = roleKeyMapping[userRole];
+      
+      // If role notifications are disabled, return 0
+      if (roleKey && settings.notifications?.roleSettings?.[roleKey]?.enabled === false) {
+        return { markedCount: 0 };
+      }
+      
       let query = {
         $and: [
           {
@@ -256,6 +306,26 @@ class NotificationService {
   // Get unread count for user
   async getUnreadCount(userId, userRole, userUnit = null, userCompanyId = null) {
     try {
+      // Check if notifications are enabled for this role
+      const settings = await Settings.getSettings();
+      
+      // Get the role key mapping for settings
+      const roleKeyMapping = {
+        'Sales': 'salesPerson',
+        'Unit Head': 'unitHead', 
+        'Unit Manager': 'unitManager',
+        'Production': 'production',
+        'Accounts': 'accounts',
+        'Super Admin': 'superAdmin'
+      };
+      
+      const roleKey = roleKeyMapping[userRole];
+      
+      // If role notifications are disabled, return 0
+      if (roleKey && settings.notifications?.roleSettings?.[roleKey]?.enabled === false) {
+        return 0;
+      }
+      
       return await Notification.getUnreadCount(userId, userRole, userUnit, userCompanyId);
     } catch (error) {
       console.error('Error getting unread count:', error);

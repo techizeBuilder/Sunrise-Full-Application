@@ -27,6 +27,7 @@ const SalesApproval = () => {
   
   // Search and Filter states
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [showFilters, setShowFilters] = useState(false);
   const [filteredProducts, setFilteredProducts] = useState([]);
   
@@ -596,6 +597,22 @@ const SalesApproval = () => {
     setIsModalOpen(true);
   };
 
+  const handleCellClick = (productName, salesPersonName) => {
+    // COMMENTED OUT - Modal functionality disabled as requested
+    // Get the orders for this specific product and sales person
+    // const ordersForProductSales = gridData[productName]?.[salesPersonName] || [];
+    
+    // if (ordersForProductSales.length > 0) {
+    //   console.log(`Clicked on ${salesPersonName} for ${productName}:`, ordersForProductSales);
+    //   
+    //   // Open the modal with the specific orders for this product/salesperson combination
+    //   setSelectedProduct(productName);
+    //   setSelectedProductOrders(ordersForProductSales);
+    //   setSelectedStatus(ordersForProductSales[0]?.status || 'pending');
+    //   setIsModalOpen(true);
+    // }
+  };
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'Pending': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
@@ -820,7 +837,7 @@ const SalesApproval = () => {
         <CardContent className="p-0">
           {/* Responsive Table - Same UI for Mobile and Desktop */}
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1200px]">
+            <table className="w-full" style={{ minWidth: `${700 + (salesPersons.length * 150)}px` }}>
               {/* Header Row - Fixed 10 columns */}
               <thead>
                 <tr className="border-b bg-gray-50">
@@ -879,14 +896,20 @@ const SalesApproval = () => {
                       <div className="text-xs font-semibold text-gray-900">/Day</div>
                     </div>
                   </th>
-                  {/* 8. CutesBoy.ai Column */}
-                  <th className="p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[120px] lg:min-w-[150px]">
-                    <div className="flex flex-col items-center gap-1">
-                      <User className="h-3 w-3 lg:h-4 lg:w-4 text-gray-600" />
-                      <div className="text-xs font-semibold text-gray-900 text-center leading-tight">CutesBoy.ai</div>
-                    </div>
-                  </th>
-                  {/* 9. Total Indent Salesman Column */}
+                  
+                  {/* Dynamic Sales Person Columns */}
+                  {salesPersons.map((salesPersonName, index) => (
+                    <th key={salesPersonName} className="p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[120px] lg:min-w-[150px]">
+                      <div className="flex flex-col items-center gap-1">
+                        <User className="h-3 w-3 lg:h-4 lg:w-4 text-gray-600" />
+                        <div className="text-xs font-semibold text-gray-900 text-center leading-tight break-words max-w-[140px]">
+                          {salesPersonName}
+                        </div>
+                      </div>
+                    </th>
+                  ))}
+                  
+                  {/* Total Indent Salesman Column */}
                   <th className="p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[90px] lg:min-w-[120px] bg-gradient-to-r from-green-50 to-green-100">
                     <div className="flex flex-col items-center gap-1">
                       <Package className="h-3 w-3 lg:h-4 lg:w-4 text-green-600" />
@@ -894,7 +917,7 @@ const SalesApproval = () => {
                       <div className="text-xs font-bold text-gray-900">Salesman</div>
                     </div>
                   </th>
-                  {/* 10. Qty/Batch Column - LAST COLUMN */}
+                  {/* Qty/Batch Column - LAST COLUMN */}
                   <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[90px] lg:min-w-[110px]">
                     <div className="flex flex-col items-center gap-1">
                       <Package className="h-3 w-3 lg:h-4 lg:w-4 text-orange-600" />
@@ -914,9 +937,6 @@ const SalesApproval = () => {
                   // Get all orders for this product from all sales persons for modal functionality
                   const productOrders = productData ? 
                     productData.salesPersons.flatMap(sp => sp.orders || []) : [];
-
-                  // Get CutesBoy.ai sales data (first sales person for demo)
-                  const cutesBoyData = salesPersons.length > 0 ? gridData[product]?.[salesPersons[0]] || [] : [];
 
                   return (
                     <tr key={product} className="border-b hover:bg-gray-50/50 transition-colors">
@@ -1005,23 +1025,31 @@ const SalesApproval = () => {
                         </div>
                       </td>
 
-                      {/* 8. CutesBoy.ai Column */}
-                      <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
-                        {cutesBoyData.length === 0 ? (
-                          <span className="text-gray-400 text-sm">0</span>
-                        ) : (
-                          <div className="text-center">
-                            <div className="text-sm font-bold text-orange-600">
-                              {cutesBoyData.reduce((sum, order) => sum + (order.quantity || 0), 0)}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              {cutesBoyData.length} order{cutesBoyData.length !== 1 ? 's' : ''}
-                            </div>
-                          </div>
-                        )}
-                      </td>
+                      {/* Dynamic Sales Person Columns */}
+                      {salesPersons.map((salesPersonName) => {
+                        const salesPersonData = gridData[product]?.[salesPersonName] || [];
+                        const totalQty = salesPersonData.reduce((sum, order) => sum + (order.quantity || 0), 0);
+                        
+                        return (
+                          <td key={`${product}-${salesPersonName}`} className="bg-white p-1 lg:p-2 border-r text-center align-middle">
+                            {salesPersonData.length === 0 ? (
+                              <span className="text-gray-400 text-sm">0</span>
+                            ) : (
+                              // DISABLED CLICK FUNCTIONALITY - Modal removed as requested
+                              <div className="text-center rounded p-1">
+                                <div className="text-sm font-bold text-orange-600">
+                                  {totalQty}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  {salesPersonData.length} order{salesPersonData.length !== 1 ? 's' : ''}
+                                </div>
+                              </div>
+                            )}
+                          </td>
+                        );
+                      })}
 
-                      {/* 9. Total Indent Salesman Column */}
+                      {/* Total Indent Salesman Column */}
                       <td className="p-1 lg:p-2 border-r align-middle bg-gradient-to-r from-green-50 to-green-100 text-center">
                         <div className="text-center">
                           <div className="text-sm font-bold text-blue-600">
@@ -1033,7 +1061,7 @@ const SalesApproval = () => {
                         </div>
                       </td>
 
-                      {/* 10. Qty/Batch Column - LAST COLUMN */}
+                      {/* Qty/Batch Column - LAST COLUMN */}
                       <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
                         <div className="text-center">
                           <div className="text-sm font-bold text-orange-600">

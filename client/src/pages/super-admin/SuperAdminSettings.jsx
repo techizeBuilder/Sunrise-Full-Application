@@ -71,6 +71,7 @@ export default function SuperAdminSettings() {
   // Update settings mutation
   const updateSettingsMutation = useMutation({
     mutationFn: ({ section, data }) => {
+      console.log(`Making API call for ${section}:`, data);
       if (section === 'notifications') {
         return apiRequest('PUT', '/api/settings/notifications', data);
       } else if (section === 'company') {
@@ -80,11 +81,15 @@ export default function SuperAdminSettings() {
       }
       return apiRequest('PUT', `/api/settings/${section}`, data);
     },
-    onSuccess: () => {
+    onSuccess: (response, { section }) => {
+      console.log(`${section} settings update successful:`, response);
       queryClient.invalidateQueries(['settings']);
+      // Force refetch to get updated data
+      refetch();
       showSmartToast('success', 'Settings updated successfully');
     },
     onError: (error) => {
+      console.error('Settings update error:', error);
       showSmartToast('error', `Failed to update settings: ${error.message}`);
     }
   });
@@ -114,8 +119,13 @@ export default function SuperAdminSettings() {
   });
 
   const handleUpdateSettings = (section, data) => {
+    console.log(`Updating ${section} settings with:`, data);
     updateSettingsMutation.mutate({ section, data });
-    setFormData({});
+    // Clear form data after successful update
+    setFormData(prev => ({
+      ...prev,
+      [section]: {}
+    }));
     setHasChanges(false);
   };
 
@@ -332,10 +342,18 @@ export default function SuperAdminSettings() {
                 <div className="flex justify-end pt-4">
                   <Button 
                     onClick={() => {
+                      // Properly structure the data according to backend expectations
                       const sectionData = {
-                        ...settings.company,
-                        ...formData.company
+                        name: formData.company?.name ?? settings.company?.name,
+                        email: formData.company?.email ?? settings.company?.contact?.email,
+                        logo: settings.company?.logo, // Keep existing logo
+                        address: formData.company?.address ?? settings.company?.address?.street,
+                        phone: formData.company?.phone ?? settings.company?.contact?.phone,
+                        website: formData.company?.website ?? settings.company?.contact?.website,
+                        gstNumber: settings.company?.gstNumber,
+                        panNumber: settings.company?.panNumber
                       };
+                      console.log('Sending company update data:', sectionData);
                       handleUpdateSettings('company', sectionData);
                     }}
                     disabled={updateSettingsMutation.isLoading}
@@ -404,17 +422,6 @@ export default function SuperAdminSettings() {
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <Switch 
-                    checked={formData.system?.maintenanceMode ?? settings.system?.maintenanceMode ?? false}
-                    onCheckedChange={(checked) => handleFieldChange('system', 'maintenanceMode', checked)}
-                  />
-                  <Label>Maintenance Mode</Label>
-                  <Badge variant={(formData.system?.maintenanceMode ?? settings.system?.maintenanceMode) ? 'destructive' : 'secondary'}>
-                    {(formData.system?.maintenanceMode ?? settings.system?.maintenanceMode) ? 'Enabled' : 'Disabled'}
-                  </Badge>
                 </div>
 
                 {/* Update Button */}

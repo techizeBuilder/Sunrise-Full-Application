@@ -182,9 +182,9 @@ export const updateOrderStatus = async (req, res) => {
           });
 
           if (existingSummary) {
-            // Update existing entry - add the ordered quantity to productionFinalBatches
+            // Update existing entry - set productionFinalBatches to 0 instead of adding quantity
             const oldBatches = existingSummary.productionFinalBatches;
-            existingSummary.productionFinalBatches += productItem.quantity;
+            existingSummary.productionFinalBatches = 0; // Always set to 0 as requested
             
             // Update qtyPerBatch if it was 0 or not set
             if (!existingSummary.qtyPerBatch || existingSummary.qtyPerBatch === 0) {
@@ -193,7 +193,7 @@ export const updateOrderStatus = async (req, res) => {
             }
             
             await existingSummary.save();
-            console.log(`   ✅ Updated ProductDailySummary: ${productName}, ${oldBatches} + ${productItem.quantity} = ${existingSummary.productionFinalBatches} batches`);
+            console.log(`   ✅ Updated ProductDailySummary: ${productName}, ${oldBatches} set to 0 (was ${oldBatches})`);
           } else {
             // Create new ProductDailySummary entry with proper qtyPerBatch
             const newSummary = new ProductDailySummary({
@@ -201,7 +201,7 @@ export const updateOrderStatus = async (req, res) => {
               productName: productName,
               date: order.orderDate,
               companyId: order.companyId,
-              productionFinalBatches: productItem.quantity,
+              productionFinalBatches: 0, // Always set to 0 as requested
               qtyPerBatch: qtyPerBatch, // ✅ SET FROM ITEM DATA
               totalRequirements: productItem.quantity,
               createdAt: new Date(),
@@ -210,7 +210,7 @@ export const updateOrderStatus = async (req, res) => {
             
             await newSummary.save();
             console.log(`   ✅ Created new ProductDailySummary: ${productName}`);
-            console.log(`      - ProductionFinalBatches: ${productItem.quantity}`);
+            console.log(`      - ProductionFinalBatches: 0 (always set to 0)`);
             console.log(`      - QtyPerBatch: ${qtyPerBatch}`);
             console.log(`      - TotalRequirements: ${productItem.quantity}`);
           }

@@ -14,6 +14,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useAuth } from '@/hooks/useAuth';
+import { useSettings } from '@/hooks/useSettings';
 import { formatDistanceToNow } from 'date-fns';
 
 // Icon mapping for notification types
@@ -43,6 +45,8 @@ const getPriorityColor = (priority) => {
 
 export const NotificationBell = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const { user } = useAuth();
+  const { settings } = useSettings();
   const { 
     notifications, 
     unreadCount, 
@@ -53,6 +57,47 @@ export const NotificationBell = () => {
     toggleSound,
     isConnected 
   } = useNotifications({ limit: 10 });
+
+  // Check if notifications are enabled for this user's role
+  const isNotificationEnabled = () => {
+    if (!user || !settings?.notifications?.roleSettings) {
+      console.log('NotificationBell: No user or no roleSettings, defaulting to enabled', { user: user?.role, settings: settings?.notifications?.roleSettings });
+      return true; // Default to enabled if no settings
+    }
+
+    // Role key mapping
+    const roleKeyMapping = {
+      'Sales': 'salesPerson',
+      'Unit Head': 'unitHead',
+      'Unit Manager': 'unitManager', 
+      'Production': 'production',
+      'Accounts': 'accounts',
+      'Super Admin': 'superAdmin'
+    };
+
+    const roleKey = roleKeyMapping[user.role];
+    if (!roleKey) {
+      console.log('NotificationBell: Unknown role, defaulting to enabled', { role: user.role });
+      return true; // Default to enabled for unknown roles
+    }
+
+    // Check if role notifications are enabled (default to true if not set)
+    const enabled = settings.notifications.roleSettings[roleKey]?.enabled !== false;
+    console.log('NotificationBell: Role notification check', { 
+      role: user.role, 
+      roleKey, 
+      enabled, 
+      roleSettings: settings.notifications.roleSettings[roleKey],
+      allRoleSettings: settings.notifications.roleSettings
+    });
+    return enabled;
+  };
+
+  // Don't render notification bell if notifications are disabled for this role
+  if (!isNotificationEnabled()) {
+    console.log('NotificationBell: Hiding notification bell for role', user.role);
+    return null;
+  }
 
   const handleNotificationClick = async (notification) => {
     if (!notification.isReadByUser) {

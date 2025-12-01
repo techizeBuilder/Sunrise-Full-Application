@@ -8,9 +8,9 @@ export function useSettings() {
   });
 
   return {
-    settings: settingsData?.settings,
+    settings: settingsData?.data,
     isLoading,
-    companyLogo: settingsData?.settings?.company?.logo,
-    companyName: settingsData?.settings?.company?.name || 'ManuERP Industries'
+    companyLogo: settingsData?.data?.company?.logo,
+    companyName: settingsData?.data?.company?.name || 'ManuERP Industries'
   };
 }

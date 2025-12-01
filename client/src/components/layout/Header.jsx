@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
+import { useSettings } from '@/hooks/useSettings';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
 import {
   Menu,
   Sun,
@@ -22,7 +24,32 @@ import {
 
 export default function Header({ onSidebarToggle, title = "Dashboard" }) {
   const { user, logout } = useAuth();
-  const [notifications] = useState(3); // This would come from API
+  const { settings } = useSettings();
+
+  // Check if notifications are enabled for this user's role
+  const isNotificationEnabled = () => {
+    if (!user || !settings?.notifications?.roleSettings) {
+      return true; // Default to enabled if no settings
+    }
+
+    // Role key mapping
+    const roleKeyMapping = {
+      'Sales': 'salesPerson',
+      'Unit Head': 'unitHead',
+      'Unit Manager': 'unitManager', 
+      'Production': 'production',
+      'Accounts': 'accounts',
+      'Super Admin': 'superAdmin'
+    };
+
+    const roleKey = roleKeyMapping[user.role];
+    if (!roleKey) {
+      return true; // Default to enabled for unknown roles
+    }
+
+    // Check if role notifications are enabled (default to true if not set)
+    return settings.notifications.roleSettings[roleKey]?.enabled !== false;
+  };
 
   const handleLogout = () => {
     logout();
@@ -53,22 +80,8 @@ export default function Header({ onSidebarToggle, title = "Dashboard" }) {
             <Sun className="h-5 w-5" />
           </Button>
 
-          {/* Notifications */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="relative text-muted-foreground hover:text-foreground"
-          >
-            <Bell className="h-5 w-5" />
-            {notifications > 0 && (
-              <Badge 
-                variant="destructive" 
-                className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs"
-              >
-                {notifications}
-              </Badge>
-            )}
-          </Button>
+          {/* Notifications - only show if enabled for user's role */}
+          {isNotificationEnabled() && <NotificationBell />}
 
           {/* User Menu */}
           <DropdownMenu>

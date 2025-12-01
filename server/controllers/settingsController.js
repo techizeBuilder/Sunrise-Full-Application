@@ -87,17 +87,92 @@ export const updateCompanySettings = async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    const { name, address, contact, gstNumber, panNumber } = req.body;
+    console.log('Received company settings update request:', req.body);
+    
+    const { name, address, contact, gstNumber, panNumber, email, logo, phone, website } = req.body;
 
     const settings = await Settings.getSettings();
     
-    if (name) settings.company.name = name;
-    if (address) settings.company.address = { ...settings.company.address, ...address };
-    if (contact) settings.company.contact = { ...settings.company.contact, ...contact };
-    if (gstNumber !== undefined) settings.company.gstNumber = gstNumber;
-    if (panNumber !== undefined) settings.company.panNumber = panNumber;
+    console.log('Before update - settings.company:', JSON.stringify(settings.company, null, 2));
+    
+    // Initialize company object if it doesn't exist
+    if (!settings.company) {
+      settings.company = {
+        name: 'ManuERP Industries',
+        contact: {},
+        address: {}
+      };
+    }
+    
+    if (!settings.company.contact) settings.company.contact = {};
+    if (!settings.company.address) settings.company.address = {};
+    
+    // Update fields
+    if (name !== undefined) {
+      console.log('Updating name:', name);
+      settings.company.name = name;
+    }
+    
+    // Handle address field directly (map to address.street)
+    if (address !== undefined) {
+      console.log('Updating address:', address);
+      settings.company.address.street = address;
+      // Mark the path as modified to ensure Mongoose saves it
+      settings.markModified('company.address');
+    }
+    
+    // Handle nested contact object
+    if (contact) {
+      console.log('Updating contact object:', contact);
+      settings.company.contact = { ...settings.company.contact, ...contact };
+      settings.markModified('company.contact');
+    }
+    
+    // Handle email field directly (map to contact.email)
+    if (email !== undefined) {
+      console.log('Updating email:', email);
+      settings.company.contact.email = email;
+      settings.markModified('company.contact');
+    }
+    
+    // Handle phone field directly (map to contact.phone)
+    if (phone !== undefined) {
+      console.log('Updating phone:', phone);
+      settings.company.contact.phone = phone;
+      settings.markModified('company.contact');
+    }
+    
+    // Handle website field directly (map to contact.website)
+    if (website !== undefined) {
+      console.log('Updating website:', website);
+      settings.company.contact.website = website;
+      settings.markModified('company.contact');
+    }
+    
+    // Handle logo field directly
+    if (logo !== undefined) {
+      console.log('Updating logo:', logo);
+      settings.company.logo = logo;
+    }
+    
+    if (gstNumber !== undefined) {
+      console.log('Updating GST number:', gstNumber);
+      settings.company.gstNumber = gstNumber;
+    }
+    
+    if (panNumber !== undefined) {
+      console.log('Updating PAN number:', panNumber);
+      settings.company.panNumber = panNumber;
+    }
 
+    // Mark the entire company object as modified to ensure it saves
+    settings.markModified('company');
+    
+    console.log('Before save - settings.company:', JSON.stringify(settings.company, null, 2));
+    
     await settings.save();
+
+    console.log('After save - settings.company:', JSON.stringify(settings.company, null, 2));
 
     res.json({
       message: 'Company settings updated successfully',
@@ -144,8 +219,10 @@ export const updateNotificationSettings = async (req, res) => {
     }
 
     const { roleNotifications } = req.body;
+    console.log('Received roleNotifications:', JSON.stringify(roleNotifications, null, 2));
 
     const settings = await Settings.getSettings();
+    console.log('Current settings before update:', JSON.stringify(settings.notifications, null, 2));
     
     // Update role-based notification settings
     if (roleNotifications) {
@@ -158,9 +235,14 @@ export const updateNotificationSettings = async (req, res) => {
           ...roleNotifications[role]
         };
       });
+      
+      // Mark the nested object as modified for MongoDB
+      settings.markModified('notifications.roleSettings');
     }
 
     await settings.save();
+
+    console.log('Settings after save:', JSON.stringify(settings.notifications, null, 2));
 
     res.json({
       message: 'Notification settings updated successfully',

@@ -24,6 +24,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
+import { useSettings } from '@/hooks/useSettings';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
 
 // Production module navigation items
 const productionNavItems = [
@@ -94,8 +96,34 @@ const productionNavItems = [
 
 export default function ProductionLayout({ children }) {
   const { user } = useAuth();
+  const { settings } = useSettings();
   const [location, navigate] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Check if notifications are enabled for this user's role
+  const isNotificationEnabled = () => {
+    if (!user || !settings?.notifications?.roleSettings) {
+      return true; // Default to enabled if no settings
+    }
+
+    // Role key mapping
+    const roleKeyMapping = {
+      'Sales': 'salesPerson',
+      'Unit Head': 'unitHead',
+      'Unit Manager': 'unitManager', 
+      'Production': 'production',
+      'Accounts': 'accounts',
+      'Super Admin': 'superAdmin'
+    };
+
+    const roleKey = roleKeyMapping[user.role];
+    if (!roleKey) {
+      return true; // Default to enabled for unknown roles
+    }
+
+    // Check if role notifications are enabled (default to true if not set)
+    return settings.notifications.roleSettings[roleKey]?.enabled !== false;
+  };
 
   // Get current active nav item
   const activeNavItem = productionNavItems.find(item => 
@@ -139,17 +167,11 @@ export default function ProductionLayout({ children }) {
             <Button variant="ghost" size="sm">
               <Search className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="sm" className="relative">
-              <Bell className="h-4 w-4" />
-              <Badge 
-                variant="destructive" 
-                className="absolute -top-1 -right-1 h-5 w-5 p-0 text-xs"
-              >
-                3
-              </Badge>
-            </Button>
+            {/* Notifications - only show if enabled for user's role */}
+            {isNotificationEnabled() && <NotificationBell />}
             <Button variant="ghost" size="sm">
               <Settings className="h-4 w-4" />
+            </Button>
             </Button>
             <div className="text-sm text-gray-600 dark:text-gray-400">
               {user?.username} | {user?.role}

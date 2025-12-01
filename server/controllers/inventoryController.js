@@ -847,28 +847,23 @@ export const getCategories = async (req, res) => {
 
     let categories;
 
-    // For Unit Head users, only show categories that exist in their company's inventory
+    // For Unit Head users, show all categories but with company-specific product counts
     if (req.user.role === 'Unit Head' && req.user.companyId) {
-      console.log('🏢 Unit Head - filtering by company:', req.user.companyId);
+      console.log('🏢 Unit Head - showing all categories with company-specific counts:', req.user.companyId);
       
-      // Get distinct categories from items that belong to the Unit Head's company
-      const companyCategories = await Item.distinct('category', { store: req.user.companyId });
+      // Get all categories (not just ones with items in the company)
+      const allCategories = await Category.find().sort({ createdAt: -1, name: 1 });
       
-      // Get category documents for those categories that exist in the company
-      const rawCategories = await Category.find({ 
-        name: { $in: companyCategories } 
-      }).sort({ createdAt: -1, name: 1 });
-
       // Add product count for each category (company-specific)
       categories = await Promise.all(
-        rawCategories.map(async (category) => {
+        allCategories.map(async (category) => {
           const productCount = await Item.countDocuments({ 
             category: category.name,
             store: req.user.companyId 
           });
           const categoryObj = category.toObject();
           categoryObj.productCount = productCount;
-          console.log(`📊 Category "${category.name}" has ${productCount} products (company-specific)`);
+          console.log(`📊 Category "${category.name}" has ${productCount} products in company ${req.user.companyId}`);
           return categoryObj;
         })
       );

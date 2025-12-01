@@ -734,29 +734,29 @@ export default function RolePermissionManagement() {
   }
 
   return (
-    <div className="space-y-6 p-2 sm:p-4 md:p-6">
+    <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Role & Permission Management</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Role & Permission Management</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">
             View user roles and permission structures. Use User Management to create and edit users.
           </p>
         </div>
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={() => { resetForm(); setIsCreateDialogOpen(true); }}>
+            <Button onClick={() => { resetForm(); setIsCreateDialogOpen(true); }} className="w-full sm:w-auto">
               <UserPlus className="h-4 w-4 mr-2" />
               Create New User
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto mx-2 sm:mx-4">
+          <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto mx-2 sm:mx-4">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <UserPlus className="h-5 w-5" />
+              <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
+                <UserPlus className="h-4 w-4 sm:h-5 sm:w-5" />
                 Create New User
               </DialogTitle>
-              <DialogDescription>
+              <DialogDescription className="text-sm">
                 Configure user details and module-level permissions
               </DialogDescription>
             </DialogHeader>
@@ -1004,59 +1004,59 @@ export default function RolePermissionManagement() {
         <CardContent>
           {/* Desktop Table */}
           <div className="hidden sm:block overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-[800px]">
               <thead>
                 <tr className="border-b">
-                  <th className="text-left py-3 px-4 font-medium text-sm">User</th>
-                  <th className="text-left py-3 px-4 font-medium text-sm">Role</th>
-                  <th className="text-left py-3 px-4 font-medium text-sm">Company/Location</th>
-                  <th className="text-left py-3 px-4 font-medium text-sm">Status</th>
-                  <th className="text-left py-3 px-4 font-medium text-sm">Module Permissions</th>
-                  <th className="text-center py-3 px-4 font-medium text-sm">Actions</th>
+                  <th className="text-left py-3 px-2 sm:px-4 font-medium text-xs sm:text-sm min-w-[180px]">User</th>
+                  <th className="text-left py-3 px-2 sm:px-4 font-medium text-xs sm:text-sm min-w-[100px]">Role</th>
+                  <th className="text-left py-3 px-2 sm:px-4 font-medium text-xs sm:text-sm min-w-[150px]">Company/Location</th>
+                  <th className="text-left py-3 px-2 sm:px-4 font-medium text-xs sm:text-sm min-w-[80px]">Status</th>
+                  <th className="text-left py-3 px-2 sm:px-4 font-medium text-xs sm:text-sm min-w-[200px]">Module Permissions</th>
+                  <th className="text-center py-3 px-2 sm:px-4 font-medium text-xs sm:text-sm min-w-[120px]">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {users.map((user) => (
                   <tr key={user._id} className="border-b hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                    <td className="py-4 px-4">
+                    <td className="py-3 sm:py-4 px-2 sm:px-4">
                       <div className="flex flex-col">
-                        <div className="font-medium text-sm">
+                        <div className="font-medium text-xs sm:text-sm break-words">
                           <span className="text-gray-500 text-xs mr-1">@</span>{user.username}
                         </div>
                         {user.fullName && user.fullName.trim() && !user.fullName.includes('No full name') && (
-                          <div className="text-xs text-gray-600 dark:text-gray-400">
+                          <div className="text-xs text-gray-600 dark:text-gray-400 break-words">
                             <span className="text-gray-400 mr-1">Name:</span>{user.fullName}
                           </div>
                         )}
-                        <div className="text-xs text-muted-foreground">{user.email}</div>
+                        <div className="text-xs text-muted-foreground break-words">{user.email}</div>
                       </div>
                     </td>
-                    <td className="py-4 px-4">
+                    <td className="py-3 sm:py-4 px-2 sm:px-4">
                       <Badge variant={getRoleBadgeVariant(user.role)} className="text-xs">
                         {user.role}
                       </Badge>
                     </td>
-                    <td className="py-4 px-4">
-                      <div className="text-xs">
+                    <td className="py-3 sm:py-4 px-2 sm:px-4">
+                      <div className="text-xs break-words">
                         {user.companyId ? (
                           <div className="flex flex-col">
-                            <span className="font-medium">{user.companyId.name || user.companyId.unitName}</span>
-                            <span className="text-muted-foreground">{user.companyId.city}, {user.companyId.state}</span>
+                            <span className="font-medium break-words">{user.companyId.name || user.companyId.unitName}</span>
+                            <span className="text-muted-foreground break-words">{user.companyId.city}, {user.companyId.state}</span>
                           </div>
                         ) : (
                           <span className="text-muted-foreground italic">No specific location</span>
                         )}
                       </div>
                     </td>
-                    <td className="py-4 px-4">
+                    <td className="py-3 sm:py-4 px-2 sm:px-4">
                       <Badge variant={user.isActive ? "default" : "secondary"} className="text-xs">
                         {user.isActive ? 'Active' : 'Inactive'}
                       </Badge>
                     </td>
-                    <td className="py-4 px-4">
-                      <div className="flex flex-wrap gap-1">
+                    <td className="py-3 sm:py-4 px-2 sm:px-4">
+                      <div className="flex flex-wrap gap-1 max-w-[150px] sm:max-w-[200px]">
                         {user.permissions && user.permissions.modules ? (
-                          user.permissions.modules.slice(0, 4).map((module) => (
+                          user.permissions.modules.slice(0, 2).map((module) => (
                             <Badge key={module.name} variant="outline" className="text-xs">
                               {module.name}
                             </Badge>
@@ -1064,41 +1064,41 @@ export default function RolePermissionManagement() {
                         ) : (
                           <span className="text-xs text-gray-500">Role-based permissions</span>
                         )}
-                        {user.permissions?.modules?.length > 4 && (
+                        {user.permissions?.modules?.length > 2 && (
                           <Badge variant="outline" className="text-xs">
-                            +{user.permissions.modules.length - 4} more
+                            +{user.permissions.modules.length - 2} more
                           </Badge>
                         )}
                       </div>
                     </td>
-                    <td className="py-4 px-4">
+                    <td className="py-3 sm:py-4 px-1 sm:px-4">
                       <div className="flex items-center justify-center gap-1">
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => handlePasswordUpdate(user)}
-                          className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                          className="h-7 w-7 sm:h-8 sm:w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                           title="Update Password"
                         >
-                          <Lock className="h-4 w-4" />
+                          <Lock className="h-3 w-3 sm:h-4 sm:w-4" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => handleEditUser(user)}
-                          className="h-8 w-8 p-0 text-gray-600 hover:text-gray-700 hover:bg-gray-50"
+                          className="h-7 w-7 sm:h-8 sm:w-8 p-0 text-gray-600 hover:text-gray-700 hover:bg-gray-50"
                           title="Edit User"
                         >
-                          <Edit className="h-4 w-4" />
+                          <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => handleDeleteUser(user)}
-                          className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                          className="h-7 w-7 sm:h-8 sm:w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
                           title="Delete User"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
                         </Button>
                       </div>
                     </td>
@@ -1111,56 +1111,56 @@ export default function RolePermissionManagement() {
           {/* Mobile Cards */}
           <div className="sm:hidden space-y-3">
             {users.map((user) => (
-              <div key={user._id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
+              <div key={user._id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-800">
                 <div className="space-y-3">
                   {/* User Info */}
                   <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">
+                    <div className="flex-1 min-w-0 pr-2">
+                      <div className="font-medium text-sm text-gray-900 dark:text-gray-100 break-words">
                         <span className="text-gray-500 text-xs mr-1">@</span>{user.username}
                       </div>
                       {user.fullName && user.fullName.trim() && !user.fullName.includes('No full name') && (
-                        <div className="text-xs text-gray-600 dark:text-gray-400 truncate mt-1">
+                        <div className="text-xs text-gray-600 dark:text-gray-400 break-words mt-1">
                           <span className="text-gray-400 mr-1">Name:</span>{user.fullName}
                         </div>
                       )}
-                      <div className="text-xs text-gray-500 dark:text-gray-400 truncate mt-1">
+                      <div className="text-xs text-gray-500 dark:text-gray-400 break-words mt-1">
                         {user.email}
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 ml-2">
+                    <div className="flex items-center gap-1 ml-2 flex-shrink-0">
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handlePasswordUpdate(user)}
-                        className="h-8 w-8 p-0 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                        className="h-7 w-7 p-0 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
                         title="Update Password"
                       >
-                        <Lock className="h-4 w-4" />
+                        <Lock className="h-3 w-3" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleEditUser(user)}
-                        className="h-8 w-8 p-0 text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
+                        className="h-7 w-7 p-0 text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
                         title="Edit User"
                       >
-                        <Edit className="h-4 w-4" />
+                        <Edit className="h-3 w-3" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleDeleteUser(user)}
-                        className="h-8 w-8 p-0 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                        className="h-7 w-7 p-0 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
                         title="Delete User"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-3 w-3" />
                       </Button>
                     </div>
                   </div>
                   
                   {/* Role and Status */}
-                  <div className="flex gap-2 flex-wrap">
+                  <div className="flex gap-1 sm:gap-2 flex-wrap">
                     <Badge variant={getRoleBadgeVariant(user.role)} className="text-xs">
                       {user.role}
                     </Badge>

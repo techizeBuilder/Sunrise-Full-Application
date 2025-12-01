@@ -431,7 +431,7 @@ export default function ExcelImportExport({ type = 'items' }) {
       </Button>
 
       {/* Template Download Button */}
-      <Button
+      {/* <Button
         onClick={downloadTemplate}
         variant="outline"
         size="sm"
@@ -439,7 +439,7 @@ export default function ExcelImportExport({ type = 'items' }) {
       >
         <FileText className="h-4 w-4 mr-2" />
         Template
-      </Button>
+      </Button> */}
 
       {/* Import Button - Only show if import is available */}
       {config.importFn && (
