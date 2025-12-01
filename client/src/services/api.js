@@ -114,8 +114,8 @@ class APIService {
   }
 
   async logout() {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    // Just call the server logout endpoint
+    // Storage clearing is handled by AuthContext
     return this.post('/auth/logout');
   }
 

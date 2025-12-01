@@ -1,5 +1,6 @@
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useSettings } from '@/hooks/useSettings';
+import { config } from '@/config/environment';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -23,6 +24,12 @@ import {
 export default function SimpleHeader({ title = "Dashboard", onSidebarToggle }) {
   const { user, logout } = useAuthContext();
   const { settings } = useSettings();
+
+  const getProfileImageUrl = (profilePicture) => {
+    if (!profilePicture) return null;
+    if (profilePicture.startsWith('http')) return profilePicture;
+    return `${config.baseURL}${profilePicture}`;
+  };
 
   // Check if notifications are enabled for this user's role
   const isNotificationEnabled = () => {
@@ -86,7 +93,7 @@ export default function SimpleHeader({ title = "Dashboard", onSidebarToggle }) {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src="" alt={user?.fullName || user?.username} />
+                  <AvatarImage src={getProfileImageUrl(user?.profilePicture)} alt={user?.fullName || user?.username} />
                   <AvatarFallback>
                     {user?.fullName 
                       ? user.fullName.split(' ').map(n => n[0]).join('').slice(0, 2)

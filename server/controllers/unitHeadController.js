@@ -297,7 +297,7 @@ export const getUnitHeadSalesPersons = async (req, res) => {
     // Get sales persons from the same company
     const salesPersons = await User.find(salesPersonQuery)
       .populate('companyId', 'name city state')
-      .select('username fullName email role active createdAt companyId')
+      .select('username fullName email role isActive createdAt companyId')
       .sort({ [sortBy]: sortOrder === 'desc' ? -1 : 1 })
       .skip((page - 1) * limit)
       .limit(parseInt(limit))
@@ -379,7 +379,7 @@ export const getUnitHeadSalesPersons = async (req, res) => {
         fullName: sp.fullName || sp.username,
         email: sp.email,
         role: sp.role,
-        active: sp.active !== false,
+        active: sp.isActive !== false,
         createdAt: sp.createdAt,
         company: sp.companyId ? {
           id: sp.companyId._id,
@@ -396,6 +396,7 @@ export const getUnitHeadSalesPersons = async (req, res) => {
     // Calculate summary
     const summary = {
       activeSalesPersons: salesPersonsWithStats.filter(sp => sp.active).length,
+      inactiveSalesPersons: salesPersonsWithStats.filter(sp => !sp.active).length,
       totalSalesPersons: salesPersonsWithStats.length,
       totalRevenue: salesPersonsWithStats.reduce((sum, sp) => sum + sp.totalRevenue, 0),
       totalOrders: salesPersonsWithStats.reduce((sum, sp) => sum + sp.totalOrders, 0)
@@ -496,10 +497,11 @@ export const getUnitHeadSalesPersonOrders = async (req, res) => {
 // Get Unit Head customers
 export const getUnitHeadCustomers = async (req, res) => {
   try {
-    const { page = 1, limit = 10, search, active } = req.query;
+    const { page = 1, limit = 10, search, active, category, sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
     const skip = (page - 1) * limit;
 
     console.log('🚀 getUnitHeadCustomers called by:', req.user?.username);
+    console.log('Query parameters:', { page, limit, search, active, category, sortBy, sortOrder });
     console.log('User details:', {
       id: req.user?.id,
       role: req.user?.role,
@@ -534,16 +536,36 @@ export const getUnitHeadCustomers = async (req, res) => {
       ];
     }
 
-    if (active !== undefined) {
-      query.active = active === 'true';
+    if (active !== undefined && active !== 'all' && active !== 'All Status') {
+      if (active === 'Yes' || active === 'true' || active === 'Active') {
+        query.active = 'Yes';
+      } else if (active === 'No' || active === 'false' || active === 'Inactive') {
+        query.active = 'No';
+      }
+      console.log('✅ Filtering by active status:', query.active, 'from parameter:', active);
     }
+
+    if (category && category !== 'all') {
+      query.category = category;
+      console.log('✅ Filtering by category:', category);
+    }
+
+    // Build sort object
+    const sortObj = {};
+    sortObj[sortBy] = sortOrder === 'desc' ? -1 : 1;
+    console.log('✅ Sorting by:', sortObj);
+    
+    console.log('🔍 Final query object:', JSON.stringify(query, null, 2));
 
     const customers = await Customer.find(query)
       .populate('companyId', 'name')
       .populate('salesContact', 'fullName username')
-      .sort({ createdAt: -1 })
+      .sort(sortObj)
       .skip(skip)
       .limit(parseInt(limit));
+
+    console.log(`📊 Found ${customers.length} customers matching query`);
+    console.log('Customer active statuses:', customers.map(c => ({ name: c.name, active: c.active })));
 
     const total = await Customer.countDocuments(query);
 
@@ -555,8 +577,8 @@ export const getUnitHeadCustomers = async (req, res) => {
     }
 
     const totalCustomers = await Customer.countDocuments(summaryQuery);
-    const activeCustomers = await Customer.countDocuments({ ...summaryQuery, active: true });
-    const inactiveCustomers = await Customer.countDocuments({ ...summaryQuery, active: false });
+    const activeCustomers = await Customer.countDocuments({ ...summaryQuery, active: 'Yes' });
+    const inactiveCustomers = await Customer.countDocuments({ ...summaryQuery, active: 'No' });
     
     // Get unique cities for this company's customers
     const cityDistribution = await Customer.distinct('city', summaryQuery);
@@ -1026,7 +1048,7 @@ export const updateUnitHeadOrderStatus = async (req, res) => {
     console.log('🔄 Updating order status by Unit Head:', unitHead.username);
 
     // Validate status
-    const validStatuses = ['pending', 'confirmed', 'processing', 'completed', 'cancelled'];
+    const validStatuses = ['pending', 'approved', 'rejected'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
         success: false,

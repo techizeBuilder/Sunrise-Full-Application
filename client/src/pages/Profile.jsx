@@ -23,6 +23,7 @@ import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
+import { config } from '@/config/environment';
 import {
   User,
   Mail,
@@ -39,6 +40,12 @@ export default function Profile() {
   const { user, refreshUser } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const getProfileImageUrl = (profilePicture) => {
+    if (!profilePicture) return null;
+    if (profilePicture.startsWith('http')) return profilePicture;
+    return `${config.baseURL}${profilePicture}`;
+  };
   
   // State
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -254,7 +261,7 @@ export default function Profile() {
           <div className="flex items-center gap-6">
             <div className="relative">
               <Avatar className="h-24 w-24">
-                <AvatarImage src={profile?.profilePicture || user?.profilePicture} alt={profile?.fullName || user?.fullName} />
+                <AvatarImage src={getProfileImageUrl(profile?.profilePicture || user?.profilePicture)} alt={profile?.fullName || user?.fullName} />
                 <AvatarFallback className="bg-blue-600 text-white text-xl">
                   {(profile?.fullName || user?.fullName)?.split(' ').map(n => n[0]).join('') || (profile?.username || user?.username)?.[0]?.toUpperCase()}
                 </AvatarFallback>

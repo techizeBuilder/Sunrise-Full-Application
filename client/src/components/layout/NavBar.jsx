@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
+import { config } from '@/config/environment';
 import { 
   Menu,
   User,
@@ -26,6 +27,12 @@ import {
 export default function NavBar({ onSidebarToggle }) {
   const { user, logout } = useAuth();
   const { companyLogo, companyName } = useSettings();
+
+  const getProfileImageUrl = (profilePicture) => {
+    if (!profilePicture) return null;
+    if (profilePicture.startsWith('http')) return profilePicture;
+    return `${config.baseURL}${profilePicture}`;
+  };
 
 
 
@@ -90,7 +97,7 @@ export default function NavBar({ onSidebarToggle }) {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src={user?.profilePicture} alt={user?.fullName || user?.username} />
+                  <AvatarImage src={getProfileImageUrl(user?.profilePicture)} alt={user?.fullName || user?.username} />
                   <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white text-sm font-medium">
                     {user?.fullName 
                       ? user.fullName.split(' ').map(n => n[0]).join('').slice(0, 2)

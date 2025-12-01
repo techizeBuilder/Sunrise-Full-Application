@@ -308,16 +308,37 @@ export const getSalesStats = async (req, res) => {
 // Salesperson-specific controller functions
 export const getSalespersonCustomers = async (req, res) => {
   try {
-    const { page = 1, limit = 10, search = '', category = '' } = req.query;
+    const { 
+      page = 1, 
+      limit = 10, 
+      search = '', 
+      category = '', 
+      status = '',
+      customerType = '',
+      name = '',
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query;
     const salespersonId = req.user._id || req.user.id;
     const salespersonUsername = req.user.username;
     const userRole = req.user.role;
     const userCompanyId = req.user.companyId;
 
+    // Handle search (name parameter or search parameter) - declare early
+    const searchTerm = search || name;
+
     console.log('🔍 getSalespersonCustomers called:', {
       username: salespersonUsername,
       role: userRole,
-      companyId: userCompanyId
+      companyId: userCompanyId,
+      queryParams: req.query,
+      filters: {
+        status,
+        customerType,
+        category,
+        search: search,
+        searchTerm: searchTerm
+      }
     });
 
     // Build filter query based on user role with company isolation
@@ -341,13 +362,14 @@ export const getSalespersonCustomers = async (req, res) => {
       query.companyId = userCompanyId;
     }
 
-    if (search) {
+    // Handle search with already declared searchTerm
+    if (searchTerm) {
       const searchQuery = {
         $or: [
-          { name: { $regex: search, $options: 'i' } },
-          { contactPerson: { $regex: search, $options: 'i' } },
-          { email: { $regex: search, $options: 'i' } },
-          { mobile: { $regex: search, $options: 'i' } }
+          { name: { $regex: searchTerm, $options: 'i' } },
+          { contactPerson: { $regex: searchTerm, $options: 'i' } },
+          { email: { $regex: searchTerm, $options: 'i' } },
+          { mobile: { $regex: searchTerm, $options: 'i' } }
         ]
       };
       
@@ -358,20 +380,50 @@ export const getSalespersonCustomers = async (req, res) => {
       }
     }
 
-    if (category) {
-      query.category = category;
+    // Handle status filter (active field)
+    if (status && status !== 'All') {
+      query.active = status; // 'Yes' or 'No'
+    }
+
+    // Handle category filter (support both 'category' and 'customerType' parameters)
+    const categoryFilter = category || customerType;
+    if (categoryFilter && categoryFilter !== 'All') {
+      query.category = categoryFilter;
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
+    // Handle sorting
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
+
+    console.log('🔍 Final query details:', {
+      query: JSON.stringify(query),
+      sortOptions,
+      skip,
+      limit: parseInt(limit),
+      filters: { 
+        status, 
+        customerType, 
+        category,
+        categoryFilterUsed: category || customerType
+      }
+    });
+
     const customers = await Customer.find(query)
       .populate('salesContact', 'username email')
       .populate('companyId', 'name')
-      .sort({ createdAt: -1 })
+      .sort(sortOptions)
       .skip(skip)
       .limit(parseInt(limit));
 
     const total = await Customer.countDocuments(query);
+
+    console.log('🔍 Query executed:', {
+      query: JSON.stringify(query),
+      total,
+      returned: customers.length
+    });
 
     res.json({
       success: true,

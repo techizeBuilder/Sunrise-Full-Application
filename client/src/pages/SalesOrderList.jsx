@@ -109,13 +109,13 @@ export default function SalesOrderList() {
 
   // Fetch orders
   const { data: ordersResponse, isLoading, error } = useQuery({
-    queryKey: ['/api/unit-manager/all-orders', filters],
+    queryKey: ['/api/unit-manager/sales-order-list', filters],
     queryFn: () => {
       const params = new URLSearchParams();
       Object.entries(filters).forEach(([key, value]) => {
         if (value && value !== 'all' && value !== '') params.append(key, value);
       });
-      return apiRequest('GET', `/api/unit-manager/all-orders?${params.toString()}`);
+      return apiRequest('GET', `/api/unit-manager/sales-order-list?${params.toString()}`);
     },
     retry: 1
   });
@@ -347,7 +347,7 @@ export default function SalesOrderList() {
               <XCircle className="h-10 w-10 text-red-600" />
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Rejected</p>
-                <p className="text-3xl font-bold">{summary.disapproved || 0}</p>
+                <p className="text-3xl font-bold">{summary.rejected || 0}</p>
               </div>
             </div>
           </CardContent>

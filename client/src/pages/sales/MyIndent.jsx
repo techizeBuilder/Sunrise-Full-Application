@@ -424,27 +424,25 @@ const MyOrders = () => {
 
   const getStatusVariant = (status) => {
     switch (status) {
-      case 'Draft': return 'secondary';
-      case 'Pending': return 'default';
-      case 'Approved': return 'success';
-      case 'Processing': return 'default';
-      case 'Completed': return 'success';
+      case 'pending':
+      case 'Pending': return 'secondary';
+      case 'approved':
+      case 'Approved': return 'default';
+      case 'rejected':
       case 'Rejected': return 'destructive';
-      case 'Cancelled': return 'destructive';
       default: return 'secondary';
     }
   };
 
   const getStatusIcon = (status) => {
     switch (status) {
-      case 'Draft': return <FileCheck className="h-3 w-3" />;
+      case 'pending':
       case 'Pending': return <Clock className="h-3 w-3" />;
+      case 'approved':
       case 'Approved': return <CheckCircle className="h-3 w-3" />;
-      case 'Processing': return <Clock className="h-3 w-3" />;
-      case 'Completed': return <CheckCircle className="h-3 w-3" />;
+      case 'rejected':
       case 'Rejected': return <XCircle className="h-3 w-3" />;
-      case 'Cancelled': return <XCircle className="h-3 w-3" />;
-      default: return <FileCheck className="h-3 w-3" />;
+      default: return <Clock className="h-3 w-3" />;
     }
   };
 
@@ -900,13 +898,9 @@ const MyOrders = () => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="Draft">Draft</SelectItem>
-              <SelectItem value="Pending">Pending</SelectItem>
-              <SelectItem value="Approved">Approved</SelectItem>
-              <SelectItem value="Processing">Processing</SelectItem>
-              <SelectItem value="Completed">Completed</SelectItem>
-              <SelectItem value="Rejected">Rejected</SelectItem>
-              <SelectItem value="Cancelled">Cancelled</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="approved">Approved</SelectItem>
+              <SelectItem value="rejected">Rejected</SelectItem>
             </SelectContent>
           </Select>
         </div>

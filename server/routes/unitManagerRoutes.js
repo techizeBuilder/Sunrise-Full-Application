@@ -119,10 +119,26 @@ router.get('/customers', async (req, res) => {
     const { authenticateToken } = await import('../middleware/auth.js');
     const Customer = (await import('../models/Customer.js')).default;
     
-    // Get all customers for dropdown
-    const customers = await Customer.find({}, 'name email phone').sort({ name: 1 }).lean();
+    // Get user's company ID for filtering
+    const userCompanyId = req.user.companyId;
+    
+    if (!userCompanyId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User company not found' 
+      });
+    }
+    
+    // Get customers only for the unit manager's company
+    const customers = await Customer.find({ 
+      companyId: userCompanyId 
+    }, 'name email phone companyId').sort({ name: 1 }).lean();
+    
+    console.log(`Unit Manager customers API: Found ${customers.length} customers for company ${userCompanyId}`);
+    
     res.json({ success: true, data: customers });
   } catch (error) {
+    console.error('Unit Manager customers API error:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch customers', error: error.message });
   }
 }); // Get customers for filter dropdown

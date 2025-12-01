@@ -5,6 +5,9 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/ui/theme-provider";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { UnitManagerProtectedRoute } from "@/components/auth/UnitManagerProtectedRoute";
+import { RoleBasedProtectedRoute } from "@/components/auth/RoleBasedProtectedRoute";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
@@ -21,7 +24,6 @@ import Purchases from "@/pages/Purchases";
 import Settings from "@/pages/Settings";
 import RolePermissionManagement from "@/pages/RolePermissionManagement";
 import UnitHeadRolePermissionManagement from "@/pages/UnitHeadRolePermissionManagement";
-import { useAuth } from "@/hooks/useAuth";
 import MainLayout from "@/components/layout/MainLayout";
 import Profile from "@/pages/Profile";
 import Companies from "@/pages/Companies";
@@ -58,100 +60,13 @@ import UnitHeadProductionGroup from "@/components/unit-head/UnitHeadProductionGr
 import UnitManagerProductionGroup from "@/pages/unit-manager/UnitManagerProductionGroup";
 import UnitManagerLayout from "@/components/layout/UnitManagerLayout";
 import RoleBasedLayout from "@/components/layout/RoleBasedLayout";
-function ProtectedRoute({ children, requiredRole = null }) {
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <Login />;
-  }
-
-  // Check role restriction if specified - STRICT role checking
-  // Exception: Super Admin can access all pages regardless of role restriction
-  if (requiredRole && user.role !== requiredRole && user.role !== 'Super Admin') {
-    return (
-      <MainLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Access Denied</h2>
-            <p className="text-gray-600 dark:text-gray-400">
-              You don't have permission to access this page. Required role: {requiredRole}
-            </p>
-          </div>
-        </div>
-      </MainLayout>
-    );
-  }
-
-  return <MainLayout>{children}</MainLayout>;
-}
-
-// Separate protected route for Unit Manager with their own layout
-function UnitManagerProtectedRoute({ children, requiredRole = null }) {
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <Login />;
-  }
-
-  // Check role restriction if specified - STRICT role checking
-  // Exception: Super Admin can access all pages regardless of role restriction
-  if (requiredRole && user.role !== requiredRole && user.role !== 'Super Admin') {
-    return (
-      <UnitManagerLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Access Denied</h2>
-            <p className="text-gray-600 dark:text-gray-400">
-              You don't have permission to access this page. Required role: {requiredRole}
-            </p>
-          </div>
-        </div>
-      </UnitManagerLayout>
-    );
-  }
-
-  return <UnitManagerLayout>{children}</UnitManagerLayout>;
-}
-
-// Protected route that uses appropriate layout based on user role
-function RoleBasedProtectedRoute({ children, requiredRole = null }) {
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <Login />;
-  }
-
-  return <RoleBasedLayout requiredRole={requiredRole}>{children}</RoleBasedLayout>;
-}
 
 function Router() {
   return (
     <Switch>
-      <Route path="/login" component={Login} />
+      <Route path="/login">
+        <Login />
+      </Route>
       <Route path="/">
         <ProtectedRoute>
           <RoleBasedDashboard />

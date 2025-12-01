@@ -417,6 +417,7 @@ export const getSuperAdminOrderById = async (req, res) => {
     const order = await Order.findById(id)
       .populate('customer', 'name contactPerson email mobile address city')
       .populate('salesPerson', 'username fullName email')
+      .populate('products.product', 'name code category price')
       .lean();
 
     if (!order) {

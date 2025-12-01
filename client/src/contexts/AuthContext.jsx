@@ -106,11 +106,36 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
+      // Try to call the server logout endpoint
       await api.post('/auth/logout');
     } catch (error) {
       console.error('Logout error:', error);
+      // Continue with logout even if server call fails
     } finally {
+      // Clear all local storage data
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      
+      // Clear session storage as well
+      sessionStorage.clear();
+      
+      // Clear React Query cache using dynamic import
+      try {
+        const { queryClient } = await import('@/lib/queryClient');
+        queryClient.clear();
+      } catch (error) {
+        console.warn('Could not clear React Query cache:', error);
+      }
+      
+      // Reset auth state
       setUser(null);
+      setIsAuthenticated(false);
+      setError(null);
+      
+      // Redirect to login page
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
     }
   };
 

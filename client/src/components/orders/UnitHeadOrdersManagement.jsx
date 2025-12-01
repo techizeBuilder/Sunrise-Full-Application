@@ -50,21 +50,20 @@ const UnitHeadOrdersManagement = () => {
   const statusOptions = [
     { value: 'all', label: 'All Status' },
     { value: 'pending', label: 'Pending' },
-    { value: 'processing', label: 'Processing' },
-    { value: 'completed', label: 'Completed' },
-    { value: 'cancelled', label: 'Cancelled' }
+    { value: 'approved', label: 'Approved' },
+    { value: 'rejected', label: 'Rejected' }
   ];
 
   // Queries
   const { data: ordersData, isLoading: ordersLoading } = useQuery({
     queryKey: ['unit-head-orders', { page: currentPage, search: searchTerm, status: statusFilter }],
     queryFn: async () => {
-      const params = new URLSearchParams({
+      const params = {
         page: currentPage.toString(),
         ...(searchTerm && { search: searchTerm }),
         ...(statusFilter !== 'all' && { status: statusFilter })
-      });
-      return await getOrders(`?${params.toString()}`);
+      };
+      return await getOrders(params);
     },
     keepPreviousData: true
   });
@@ -343,9 +342,8 @@ const UnitHeadOrdersManagement = () => {
   const getStatusVariant = (status) => {
     switch (status) {
       case 'pending': return 'secondary';
-      case 'processing': return 'default';
-      case 'completed': return 'default';
-      case 'cancelled': return 'destructive';
+      case 'approved': return 'default';
+      case 'rejected': return 'destructive';
       default: return 'secondary';
     }
   };
@@ -353,9 +351,8 @@ const UnitHeadOrdersManagement = () => {
   const getStatusIcon = (status) => {
     switch (status) {
       case 'pending': return <Clock className="h-3 w-3" />;
-      case 'processing': return <Loader2 className="h-3 w-3 animate-spin" />;
-      case 'completed': return <CheckCircle className="h-3 w-3" />;
-      case 'cancelled': return <XCircle className="h-3 w-3" />;
+      case 'approved': return <CheckCircle className="h-3 w-3" />;
+      case 'rejected': return <XCircle className="h-3 w-3" />;
       default: return <Clock className="h-3 w-3" />;
     }
   };

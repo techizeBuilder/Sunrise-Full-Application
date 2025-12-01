@@ -27,11 +27,59 @@ salesRouter.get('/debug', (req, res) => {
     serverTime: new Date().toLocaleString(),
     availableRoutes: [
       'GET /api/sales/debug (no auth)',
+      'GET /api/sales/debug-customers (no auth)',
       'GET /api/sales/test-summary (needs auth)',  
       'GET /api/sales/product-summary (needs auth)',
       'POST /api/sales/update-product-summary (needs auth)'
     ]
   });
+});
+
+// Debug customers endpoint - NO AUTH REQUIRED
+salesRouter.get('/debug-customers', async (req, res) => {
+  try {
+    const { default: Customer } = await import('../models/Customer.js');
+    
+    // Get sample customers
+    const sampleCustomers = await Customer.find({}).select('name category active').limit(5);
+    
+    // Get distinct categories
+    const categories = await Customer.distinct('category');
+    
+    // Get distinct active values
+    const activeValues = await Customer.distinct('active');
+    
+    // Count by category
+    const categoryCounts = {};
+    for (const cat of categories) {
+      categoryCounts[cat] = await Customer.countDocuments({ category: cat });
+    }
+    
+    // Count by active status
+    const activeCounts = {};
+    for (const active of activeValues) {
+      activeCounts[active] = await Customer.countDocuments({ active });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Customer data debug info',
+      data: {
+        totalCustomers: await Customer.countDocuments(),
+        categories,
+        activeValues,
+        categoryCounts,
+        activeCounts,
+        sampleCustomers
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching debug info',
+      error: error.message
+    });
+  }
 });
 
 // Apply authentication to all other sales routes

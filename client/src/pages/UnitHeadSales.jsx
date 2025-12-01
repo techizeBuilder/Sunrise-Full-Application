@@ -563,7 +563,7 @@ export default function UnitHeadSales() {
           <CardContent>
             <div className="text-2xl font-bold">{summary.totalSalesPersons || 0}</div>
             <p className="text-xs text-muted-foreground">
-              Active sales team members
+              All sales team members
             </p>
           </CardContent>
         </Card>
@@ -574,7 +574,7 @@ export default function UnitHeadSales() {
             <CheckCircle className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{salesPersons.filter(sp => sp.active === 'Yes').length}</div>
+            <div className="text-2xl font-bold">{summary.activeSalesPersons || 0}</div>
             <p className="text-xs text-muted-foreground">
               Active sales persons
             </p>
@@ -587,7 +587,7 @@ export default function UnitHeadSales() {
             <Clock className="h-4 w-4 text-red-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{salesPersons.filter(sp => sp.active === 'No').length}</div>
+            <div className="text-2xl font-bold">{summary.inactiveSalesPersons || 0}</div>
             <p className="text-xs text-muted-foreground">
               Inactive sales persons
             </p>
@@ -596,17 +596,13 @@ export default function UnitHeadSales() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">This Month</CardTitle>
-            <TrendingUp className="h-4 w-4 text-yellow-600" />
+            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
+            <ShoppingCart className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{salesPersons.filter(sp => {
-              const created = new Date(sp.createdAt);
-              const now = new Date();
-              return created.getMonth() === now.getMonth() && created.getFullYear() === now.getFullYear();
-            }).length}</div>
+            <div className="text-2xl font-bold">{summary.totalOrders || 0}</div>
             <p className="text-xs text-muted-foreground">
-              Added this month
+              All sales orders
             </p>
           </CardContent>
         </Card>
