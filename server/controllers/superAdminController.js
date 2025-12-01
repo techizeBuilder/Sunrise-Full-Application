@@ -668,6 +668,10 @@ export const getSuperAdminCustomers = async (req, res) => {
     const { page = 1, limit = 20, search, city, status = 'all', sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
     const skip = (page - 1) * limit;
 
+    console.log('🔍 SuperAdmin customers filter params:', {
+      page, limit, search, city, status, sortBy, sortOrder
+    });
+
     let query = {};
 
     // Apply filters
@@ -685,11 +689,18 @@ export const getSuperAdminCustomers = async (req, res) => {
     }
 
     if (status !== 'all') {
-      query.active = status === 'active';
+      if (status === 'active') {
+        query.active = 'Yes';
+      } else if (status === 'inactive') {
+        query.active = 'No';
+      }
     }
 
     const sort = {};
     sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
+
+    console.log('🔍 Final customer query:', JSON.stringify(query));
+    console.log('🔍 Sort options:', sort);
 
     const [customers, totalCustomers] = await Promise.all([
       Customer.find(query)
@@ -732,7 +743,7 @@ export const getSuperAdminCustomers = async (req, res) => {
           _id: null,
           totalCustomers: { $sum: 1 },
           activeCustomers: {
-            $sum: { $cond: [{ $eq: ['$active', true] }, 1, 0] }
+            $sum: { $cond: [{ $eq: ['$active', 'Yes'] }, 1, 0] }
           }
         }
       }

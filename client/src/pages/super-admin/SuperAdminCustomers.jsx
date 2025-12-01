@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -52,15 +52,25 @@ export default function SuperAdminCustomers() {
     sortOrder: 'desc'
   });
   
+  const [debouncedFilters, setDebouncedFilters] = useState(filters);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
+  // Debounce filters to prevent excessive API calls
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedFilters(filters);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [filters]);
+
   // Query for customers list
   const { data: customersData, isLoading, error, refetch } = useQuery({
-    queryKey: ['super-admin-customers', filters],
+    queryKey: ['super-admin-customers', debouncedFilters],
     queryFn: () => {
       const params = new URLSearchParams();
-      Object.entries(filters).forEach(([key, value]) => {
+      Object.entries(debouncedFilters).forEach(([key, value]) => {
         if (value && value !== 'all') {
           params.append(key, value.toString());
         }
@@ -310,8 +320,8 @@ export default function SuperAdminCustomers() {
                         {formatCurrency(customer.orderStats?.totalAmount)}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={customer.active ? 'default' : 'secondary'}>
-                          {customer.active ? 'Active' : 'Inactive'}
+                        <Badge variant={customer.active === 'Yes' ? 'default' : 'secondary'}>
+                          {customer.active === 'Yes' ? 'Active' : 'Inactive'}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-center">
@@ -386,8 +396,8 @@ export default function SuperAdminCustomers() {
                     <p><strong>Address:</strong> {customerDetail.customer?.address || 'N/A'}</p>
                     <p><strong>City:</strong> {customerDetail.customer?.city || 'N/A'}</p>
                     <p><strong>Status:</strong> 
-                      <Badge className={`ml-2 ${customerDetail.customer?.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
-                        {customerDetail.customer?.active ? 'Active' : 'Inactive'}
+                      <Badge className={`ml-2 ${customerDetail.customer?.active === 'Yes' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                        {customerDetail.customer?.active === 'Yes' ? 'Active' : 'Inactive'}
                       </Badge>
                     </p>
                   </div>
