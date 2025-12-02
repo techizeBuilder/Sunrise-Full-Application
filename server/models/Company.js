@@ -16,13 +16,18 @@ const companySchema = new mongoose.Schema({
   },
   companyType: {
     type: String,
+    required: false,
     trim: true,
+    default: undefined,
     validate: {
       validator: function(v) {
-        if (!v) return true; // Allow empty values
+        // Skip validation if value is null, undefined, or empty string
+        if (v == null || v === '' || v === undefined) {
+          return true;
+        }
         return ['Private Limited', 'Public Limited', 'LLP', 'Partnership', 'Proprietorship', 'OPC', 'Other'].includes(v);
       },
-      message: 'Invalid company type'
+      message: 'Invalid company type. Allowed values: Private Limited, Public Limited, LLP, Partnership, Proprietorship, OPC, Other'
     }
   },
   mobile: {

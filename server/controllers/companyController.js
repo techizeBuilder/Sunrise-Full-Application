@@ -141,8 +141,8 @@ export const createCompany = async (req, res) => {
     }
 
     // Clean up empty companyType to prevent validation errors
-    if (companyData.companyType === '') {
-      delete companyData.companyType;
+    if (companyData.companyType === '' || companyData.companyType === null) {
+      companyData.companyType = undefined;
     }
 
     // Validate required fields (name is now optional as it can be auto-generated)
@@ -212,29 +212,67 @@ export const createCompany = async (req, res) => {
     });
   } catch (error) {
     console.error('Create company error:', error);
+    
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      const validationErrors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({ 
+        success: false,
+        message: 'Validation failed: ' + validationErrors.join(', ')
+      });
+    }
+    
+    // Handle duplicate key errors
     if (error.code === 11000) {
-      res.status(400).json({ 
+      return res.status(400).json({ 
         success: false,
         message: 'Company with this information already exists' 
       });
-    } else {
-      res.status(500).json({ 
-        success: false,
-        message: 'Internal server error' 
-      });
     }
+    
+    // Generic error
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to create company. Please try again later.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 
 // Update company
 export const updateCompany = async (req, res) => {
   try {
+    console.log('Update company request:', {
+      userId: req.user?._id,
+      userRole: req.user?.role,
+      companyId: req.params.id,
+      updateData: req.body
+    });
+
+    if (!req.user) {
+      return res.status(401).json({ 
+        success: false,
+        message: 'Authentication required. Please log in.' 
+      });
+    }
+
     if (!checkCompanyPermission(req.user, 'edit')) {
-      return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
+      return res.status(403).json({ 
+        success: false,
+        message: 'Access denied. Insufficient permissions to edit companies.' 
+      });
     }
 
     const { id } = req.params;
     const updateData = req.body;
+
+    // Validate company ID format
+    if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid company ID format'
+      });
+    }
 
     // Auto-generate name from unitName if name is not provided but unitName is
     if (!updateData.name && updateData.unitName) {
@@ -242,9 +280,11 @@ export const updateCompany = async (req, res) => {
     }
 
     // Clean up empty companyType to prevent validation errors
-    if (updateData.companyType === '') {
-      delete updateData.companyType;
+    if (updateData.companyType === '' || updateData.companyType === null) {
+      updateData.companyType = undefined;
     }
+
+    console.log('Finding and updating company:', id);
 
     const company = await Company.findByIdAndUpdate(
       id,
@@ -255,9 +295,11 @@ export const updateCompany = async (req, res) => {
     if (!company) {
       return res.status(404).json({ 
         success: false,
-        message: 'Company not found' 
+        message: 'Company not found with the provided ID' 
       });
     }
+
+    console.log('Company updated successfully:', company._id);
 
     res.json({
       success: true,
@@ -266,9 +308,37 @@ export const updateCompany = async (req, res) => {
     });
   } catch (error) {
     console.error('Update company error:', error);
+    
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      const validationErrors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({ 
+        success: false,
+        message: 'Validation failed: ' + validationErrors.join(', ')
+      });
+    }
+    
+    // Handle duplicate key errors
+    if (error.code === 11000) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Company with this information already exists'
+      });
+    }
+    
+    // Handle cast errors (invalid ObjectId)
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid company ID format'
+      });
+    }
+    
+    // Generic error
     res.status(500).json({ 
       success: false,
-      message: 'Internal server error' 
+      message: 'Failed to update company. Please try again later.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
