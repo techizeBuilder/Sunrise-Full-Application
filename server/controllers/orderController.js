@@ -520,65 +520,6 @@ const updateOrderStatus = async (req, res) => {
       order.approvedBy = req.user._id;
       order.approvedAt = new Date();
       
-      // 🎯 CREATE PRODUCTDAILYSUMMARY ENTRIES WHEN ORDER IS APPROVED
-      console.log('📊 Creating ProductDailySummary entries for approved order...');
-      
-      try {
-        for (const productItem of order.products) {
-          // Get complete product details including qtyPerBatch
-          console.log(`📦 Fetching complete product details from database...`);
-          const product = await Item.findById(productItem.product).select('name qtyPerBatch qty unit price').lean();
-          if (!product) {
-            console.log(`⚠️ Product not found: ${productItem.product}`);
-            continue;
-          }
-          
-          const qtyPerBatch = product.qtyPerBatch || product.qty || 1; // Fallback to qty or 1
-          console.log(`Product ${product.name}: qtyPerBatch=${qtyPerBatch}, qty=${product.qty}`);
-          
-          // Check if ProductDailySummary entry already exists for this product and date
-          const existingSummary = await ProductDailySummary.findOne({
-            productId: productItem.product,
-            date: order.orderDate,
-            companyId: order.companyId
-          });
-
-          if (existingSummary) {
-            // Update existing entry - add the ordered quantity to productionFinalBatches
-            existingSummary.productionFinalBatches += productItem.quantity;
-            
-            // Update qtyPerBatch if it was 0 or not set
-            if (!existingSummary.qtyPerBatch || existingSummary.qtyPerBatch === 0) {
-              existingSummary.qtyPerBatch = qtyPerBatch;
-            }
-            
-            await existingSummary.save();
-            console.log(`✅ Updated ProductDailySummary: Product ${product.name}, Added ${productItem.quantity} batches, qtyPerBatch=${existingSummary.qtyPerBatch}`);
-          } else {
-            // Create new ProductDailySummary entry with proper qtyPerBatch
-            const newSummary = new ProductDailySummary({
-              productId: productItem.product,
-              productName: product.name, // ✅ REQUIRED FIELD ADDED
-              date: order.orderDate,
-              companyId: order.companyId,
-              productionFinalBatches: productItem.quantity,
-              qtyPerBatch: qtyPerBatch, // ✅ SET FROM ITEM DATA
-              totalRequirements: productItem.quantity,
-              createdAt: new Date(),
-              updatedAt: new Date()
-            });
-            
-            await newSummary.save();
-            console.log(`✅ Created new ProductDailySummary: Product ${product.name}, Batches ${productItem.quantity}, qtyPerBatch=${qtyPerBatch}`);
-          }
-        }
-        
-        console.log(`🎉 Successfully updated ProductDailySummary for order ${order.orderCode}`);
-      } catch (summaryError) {
-        console.error('❌ Failed to update ProductDailySummary:', summaryError);
-        // Log error but don't fail the order approval
-      }
-      
     } else if (status === 'rejected') {
       order.rejectionReason = remarks;
     } else if (status === 'in_production') {

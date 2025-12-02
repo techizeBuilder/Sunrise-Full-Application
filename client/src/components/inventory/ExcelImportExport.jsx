@@ -288,12 +288,12 @@ export default function ExcelImportExport({ type = 'items' }) {
         default:
           templateData = [{
             'S.No': 1,
-            'Item Code': 'ITEM001',
-            'Item Name': 'Sample Item',
-            'Description': 'Sample description',
+            'Item Code': 'Leave blank for auto-generation',
+            'Item Name': 'Everyday PremiumSoft Milk Bread 400g',
+            'Description': 'Soft milk bread perfect for daily consumption',
             'Type': 'Product',
-            'Category': 'Sample Category',
-            'Sub Category': 'Sample Sub',
+            'Category': 'Breads',
+            'Sub Category': 'Premium Breads',
             'Customer Category': 'General',
             'Unit': 'pieces',
             'Purchase Price': 100,
@@ -304,7 +304,7 @@ export default function ExcelImportExport({ type = 'items' }) {
             'Max Stock': 100,
             'GST %': 18,
             'HSN Code': '12345678',
-            'Store Location': 'Main Warehouse',
+            'Store Location': 'Sunrise Foods (Tirupati) - Tirupati, Andhra Pradesh',
             'Supplier': 'Sample Supplier',
             'Qty/Batch': 'BATCH001',
             'Lead Time': 5,
@@ -542,14 +542,27 @@ export default function ExcelImportExport({ type = 'items' }) {
                       
                       {importResult.results.errors && importResult.results.errors.length > 0 && (
                         <div className="mt-3">
-                          <div className="text-sm font-medium text-red-600 mb-1">Errors:</div>
-                          <div className="max-h-32 overflow-y-auto text-xs space-y-1">
-                            {importResult.results.errors.slice(0, 10).map((error, index) => (
-                              <div key={index} className="text-red-600">{error}</div>
-                            ))}
+                          <div className="text-sm font-medium text-red-600 mb-2">Issues Found:</div>
+                          <div className="max-h-40 overflow-y-auto text-xs space-y-2 p-3 bg-red-50 rounded border">
+                            {importResult.results.errors.slice(0, 10).map((error, index) => {
+                              // Clean up error message for better readability
+                              const cleanError = error.replace(/^Row \d+:\s*/, '').replace(/Row \d+:\s*/, '');
+                              const rowMatch = error.match(/Row (\d+):/);
+                              const rowNumber = rowMatch ? rowMatch[1] : index + 2;
+                              
+                              return (
+                                <div key={index} className="flex gap-2">
+                                  <span className="text-red-800 font-mono text-xs bg-red-100 px-1 rounded">Row {rowNumber}</span>
+                                  <span className="text-red-700">{cleanError}</span>
+                                </div>
+                              );
+                            })}
                             {importResult.results.errors.length > 10 && (
-                              <div className="text-muted-foreground">...and {importResult.results.errors.length - 10} more errors</div>
+                              <div className="text-red-600 font-medium">...and {importResult.results.errors.length - 10} more issues</div>
                             )}
+                          </div>
+                          <div className="mt-2 text-xs text-gray-600">
+                            💡 Tip: Each item name must be unique. Check for duplicate names or modify them to be distinct.
                           </div>
                         </div>
                       )}

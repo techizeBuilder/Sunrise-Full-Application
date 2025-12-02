@@ -259,44 +259,56 @@ export default function ProductionShift() {
           {group.name}
         </TableCell>
         
-        {/* Moulding Time */}
+        {/* Moulding Time - Punch In/Out System */}
         <TableCell>
-          <Input
-            type="datetime-local"
-            value={batch.mouldingTime || ''}
-            onChange={(e) => {
-              // Update local state immediately
-              setBatchData(prev => ({
-                ...prev,
-                [batchKey]: {
-                  ...prev[batchKey],
-                  mouldingTime: e.target.value
-                }
-              }));
-            }}
-            onBlur={(e) => handleBatchDataChange(batchKey, 'mouldingTime', e.target.value)}
-            className="w-48"
-          />
+          {!batch.mouldingTime ? (
+            <Button
+              onClick={() => {
+                const now = new Date().toISOString().slice(0, 16);
+                handleBatchDataChange(batchKey, 'mouldingTime', now);
+              }}
+              className="w-full bg-green-600 hover:bg-green-700 text-white h-10"
+            >
+              Start Moulding
+            </Button>
+          ) : (
+            <div className="text-center">
+              <div className="p-3 bg-green-50 rounded-lg border">
+                <div className="text-sm font-medium text-green-700">Started</div>
+                <div className="text-xs text-gray-600">
+                  {new Date(batch.mouldingTime).toLocaleDateString()} at{' '}
+                  {new Date(batch.mouldingTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                </div>
+              </div>
+            </div>
+          )}
         </TableCell>
         
-        {/* Unloading Time */}
+        {/* Unloading Time - Punch In/Out System */}
         <TableCell>
-          <Input
-            type="datetime-local"
-            value={batch.unloadingTime || ''}
-            onChange={(e) => {
-              // Update local state immediately
-              setBatchData(prev => ({
-                ...prev,
-                [batchKey]: {
-                  ...prev[batchKey],
-                  unloadingTime: e.target.value
-                }
-              }));
-            }}
-            onBlur={(e) => handleBatchDataChange(batchKey, 'unloadingTime', e.target.value)}
-            className="w-48"
-          />
+          {!batch.unloadingTime ? (
+            <Button
+              onClick={() => {
+                const now = new Date().toISOString().slice(0, 16);
+                handleBatchDataChange(batchKey, 'unloadingTime', now);
+              }}
+              disabled={!batch.mouldingTime}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-300 disabled:text-gray-500 h-10"
+              title={!batch.mouldingTime ? "Please start moulding first" : "Click to end and record current time"}
+            >
+              End Moulding
+            </Button>
+          ) : (
+            <div className="text-center">
+              <div className="p-3 bg-blue-50 rounded-lg border">
+                <div className="text-sm font-medium text-blue-700">Ended</div>
+                <div className="text-xs text-gray-600">
+                  {new Date(batch.unloadingTime).toLocaleDateString()} at{' '}
+                  {new Date(batch.unloadingTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                </div>
+              </div>
+            </div>
+          )}
         </TableCell>
         
         {/* Production Loss */}
@@ -501,12 +513,32 @@ export default function ProductionShift() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Moulding Time</label>
-                  <p className="text-lg">{selectedBatch.mouldingTime || 'Not set'}</p>
+                  <label className="text-sm font-medium text-gray-500">Moulding Start Time</label>
+                  <p className="text-lg">
+                    {selectedBatch.mouldingTime ? 
+                      new Date(selectedBatch.mouldingTime).toLocaleString() : 
+                      'Not started'
+                    }
+                  </p>
+                  {selectedBatch.mouldingTime && (
+                    <Badge variant="outline" className="mt-1 bg-green-50 text-green-700">
+                      Started
+                    </Badge>
+                  )}
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Unloading Time</label>
-                  <p className="text-lg">{selectedBatch.unloadingTime || 'Not set'}</p>
+                  <label className="text-sm font-medium text-gray-500">Moulding End Time</label>
+                  <p className="text-lg">
+                    {selectedBatch.unloadingTime ? 
+                      new Date(selectedBatch.unloadingTime).toLocaleString() : 
+                      'Not ended'
+                    }
+                  </p>
+                  {selectedBatch.unloadingTime && (
+                    <Badge variant="outline" className="mt-1 bg-blue-50 text-blue-700">
+                      Completed
+                    </Badge>
+                  )}
                 </div>
               </div>
 

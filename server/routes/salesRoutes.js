@@ -122,7 +122,11 @@ salesRouter.get('/product-summary', (req, res) => {
   }
 });
 
-salesRouter.post('/update-product-summary', (req, res) => {
+// Apply role-based authorization for other sales routes only
+salesRouter.use(authorizeRoles('Sales', 'Unit Manager', 'Super Admin'));
+
+// MOVED: Only Unit Managers and Super Admins can update product summary
+salesRouter.post('/update-product-summary', authorizeRoles('Unit Manager', 'Super Admin'), (req, res) => {
   console.log('🔍 POST /update-product-summary called');
   console.log('User:', req.user ? { id: req.user.id, role: req.user.role, companyId: req.user.companyId } : 'No user');
   console.log('Body:', req.body);
@@ -138,9 +142,6 @@ salesRouter.post('/update-product-summary', (req, res) => {
     });
   }
 });
-
-// Apply role-based authorization for other sales routes only
-salesRouter.use(authorizeRoles('Sales', 'Unit Manager', 'Super Admin'));
 
 // Sales-specific dashboard routes
 salesRouter.get('/summary', getSalesSummary);

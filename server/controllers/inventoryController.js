@@ -1341,7 +1341,7 @@ export const importItemsFromExcel = [upload.single('file'), async (req, res) => 
         const existingItemByName = await Item.findOne(query);
         
         if (existingItemByName) {
-          throw new Error(`❌ Row ${rowNumber}: Duplicate item "${trimmedName}" - already exists as "${existingItemByName.name}" (Code: ${existingItemByName.code}). Please use a different name.`);
+          throw new Error(`Item "${trimmedName}" already exists in your inventory. Please use a different name or check existing items.`);
         }
 
         // Ensure type has a valid value
@@ -1380,17 +1380,40 @@ export const importItemsFromExcel = [upload.single('file'), async (req, res) => 
         
         if (existingItemByCode) {
           console.log(`Code ${itemData.code} already exists, auto-generating new code...`);
-          throw new Error(`Row ${rowNumber}: Item code "${itemData.code}" already exists for item "${existingItemByCode.name}". Please use a unique code or leave blank for auto-generation.`);
+          // Auto-generate a new unique code instead of failing
+          const prefix = itemData.type === 'Product' ? 'PRO' : 'SER';
+          const count = await Item.countDocuments({ 
+            code: new RegExp(`^${prefix}\\d{4}$`),
+            ...(companyIdForCheck && { 
+              $or: [
+                { companyId: companyIdForCheck },
+                { store: companyIdForCheck }
+              ]
+            })
+          });
+          itemData.code = `${prefix}${String(count + 1).padStart(4, '0')}`;
+          console.log(`Generated new unique code: ${itemData.code}`);
         }
 
+        // Resolve store location to company name if it's a company ID
+        if (itemData.store && itemData.store.match(/^[0-9a-fA-F]{24}$/)) {
+          try {
+            const Company = (await import('../models/Company.js')).default;
+            const company = await Company.findById(itemData.store);
+            if (company) {
+              console.log(`Resolved store location: ${itemData.store} -> ${company.name}`);
+              // Keep the company ID for companyId field but store readable name for display
+              itemData.companyId = itemData.store;
+              itemData.storeLocation = company.name;
+            }
+          } catch (err) {
+            console.log('Could not resolve company name, keeping ID:', err.message);
+          }
+        }
+        
         // Ensure company assignment from store field or user
         if (companyIdForCheck) {
           itemData.companyId = companyIdForCheck;
-        }
-        
-        // If store field contains a companyId, use it for companyId
-        if (itemData.store && itemData.store.match(/^[0-9a-fA-F]{24}$/)) {
-          itemData.companyId = itemData.store;
         }
 
         // Create new item

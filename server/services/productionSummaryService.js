@@ -85,19 +85,16 @@ export const updateProductSummary = async (productId, date, companyId) => {
  */
 export const getSalesBreakdown = async (productId, date, companyId) => {
   try {
-    const summaryDate = new Date(date);
-    summaryDate.setUTCHours(0, 0, 0, 0);
+    // Remove date filtering to match ProductDailySummary logic
+    console.log(`🔍 Getting sales breakdown for productId: ${productId}, companyId: ${companyId} (no date filter)`);
 
     const breakdown = await Order.aggregate([
       {
         $match: {
           companyId: new mongoose.Types.ObjectId(companyId),
-          orderDate: {
-            $gte: summaryDate,
-            $lt: new Date(summaryDate.getTime() + 24 * 60 * 60 * 1000)
-          },
+          // Remove date filter - match ProductDailySummary logic
           'products.product': new mongoose.Types.ObjectId(productId),
-          status: { $nin: ['cancelled', 'rejected'] }
+          status: 'approved' // Only count approved orders for production summary
         }
       },
       {
@@ -116,12 +113,24 @@ export const getSalesBreakdown = async (productId, date, companyId) => {
           'products.product': new mongoose.Types.ObjectId(productId)
         }
       },
+      // STEP 1: Group by ORDER to get total quantity per order per salesperson
       {
         $group: {
-          _id: '$salesPerson',
+          _id: {
+            orderId: '$_id',
+            salesPersonId: '$salesPerson'
+          },
           salesPersonName: { $first: { $ifNull: [{ $arrayElemAt: ['$salesPersonDetails.fullName', 0] }, { $arrayElemAt: ['$salesPersonDetails.username', 0] }] } },
-          totalQuantity: { $sum: '$products.quantity' },
-          orderCount: { $sum: 1 }
+          orderQuantity: { $sum: '$products.quantity' } // Sum quantity for this product in this order
+        }
+      },
+      // STEP 2: Group by SALESPERSON to get total across all their orders
+      {
+        $group: {
+          _id: '$_id.salesPersonId',
+          salesPersonName: { $first: '$salesPersonName' },
+          totalQuantity: { $sum: '$orderQuantity' }, // Sum all order quantities
+          orderCount: { $sum: 1 } // Count number of orders
         }
       },
       {

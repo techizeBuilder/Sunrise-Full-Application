@@ -174,17 +174,25 @@ export const updateOrderStatus = async (req, res) => {
           console.log(`   Product qtyPerBatch: ${qtyPerBatch}`);
           console.log(`   Product details: batch=${productDetails.batch}, qty=${productDetails.qty}, unit=${productDetails.unit}, price=${productDetails.price}`);
           
-          // Check if ProductDailySummary entry already exists for this product and date
+          // ✅ NORMALIZE DATE TO START OF DAY for storage
+          const summaryDate = new Date(order.orderDate);
+          summaryDate.setUTCHours(0, 0, 0, 0);
+          
+          console.log(`   📅 Original order date: ${order.orderDate}`);
+          console.log(`   📅 Normalized summary date: ${summaryDate}`);
+          
+          // Check if ProductDailySummary entry already exists for this product and company
+          // Remove date from query to prevent duplicates - we want ONE entry per product per company
           const existingSummary = await ProductDailySummary.findOne({
             productId: productId,
-            date: order.orderDate,
             companyId: order.companyId
           });
 
           if (existingSummary) {
-            // Update existing entry - set productionFinalBatches to 0 instead of adding quantity
-            const oldBatches = existingSummary.productionFinalBatches;
-            existingSummary.productionFinalBatches = 0; // Always set to 0 as requested
+            // Update existing entry - ADD the new quantity to existing totalQuantity
+            const oldQuantity = existingSummary.totalQuantity || 0;
+            const newQuantity = oldQuantity + productItem.quantity;
+            existingSummary.totalQuantity = newQuantity;
             
             // Update qtyPerBatch if it was 0 or not set
             if (!existingSummary.qtyPerBatch || existingSummary.qtyPerBatch === 0) {
@@ -193,26 +201,56 @@ export const updateOrderStatus = async (req, res) => {
             }
             
             await existingSummary.save();
-            console.log(`   ✅ Updated ProductDailySummary: ${productName}, ${oldBatches} set to 0 (was ${oldBatches})`);
+            console.log(`   ✅ Updated ProductDailySummary: ${productName}, quantity: ${oldQuantity} + ${productItem.quantity} = ${newQuantity}`);
           } else {
             // Create new ProductDailySummary entry with proper qtyPerBatch
-            const newSummary = new ProductDailySummary({
-              productId: productId,
-              productName: productName,
-              date: order.orderDate,
-              companyId: order.companyId,
-              productionFinalBatches: 0, // Always set to 0 as requested
-              qtyPerBatch: qtyPerBatch, // ✅ SET FROM ITEM DATA
-              totalRequirements: productItem.quantity,
-              createdAt: new Date(),
-              updatedAt: new Date()
-            });
-            
-            await newSummary.save();
-            console.log(`   ✅ Created new ProductDailySummary: ${productName}`);
-            console.log(`      - ProductionFinalBatches: 0 (always set to 0)`);
-            console.log(`      - QtyPerBatch: ${qtyPerBatch}`);
-            console.log(`      - TotalRequirements: ${productItem.quantity}`);
+            try {
+              const newSummary = new ProductDailySummary({
+                productId: productId,
+                productName: productName,
+                date: summaryDate, // ✅ USE NORMALIZED DATE
+                companyId: order.companyId,
+                productionFinalBatches: 0, // Initialize to 0
+                qtyPerBatch: qtyPerBatch, // ✅ SET FROM ITEM DATA
+                totalQuantity: productItem.quantity, // Set initial quantity
+                createdAt: new Date(),
+                updatedAt: new Date()
+              });
+              
+              await newSummary.save();
+              console.log(`   ✅ Created new ProductDailySummary: ${productName}`);
+              console.log(`      - ProductionFinalBatches: 0 (initialized)`);
+              console.log(`      - QtyPerBatch: ${qtyPerBatch}`);
+              console.log(`      - TotalQuantity: ${productItem.quantity}`);
+            } catch (createError) {
+              // Handle duplicate key error (race condition)
+              if (createError.code === 11000) {
+                console.log(`   ⚠️ ProductDailySummary already exists (race condition), updating instead...`);
+                
+                // Try to find and update the existing entry
+                const raceSummary = await ProductDailySummary.findOne({
+                  productId: productId,
+                  companyId: order.companyId
+                });
+                
+                if (raceSummary) {
+                  // ADD the new quantity to existing totalQuantity
+                  const oldQuantity = raceSummary.totalQuantity || 0;
+                  const newQuantity = oldQuantity + productItem.quantity;
+                  raceSummary.totalQuantity = newQuantity;
+                  
+                  if (!raceSummary.qtyPerBatch || raceSummary.qtyPerBatch === 0) {
+                    raceSummary.qtyPerBatch = qtyPerBatch;
+                  }
+                  await raceSummary.save();
+                  console.log(`   ✅ Updated existing ProductDailySummary after race condition: ${productName}, quantity: ${oldQuantity} + ${productItem.quantity} = ${newQuantity}`);
+                } else {
+                  console.log(`   ❌ Could not find or create ProductDailySummary for: ${productName}`);
+                }
+              } else {
+                throw createError; // Re-throw other errors
+              }
+            }
           }
         }
         

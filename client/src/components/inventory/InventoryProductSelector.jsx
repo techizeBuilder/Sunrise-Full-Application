@@ -136,16 +136,6 @@ const InventoryProductSelector = React.memo(({
     if (isSelected) {
       onProductRemove(item._id);
     } else {
-      // Check if item has stock
-      if (item.qty <= 0) {
-        toast({
-          title: "Out of Stock",
-          description: `${item.name} is currently out of stock`,
-          variant: "destructive"
-        });
-        return;
-      }
-      
       onProductSelect({
         ...item,
         quantity: 1,
@@ -157,20 +147,9 @@ const InventoryProductSelector = React.memo(({
 
   const handleQuantityUpdate = (productId, value) => {
     const numQuantity = parseInt(value) || 0;
-    const item = items.find(p => p._id === productId);
     
     if (numQuantity <= 0) {
       onProductRemove(productId);
-      return;
-    }
-    
-    // Check against available quantity
-    if (item && numQuantity > item.qty) {
-      toast({
-        title: "Insufficient Stock",
-        description: `Only ${item.qty} ${item.unit || 'units'} available for ${item.name}`,
-        variant: "destructive"
-      });
       return;
     }
     
@@ -269,7 +248,6 @@ const InventoryProductSelector = React.memo(({
                           <thead>
                             <tr className="border-b">
                               <th className="text-left py-2 font-medium">ITEM NAME</th>
-                              <th className="text-left py-2 font-medium">STOCK</th>
                               <th className="text-left py-2 font-medium">PRICE</th>
                               <th className="text-right py-2 font-medium">QUANTITY</th>
                             </tr>
@@ -298,16 +276,6 @@ const InventoryProductSelector = React.memo(({
                                     </div>
                                   </td>
                                   <td className="py-3">
-                                    <div className="flex items-center gap-2">
-                                      <Badge variant="outline" className={`${stockStatus.bg} ${stockStatus.color} border-0`}>
-                                        {item.qty} {item.unit}
-                                      </Badge>
-                                      {stockStatus.status === 'out' && (
-                                        <AlertTriangle className="h-4 w-4 text-red-500" />
-                                      )}
-                                    </div>
-                                  </td>
-                                  <td className="py-3">
                                     <span className="font-medium">₹{(item.salePrice || 0).toLocaleString()}</span>
                                   </td>
                                   <td className="py-3 text-right">
@@ -317,7 +285,6 @@ const InventoryProductSelector = React.memo(({
                                           <Input
                                             type="number"
                                             min="1"
-                                            max={item.qty}
                                             value={selectedQty}
                                             onChange={(e) => handleQuantityUpdate(item._id, e.target.value)}
                                             className="w-20 text-center"
@@ -336,10 +303,9 @@ const InventoryProductSelector = React.memo(({
                                           variant="outline"
                                           size="sm"
                                           onClick={() => handleProductToggle(item)}
-                                          disabled={item.qty <= 0}
                                           className="text-blue-600 hover:text-blue-700"
                                         >
-                                          {item.qty <= 0 ? 'Out of Stock' : 'Add'}
+                                          Add
                                         </Button>
                                       )}
                                     </div>

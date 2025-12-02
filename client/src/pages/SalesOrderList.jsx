@@ -147,7 +147,7 @@ export default function SalesOrderList() {
       apiRequest('PUT', `/api/unit-manager/orders/${orderId}/status`, { status, notes }),
     onSuccess: () => {
       showSuccessToast('Success', 'Order status updated successfully');
-      queryClient.invalidateQueries({ queryKey: ['/api/unit-manager/all-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/unit-manager/sales-order-list'] });
       setIsDetailsOpen(false);
       setIsStatusUpdateOpen(false);
       setSelectedOrder(null);
@@ -276,7 +276,7 @@ export default function SalesOrderList() {
             <div className="text-center text-red-600">
               <p>Error loading orders: {error.message}</p>
               <Button 
-                onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/unit-manager/all-orders'] })}
+                onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/unit-manager/sales-order-list'] })}
                 className="mt-4"
               >
                 <RefreshCw className="w-4 h-4 mr-2" />

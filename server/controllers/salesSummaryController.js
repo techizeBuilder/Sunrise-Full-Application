@@ -124,6 +124,7 @@ export const getSalesSummary = async (req, res) => {
           productId: summary.productId._id,
           productName: summary.productName,
           qtyPerBatch: summary.qtyPerBatch,
+          totalQuantity: summary.totalQuantity || 0, // ADD totalQuantity from database
           summary: {
             totalIndent: summary.totalIndent,
             physicalStock: summary.physicalStock,

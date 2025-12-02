@@ -310,7 +310,6 @@ const ProductSelector = React.memo(({
                     {/* Header Row */}
                     <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 text-xs font-medium text-gray-600 dark:text-gray-400">
                       <span>ITEM NAME</span>
-                      <span className="w-16 text-center">STOCK</span>
                       <span className="w-20 text-center">QUANTITY</span>
                     </div>
                     
@@ -347,39 +346,15 @@ const ProductSelector = React.memo(({
                             </div>
                           </div>
 
-                          {/* Stock Display */}
-                          <div className="w-16 text-center">
-                            <span className={`text-sm font-medium ${
-                              product.stock <= 0 ? 'text-red-500' : 
-                              product.stock <= 10 ? 'text-orange-500' : 'text-green-600'
-                            }`}>
-                              {product.stock}
-                            </span>
-                            <p className="text-xs text-gray-400">{product.unit}</p>
-                          </div>
-
                           <div className="w-20" onClick={(e) => e.stopPropagation()}>
                             <Input
                               type="number"
                               min="0"
-                              max={product.stock}
-                              placeholder={product.stock > 0 ? "0" : "Out of Stock"}
+                              placeholder="0"
                               defaultValue={selectedQuantity || ''}
-                              disabled={product.stock <= 0}
                               onChange={(e) => {
                                 e.stopPropagation();
-                                const requestedQty = parseInt(e.target.value) || 0;
-                                if (requestedQty > product.stock && product.stock > 0) {
-                                  toast({
-                                    title: "Stock Limit Exceeded",
-                                    description: `Only ${product.stock} ${product.unit} available for ${product.name}`,
-                                    variant: "destructive"
-                                  });
-                                  e.target.value = product.stock;
-                                  handleQuantityUpdate(product._id, product.stock);
-                                } else {
-                                  handleQuantityUpdate(product._id, e.target.value);
-                                }
+                                handleQuantityUpdate(product._id, e.target.value);
                               }}
                               onFocus={(e) => {
                                 e.stopPropagation();
@@ -388,7 +363,7 @@ const ProductSelector = React.memo(({
                               onBlur={(e) => {
                                 e.stopPropagation();
                                 if (!e.target.value) {
-                                  e.target.placeholder = product.stock > 0 ? "0" : "Out of Stock";
+                                  e.target.placeholder = "0";
                                 }
                               }}
                               onClick={(e) => {
@@ -397,9 +372,7 @@ const ProductSelector = React.memo(({
                               onKeyDown={(e) => {
                                 e.stopPropagation();
                               }}
-                              className={`w-full text-center text-sm h-8 ${
-                                product.stock <= 0 ? 'bg-gray-100 cursor-not-allowed' : ''
-                              }`}
+                              className="w-full text-center text-sm h-8"
                             />
                           </div>
                         </div>

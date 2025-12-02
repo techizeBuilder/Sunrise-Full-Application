@@ -43,6 +43,11 @@ const productDailySummarySchema = new mongoose.Schema({
   },
   
   // Auto-Calculated Fields
+  totalQuantity: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
   totalIndent: {
     type: Number,
     default: 0,
