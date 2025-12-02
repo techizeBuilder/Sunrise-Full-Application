@@ -635,7 +635,7 @@ export default function SimpleInventoryForm({
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
-                <Label htmlFor="qty" className="text-sm font-medium text-gray-700">Current Quantity</Label>
+                <Label htmlFor="qty" className="text-sm font-medium text-gray-700">Available Stock</Label>
                 <Input
                   id="qty"
                   type="number"

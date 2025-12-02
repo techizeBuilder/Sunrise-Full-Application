@@ -216,6 +216,10 @@ export default function ExcelImportExport({ type = 'items' }) {
     setImportResult(null);
     setUploadProgress(0);
     setUploading(false);
+    // Clear the file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   const downloadTemplate = async () => {
@@ -288,7 +292,6 @@ export default function ExcelImportExport({ type = 'items' }) {
         default:
           templateData = [{
             'S.No': 1,
-            'Item Code': 'Leave blank for auto-generation',
             'Item Name': 'Everyday PremiumSoft Milk Bread 400g',
             'Description': 'Soft milk bread perfect for daily consumption',
             'Type': 'Product',
@@ -304,7 +307,7 @@ export default function ExcelImportExport({ type = 'items' }) {
             'Max Stock': 100,
             'GST %': 18,
             'HSN Code': '12345678',
-            'Store Location': 'Sunrise Foods (Tirupati) - Tirupati, Andhra Pradesh',
+            'Store Location ID': '675bff35e71ef51a68b5d7ab6',
             'Supplier': 'Sample Supplier',
             'Qty/Batch': 'BATCH001',
             'Lead Time': 5,
@@ -443,7 +446,13 @@ export default function ExcelImportExport({ type = 'items' }) {
 
       {/* Import Button - Only show if import is available */}
       {config.importFn && (
-        <Dialog open={importOpen} onOpenChange={setImportOpen}>
+        <Dialog open={importOpen} onOpenChange={(open) => {
+          setImportOpen(open);
+          // Clear import state when modal is closed
+          if (!open) {
+            resetImport();
+          }
+        }}>
           <DialogTrigger asChild>
             <Button
               variant="outline"
@@ -454,7 +463,7 @@ export default function ExcelImportExport({ type = 'items' }) {
               Import Excel
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="sm:max-w-2xl max-w-[90vw] max-h-[85vh] overflow-hidden">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <FileSpreadsheet className="h-5 w-5 text-blue-600" />
@@ -462,14 +471,14 @@ export default function ExcelImportExport({ type = 'items' }) {
               </DialogTitle>
             </DialogHeader>
 
-            <div className="space-y-4">
+            <div className="space-y-4 overflow-y-auto max-h-[70vh]">
               {!importResult && !uploading && (
                 <div className="space-y-4">
                   <Alert>
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>
                       Upload an Excel file (.xlsx or .xls) containing {config.title.toLowerCase()} data. 
-                      Download the template below to see the required format and column headers.
+                      📝 Item Code is auto-generated, Store Location ID must be a valid company ID. Download the template to see the required format.
                     </AlertDescription>
                   </Alert>
 
@@ -542,27 +551,36 @@ export default function ExcelImportExport({ type = 'items' }) {
                       
                       {importResult.results.errors && importResult.results.errors.length > 0 && (
                         <div className="mt-3">
-                          <div className="text-sm font-medium text-red-600 mb-2">Issues Found:</div>
-                          <div className="max-h-40 overflow-y-auto text-xs space-y-2 p-3 bg-red-50 rounded border">
-                            {importResult.results.errors.slice(0, 10).map((error, index) => {
+                          <div className="text-sm font-medium text-red-600 mb-2 flex items-center gap-2">
+                            <span>Issues Found ({importResult.results.errors.length}):</span>
+                            <span className="text-xs text-gray-500">All errors are shown below</span>
+                          </div>
+                          <div className="max-h-60 overflow-y-auto text-sm space-y-2 p-4 bg-red-50 rounded-lg border border-red-200">
+                            {importResult.results.errors.map((error, index) => {
                               // Clean up error message for better readability
                               const cleanError = error.replace(/^Row \d+:\s*/, '').replace(/Row \d+:\s*/, '');
                               const rowMatch = error.match(/Row (\d+):/);
                               const rowNumber = rowMatch ? rowMatch[1] : index + 2;
                               
                               return (
-                                <div key={index} className="flex gap-2">
-                                  <span className="text-red-800 font-mono text-xs bg-red-100 px-1 rounded">Row {rowNumber}</span>
-                                  <span className="text-red-700">{cleanError}</span>
+                                <div key={index} className="flex gap-3 p-2 bg-white rounded border border-red-100">
+                                  <span className="text-red-800 font-mono text-sm bg-red-200 px-2 py-1 rounded flex-shrink-0">
+                                    Row {rowNumber}
+                                  </span>
+                                  <span className="text-red-700 flex-1 break-words">{cleanError}</span>
                                 </div>
                               );
                             })}
-                            {importResult.results.errors.length > 10 && (
-                              <div className="text-red-600 font-medium">...and {importResult.results.errors.length - 10} more issues</div>
-                            )}
                           </div>
-                          <div className="mt-2 text-xs text-gray-600">
-                            💡 Tip: Each item name must be unique. Check for duplicate names or modify them to be distinct.
+                          <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                            <div className="text-sm font-medium text-blue-800 mb-2">💡 Import Guidelines:</div>
+                            <div className="text-sm text-blue-700 space-y-1">
+                              <div>• Each item name must be unique within your company</div>
+                              <div>• Item Code is auto-generated if left blank</div>
+                              <div>• Store Location accepts both company ID or company name</div>
+                              <div>• Use the template download for proper format</div>
+                              <div>• Check for typos in required fields</div>
+                            </div>
                           </div>
                         </div>
                       )}

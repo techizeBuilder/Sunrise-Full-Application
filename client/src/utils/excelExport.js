@@ -50,7 +50,6 @@ export class ClientExcelExporter {
   static exportInventoryItems(items) {
     const exportData = items.map((item, index) => ({
       'S.No': index + 1,
-      'Item Code': item.code || '',
       'Item Name': item.name || '',
       'Description': item.description || '',
       'Type': item.type || '',
@@ -66,7 +65,7 @@ export class ClientExcelExporter {
       'Max Stock': Number(item.maxStock || 0),
       'GST %': Number(item.gst || 0),
       'HSN Code': item.hsn || '',
-      'Store Location': item.store || item.location || '',
+      'Store Location ID': item.store || item.companyId || '',
       'Supplier': item.supplier || '',
       'Batch': item.batch || '',
       'Lead Time': Number(item.leadTime || 0),

@@ -106,20 +106,39 @@ const updateProductSummaryQtyPerBatch = async (productId, productName, qtyPerBat
   }
 };
 
-// Auto-generate item code
+// Auto-generate item code - globally unique
 const generateItemCode = async (type) => {
-  const prefix = type.substring(0, 3).toUpperCase();
-  const lastItem = await Item.findOne({ 
-    code: { $regex: `^${prefix}` } 
-  }).sort({ code: -1 });
+  const prefix = type === 'Product' ? 'PRO' : 'SER';
   
-  let nextNumber = 1;
-  if (lastItem) {
-    const lastNumber = parseInt(lastItem.code.substring(3));
-    nextNumber = lastNumber + 1;
+  let codeAttempts = 0;
+  let uniqueCode = '';
+  let codeExists = true;
+  
+  while (codeExists && codeAttempts < 100) {
+    // Get GLOBAL count for this prefix to ensure global uniqueness
+    const globalCount = await Item.countDocuments({ 
+      code: new RegExp(`^${prefix}\\d{4}$`)
+    });
+    
+    // Generate next available global number
+    uniqueCode = `${prefix}${String(globalCount + 1 + codeAttempts).padStart(4, '0')}`;
+    
+    // Check if this code already exists GLOBALLY
+    const existingItem = await Item.findOne({ code: uniqueCode });
+    codeExists = !!existingItem;
+    codeAttempts++;
+    
+    if (codeExists) {
+      console.log(`Code ${uniqueCode} already exists globally, trying next number...`);
+    }
   }
   
-  return `${prefix}${nextNumber.toString().padStart(4, '0')}`;
+  if (codeAttempts >= 100) {
+    throw new Error('Unable to generate unique code after 100 attempts');
+  }
+  
+  console.log(`Generated globally unique code: ${uniqueCode}`);
+  return uniqueCode;
 };
 
 // ITEM CONTROLLERS
@@ -1173,7 +1192,6 @@ export const exportItemsToExcel = async (req, res) => {
     // Create simple data structure for Excel
     const excelData = items.map((item, index) => ({
       'Serial No': index + 1,
-      'Item Code': item.code || '',
       'Item Name': item.name || '',
       'Description': item.description || '',
       'Category': item.category || '',
@@ -1185,7 +1203,7 @@ export const exportItemsToExcel = async (req, res) => {
       'Current Stock': item.qty || 0,
       'Min Stock': item.minStock || 0,
       'Max Stock': item.maxStock || 0,
-      'Location': item.location || '',
+      'Store Location ID': item.store || item.companyId || '',
       'Supplier': item.supplier || '',
       'Created Date': item.createdAt ? item.createdAt.toISOString().split('T')[0] : ''
     }));
@@ -1235,13 +1253,23 @@ export const importItemsFromExcel = [upload.single('file'), async (req, res) => 
       size: req.file.size
     });
 
-    // Parse Excel file
-    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
-    const sheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
-    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+    let workbook, worksheet, jsonData;
 
-    console.log(`Parsed ${jsonData.length} rows from Excel`);
+    try {
+      // Parse Excel file
+      workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+      const sheetName = workbook.SheetNames[0];
+      worksheet = workbook.Sheets[sheetName];
+      jsonData = XLSX.utils.sheet_to_json(worksheet);
+      console.log(`Parsed ${jsonData.length} rows from Excel`);
+    } catch (parseError) {
+      console.error('Excel parsing error:', parseError);
+      return res.status(400).json({ 
+        success: false,
+        message: 'Failed to parse Excel file: ' + parseError.message,
+        results: null
+      });
+    }
 
     if (jsonData.length === 0) {
       return res.status(400).json({ 
@@ -1262,8 +1290,11 @@ export const importItemsFromExcel = [upload.single('file'), async (req, res) => 
     for (let i = 0; i < jsonData.length; i++) {
       const row = jsonData[i];
       const rowNumber = i + 2; // Excel row number (accounting for header)
+      let itemData = { name: 'Unknown' }; // Initialize with default values
 
       try {
+        console.log(`\n🔄 Starting row ${rowNumber} processing...`);
+        
         // Enhanced field mapping with null/undefined safety
         const safeString = (value) => value ? String(value).trim() : '';
         const safeNumber = (value) => {
@@ -1271,77 +1302,166 @@ export const importItemsFromExcel = [upload.single('file'), async (req, res) => 
           return isNaN(num) ? 0 : num;
         };
 
-        const itemData = {
-          name: safeString(row['Item Name'] || row['Name'] || row['ItemName']),
-          code: safeString(row['Item Code'] || row['Code'] || row['ItemCode']),
-          description: safeString(row['Description'] || row['Desc']),
-          category: safeString(row['Category'] || row['Cat']),
-          subCategory: safeString(row['Sub Category'] || row['SubCategory'] || row['Subcategory']),
-          customerCategory: safeString(row['Customer Category'] || row['CustomerCategory'] || row['CustCategory']),
-          type: safeString(row['Type'] || row['ItemType'] || row['Product Type']) || 'Product',
-          importance: safeString(row['Importance'] || row['Priority']) || 'Normal',
-          unit: safeString(row['Unit'] || row['UOM']) || 'pieces',
-          qty: safeNumber(row['Current Stock'] || row['Qty'] || row['Quantity'] || row['Stock']),
-          minStock: safeNumber(row['Min Stock'] || row['MinStock'] || row['Minimum Stock']),
-          maxStock: safeNumber(row['Max Stock'] || row['MaxStock'] || row['Maximum Stock']),
-          stdCost: safeNumber(row['Standard Cost'] || row['StdCost'] || row['Std Cost']),
-          purchaseCost: safeNumber(row['Purchase Price'] || row['Purchase Cost'] || row['PurchaseCost']),
-          salePrice: safeNumber(row['Sale Price'] || row['SalePrice'] || row['Selling Price']),
-          mrp: safeNumber(row['MRP'] || row['Mrp'] || row['Maximum Retail Price']),
-          gst: safeNumber(row['GST'] || row['Gst'] || row['Tax'] || row['GST %']),
-          hsn: safeString(row['HSN'] || row['Hsn'] || row['HSN Code']),
-          batch: safeString(row['Batch'] || row['Batch No']),
-          store: safeString(row['Store'] || row['Location'] || row['Warehouse'] || row['Store Location']),
-          leadTime: safeNumber(row['Lead Time'] || row['LeadTime']),
-          internalManufacturing: String(row['Internal Manufacturing'] || row['InternalManufacturing'] || 'NO').toLowerCase() === 'yes',
-          purchase: String(row['Purchase Allowed'] || row['Purchase'] || 'YES').toLowerCase() === 'yes',
-          internalNotes: safeString(row['Internal Notes'] || row['Notes'])
+        itemData = {
+          name: safeString(row['Item Name']),
+          description: safeString(row['Description']),
+          category: safeString(row['Category']),
+          subCategory: safeString(row['Sub Category']),
+          customerCategory: safeString(row['Customer Category']),
+          type: safeString(row['Type']) || 'Product',
+          importance: safeString(row['Importance']) || 'Normal',
+          unit: safeString(row['Unit']) || 'pieces',
+          qty: safeNumber(row['Current Stock']),
+          minStock: safeNumber(row['Min Stock']),
+          maxStock: safeNumber(row['Max Stock']),
+          stdCost: safeNumber(row['Standard Cost']),
+          purchaseCost: safeNumber(row['Purchase Price']),
+          salePrice: safeNumber(row['Sale Price']),
+          mrp: safeNumber(row['MRP']),
+          gst: safeNumber(row['GST %']),
+          hsn: safeString(row['HSN Code']),
+          batch: safeString(row['Batch']),
+          store: safeString(row['Store Location ID']),
+          leadTime: safeNumber(row['Lead Time']),
+          internalManufacturing: String(row['Internal Manufacturing'] || 'NO').toLowerCase() === 'yes',
+          purchase: String(row['Purchase Allowed'] || 'YES').toLowerCase() === 'yes',
+          internalNotes: safeString(row['Internal Notes'])
         };
 
-        console.log(`Processing row ${rowNumber}:`, {
+        console.log(`\n🔄 Processing row ${rowNumber}:`, {
           originalName: row['Item Name'],
-          originalCode: row['Item Code'], 
+          originalStore: row['Store Location ID'],
           parsedName: itemData.name,
-          parsedCode: itemData.code,
-          parsedType: itemData.type
+          parsedType: itemData.type,
+          storeLocationId: itemData.store
         });
 
         // Validate required fields with better error messages
         if (!itemData.name || !itemData.name.trim()) {
-          throw new Error(`Row ${rowNumber}: Item name is required and cannot be empty`);
+          throw new Error(`Item name is required and cannot be empty`);
+        }
+
+        // Validate Store Location ID format if provided - check if it exists as a company (by ID or name)
+        if (itemData.store) {
+          console.log(`🔍 Looking up company: "${itemData.store}" (Length: ${itemData.store.length} chars)`);
+          
+          try {
+            const { Company } = await import('../models/Company.js');
+            let company = null;
+            
+            // First try to find by ID (if it looks like an ObjectId - flexible length check)
+            if (itemData.store.match(/^[0-9a-fA-F]{20,24}$/)) {
+              console.log(`📋 Searching by ID: ${itemData.store} (${itemData.store.length} chars)`);
+              try {
+                company = await Company.findById(itemData.store);
+                console.log(`📋 Found by ID:`, company ? `✅ ${company.name} (${company._id})` : '❌ NOT FOUND');
+              } catch (idError) {
+                console.log(`📋 ID lookup failed:`, idError.message);
+              }
+            } else {
+              console.log(`📋 Not an ObjectId format, trying name search`);
+            }
+            
+            // If not found by ID, try to find by name (exact match first, then partial)
+            if (!company) {
+              console.log(`📋 Searching by name: "${itemData.store}"`);
+              
+              // Try exact match first
+              company = await Company.findOne({ 
+                name: { $regex: new RegExp(`^${itemData.store.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+              });
+              
+              console.log(`📋 Exact name match:`, company ? `✅ ${company.name}` : '❌ NOT FOUND');
+              
+              // If no exact match, try partial match
+              if (!company) {
+                company = await Company.findOne({ 
+                  name: { $regex: new RegExp(itemData.store.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') }
+                });
+                console.log(`📋 Partial name match:`, company ? `✅ ${company.name}` : '❌ NOT FOUND');
+              }
+            }
+            
+            if (!company) {
+              // Better error message for Unit Head vs Super Admin
+              if (req.user.role === 'Unit Head' && req.user.companyId) {
+                // Get user's company name for better error message
+                const userCompany = await Company.findById(req.user.companyId).select('name');
+                const userCompanyName = userCompany ? userCompany.name : 'Your Company';
+                
+                throw new Error(`Location Not Found: "${itemData.store}" is not a valid company location. As a Unit Head, you can only import items for your assigned location "${userCompanyName}". Please use your company name or ID in the Store Location ID column.`);
+              } else {
+                // List available companies for debugging (Super Admin)
+                const availableCompanies = await Company.find({}).select('_id name').limit(5);
+                console.log(`📋 Available companies (first 5):`, availableCompanies.map(c => `${c.name} (ID: ${c._id})`));
+                throw new Error(`Store Location "${itemData.store}" not found. Please use a valid company ID or company name`);
+              }
+            }
+            
+            // 🔒 UNIT HEAD RESTRICTION: Only allow their own company
+            if (req.user.role === 'Unit Head' && req.user.companyId) {
+              const userCompanyId = req.user.companyId.toString();
+              const itemCompanyId = company._id.toString();
+              
+              if (userCompanyId !== itemCompanyId) {
+                // Get user's company name for better error message
+                const userCompany = await Company.findById(req.user.companyId).select('name');
+                const userCompanyName = userCompany ? userCompany.name : 'Your Company';
+                
+                console.log(`🚫 Unit Head restriction: User company ${userCompanyId} (${userCompanyName}) ≠ Item company ${itemCompanyId} (${company.name})`);
+                throw new Error(`Access Denied: You can only import items for your location "${userCompanyName}". This item belongs to "${company.name}" which is not your assigned location.`);
+              } else {
+                console.log(`✅ Unit Head validation passed: Item company matches user company`);
+              }
+            }
+            
+            // Store the company ID for consistency
+            itemData.store = company._id.toString();
+            console.log(`✅ Valid Store Location: ${itemData.store} -> ${company.name}`);
+          } catch (err) {
+            console.error(`❌ Company lookup error:`, err.message);
+            throw new Error(`Store Location "${itemData.store}" not found. Please use a valid company ID or company name`);
+          }
+        } else if (req.user.role === 'Unit Head') {
+          // 🔒 If no store provided and user is Unit Head, auto-assign their company
+          console.log(`🏢 Unit Head: Auto-assigning company ${req.user.companyId}`);
+          itemData.store = req.user.companyId;
         }
 
         const trimmedName = itemData.name.trim();
 
-        // Check for duplicate item name (case-insensitive) within company
+        // Check for duplicate item name (case-insensitive) within the SAME company
         const escapedName = trimmedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const query = {
-          name: { $regex: new RegExp(`^${escapedName}$`, 'i') }
-        };
         
         // Determine company ID for duplicate checking (same logic as manual creation)
         let companyIdForCheck = req.user.companyId;
-        if (itemData.store && itemData.store.match(/^[0-9a-fA-F]{24}$/)) {
+        if (itemData.store) {
           companyIdForCheck = itemData.store;
         }
         
-        // Check duplicates in both companyId and store fields (same as manual creation)
+        console.log(`📋 Import duplicate check for "${trimmedName}" in company: ${companyIdForCheck}`);
+        
+        // Only check duplicates within the same company - same name allowed in different companies
         if (companyIdForCheck) {
-          query.$or = [
-            { companyId: companyIdForCheck },
-            { store: companyIdForCheck }
-          ];
-        }
-        
-        console.log(`📋 Import duplicate check for "${trimmedName}":`, {
-          companyIdForCheck,
-          query
-        });
-        
-        const existingItemByName = await Item.findOne(query);
-        
-        if (existingItemByName) {
-          throw new Error(`Item "${trimmedName}" already exists in your inventory. Please use a different name or check existing items.`);
+          const query = {
+            name: { $regex: new RegExp(`^${escapedName}$`, 'i') },
+            $or: [
+              { companyId: companyIdForCheck },
+              { store: companyIdForCheck }
+            ]
+          };
+          
+          console.log(`📋 Duplicate query:`, query);
+          
+          const existingItemByName = await Item.findOne(query);
+          
+          if (existingItemByName) {
+            throw new Error(`Item "${trimmedName}" already exists in this company location. Same item names are allowed in different companies, but not within the same company`);
+          } else {
+            console.log(`✅ Item name "${trimmedName}" is unique within company ${companyIdForCheck}`);
+          }
+        } else {
+          console.log(`⚠️ No company ID found for duplicate checking - allowing item`);
         }
 
         // Ensure type has a valid value
@@ -1356,58 +1476,61 @@ export const importItemsFromExcel = [upload.single('file'), async (req, res) => 
           itemData.importance = 'Normal';
         }
 
-        // Auto-generate code if not provided
-        if (!itemData.code || !itemData.code.trim()) {
-          const prefix = itemData.type === 'Product' ? 'PRO' : 'SER';
-          const count = await Item.countDocuments({ 
-            code: new RegExp(`^${prefix}\\d{4}$`),
-            ...(req.user.companyId && { companyId: req.user.companyId })
+        // Auto-generate code since Item Code is not required in import
+        const prefix = itemData.type === 'Product' ? 'PRO' : 'SER';
+        
+        // Generate globally unique code to avoid MongoDB unique index conflicts
+        let codeAttempts = 0;
+        let uniqueCode = '';
+        let codeExists = true;
+        
+        while (codeExists && codeAttempts < 100) {
+          // Get GLOBAL count for this prefix to ensure global uniqueness
+          const globalCount = await Item.countDocuments({ 
+            code: new RegExp(`^${prefix}\\d{4}$`)
           });
-          itemData.code = `${prefix}${String(count + 1).padStart(4, '0')}`;
-          console.log(`Auto-generated code for ${trimmedName}: ${itemData.code}`);
-        }
-
-        // Check for duplicate code and auto-generate new one if exists
-        const codeQuery = { code: itemData.code };
-        if (companyIdForCheck) {
-          codeQuery.$or = [
-            { companyId: companyIdForCheck },
-            { store: companyIdForCheck }
-          ];
+          
+          // Generate next available global number
+          uniqueCode = `${prefix}${String(globalCount + 1 + codeAttempts).padStart(4, '0')}`;
+          
+          // Check if this code already exists GLOBALLY (not just in company)
+          const existingItemByCode = await Item.findOne({ code: uniqueCode });
+          codeExists = !!existingItemByCode;
+          codeAttempts++;
+          
+          if (codeExists) {
+            console.log(`Code ${uniqueCode} already exists globally, trying next number...`);
+          } else {
+            console.log(`✅ Generated globally unique code: ${uniqueCode}`);
+          }
         }
         
-        let existingItemByCode = await Item.findOne(codeQuery);
-        
-        if (existingItemByCode) {
-          console.log(`Code ${itemData.code} already exists, auto-generating new code...`);
-          // Auto-generate a new unique code instead of failing
-          const prefix = itemData.type === 'Product' ? 'PRO' : 'SER';
-          const count = await Item.countDocuments({ 
-            code: new RegExp(`^${prefix}\\d{4}$`),
-            ...(companyIdForCheck && { 
-              $or: [
-                { companyId: companyIdForCheck },
-                { store: companyIdForCheck }
-              ]
-            })
-          });
-          itemData.code = `${prefix}${String(count + 1).padStart(4, '0')}`;
-          console.log(`Generated new unique code: ${itemData.code}`);
+        if (codeAttempts >= 100) {
+          throw new Error('Unable to generate unique code after 100 attempts');
         }
+        
+        itemData.code = uniqueCode;
+        console.log(`Auto-generated globally unique code for ${trimmedName}: ${itemData.code} (Company: ${companyIdForCheck})`);
 
-        // Resolve store location to company name if it's a company ID
-        if (itemData.store && itemData.store.match(/^[0-9a-fA-F]{24}$/)) {
+        // Resolve store location to company name (already validated above - just get the name)
+        if (itemData.store) {
           try {
-            const Company = (await import('../models/Company.js')).default;
+            const { Company } = await import('../models/Company.js');
             const company = await Company.findById(itemData.store);
             if (company) {
-              console.log(`Resolved store location: ${itemData.store} -> ${company.name}`);
+              console.log(`✅ Resolved store location: ${itemData.store} -> ${company.name}`);
               // Keep the company ID for companyId field but store readable name for display
               itemData.companyId = itemData.store;
               itemData.storeLocation = company.name;
+            } else {
+              console.log(`⚠️ Warning: Company ${itemData.store} not found during name resolution, but should have been validated already`);
+              itemData.companyId = itemData.store;
+              itemData.storeLocation = 'Unknown Company';
             }
           } catch (err) {
-            console.log('Could not resolve company name, keeping ID:', err.message);
+            console.log(`⚠️ Warning: Could not resolve company name:`, err.message);
+            itemData.companyId = itemData.store;
+            itemData.storeLocation = 'Unknown Company';
           }
         }
         
@@ -1419,10 +1542,22 @@ export const importItemsFromExcel = [upload.single('file'), async (req, res) => 
         // Create new item
         const newItem = await Item.create(itemData);
         console.log(`✅ Successfully created item: ${trimmedName} (Code: ${itemData.code}) - Row ${rowNumber}`);
+        console.log(`📊 Item details saved:`, {
+          id: newItem._id,
+          name: newItem.name,
+          companyId: newItem.companyId,
+          store: newItem.store
+        });
 
         results.successful++;
       } catch (rowError) {
-        console.error(`Error processing row ${rowNumber}:`, rowError);
+        console.error(`❌ ERROR processing row ${rowNumber}:`, {
+          itemName: itemData?.name || 'Unknown',
+          storeLocation: itemData?.store || 'Unknown',
+          originalRowData: row,
+          errorMessage: rowError.message,
+          errorStack: rowError.stack?.split('\n')[0]
+        });
         results.errors.push(`Row ${rowNumber}: ${rowError.message}`);
         results.failed++;
       }

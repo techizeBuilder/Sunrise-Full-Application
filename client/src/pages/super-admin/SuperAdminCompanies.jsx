@@ -433,10 +433,11 @@ const SuperAdminCompanies = () => {
       <Card>
         <CardContent className="p-3 sm:p-6">
           <div className="overflow-x-auto">
-            <Table className="min-w-[600px]">
+            <Table className="min-w-[750px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Company</TableHead>
+                <TableHead>Company ID</TableHead>
                 <TableHead>Location</TableHead>
                 <TableHead>Contact</TableHead>
                 <TableHead>Status</TableHead>
@@ -446,7 +447,7 @@ const SuperAdminCompanies = () => {
             <TableBody>
               {companies.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8">
+                  <TableCell colSpan={6} className="text-center py-8">
                     <div className="flex flex-col items-center space-y-3">
                       <Building2 className="h-12 w-12 text-muted-foreground" />
                       <div className="space-y-1">
@@ -465,6 +466,11 @@ const SuperAdminCompanies = () => {
                       <div>
                         <div className="font-medium text-sm sm:text-base">{company.name}</div>
                         <div className="text-xs sm:text-sm text-muted-foreground">{company.unitName}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="min-w-[120px]">
+                      <div className="font-mono text-xs text-muted-foreground bg-gray-50 px-2 py-1 rounded border">
+                        {company._id}
                       </div>
                     </TableCell>
                     <TableCell className="min-w-[150px]">
