@@ -8,7 +8,7 @@ import mongoose from 'mongoose';
 export const getItems = async (req, res) => {
   try {
     const user = req.user;
-    
+
     // Only allow Unit Manager role
     if (user.role !== 'Unit Manager') {
       return res.status(403).json({
@@ -26,7 +26,7 @@ export const getItems = async (req, res) => {
     const baseFilter = {
       companyId: user.companyId
     };
-    
+
     // Add unit to filter only if it exists (backward compatibility)
     if (user.unit) {
       baseFilter.unit = user.unit;
@@ -79,17 +79,22 @@ export const getItems = async (req, res) => {
   }
 };
 
-// Update order status (approve/reject/move to production)
+// Update order status (approve/reject/move to production or bulk approve all)
 export const updateOrderStatus = async (req, res) => {
   try {
     console.log('🚀 UNIT MANAGER updateOrderStatus called');
     console.log('Request params:', req.params);
     console.log('Request body:', req.body);
     console.log('User:', { id: req.user._id, role: req.user.role, companyId: req.user.companyId });
-    
+
     const user = req.user;
     const { id: orderId } = req.params;
-    const { status, notes } = req.body;
+    const { status, notes, bulkApprove } = req.body;
+
+    console.log('🔍 DEBUG - orderId:', orderId);
+    console.log('🔍 DEBUG - bulkApprove:', bulkApprove);
+    console.log('🔍 DEBUG - status:', status);
+    console.log('🔍 DEBUG - Condition check:', bulkApprove === true || orderId === 'bulk-approve');
 
     // Only allow Unit Manager role
     if (user.role !== 'Unit Manager') {
@@ -99,7 +104,184 @@ export const updateOrderStatus = async (req, res) => {
       });
     }
 
-    // Validate status
+    // 🎯 BULK APPROVE ALL ORDERS
+    if (bulkApprove === true || orderId === 'bulk-approve') {
+      console.log('📦 BULK APPROVE MODE ACTIVATED');
+
+      // Create base filter to ensure company isolation
+      const baseFilter = {
+        companyId: user.companyId,
+        status: 'pending' // Only approve pending orders
+      };
+
+      // Add unit to filter only if it exists (backward compatibility)
+      if (user.unit) {
+        baseFilter.unit = user.unit;
+      }
+
+      // Get all orders that need to be approved
+      const orders = await Order.find(baseFilter).populate('products.product', 'name code');
+
+      console.log(`🔍 Found ${orders.length} orders to approve`);
+
+      if (orders.length === 0) {
+        return res.status(200).json({
+          success: true,
+          message: 'No orders found to approve',
+          approvedCount: 0
+        });
+      }
+
+      let approvedCount = 0;
+      const errors = [];
+
+      // Process each order
+      for (const order of orders) {
+        try {
+          const previousStatus = order.status;
+
+          // 🎯 CREATE PRODUCTDAILYSUMMARY ENTRIES
+          console.log(`📊 Creating ProductDailySummary entries for order ${order.orderCode}...`);
+          console.log('Order details:', {
+            orderId: order._id,
+            orderCode: order.orderCode,
+            currentStatus: order.status,
+            newStatus: 'approved',
+            productsCount: order.products?.length || 0,
+            orderDate: order.orderDate,
+            companyId: order.companyId
+          });
+
+          try {
+            for (const productItem of order.products) {
+              console.log(`\n🔍 Processing product: ${productItem.product?.name || 'Unknown'}`);
+              console.log(`   Product ID: ${productItem.product?._id}`);
+              console.log(`   Quantity: ${productItem.quantity}`);
+
+              // Get complete product details including qtyPerBatch
+              let productName = productItem.product?.name;
+              const productId = productItem.product?._id || productItem.product;
+              let qtyPerBatch = 0;
+
+              // Always fetch complete product details for batch information
+              console.log(`📦 Fetching complete product details from database...`);
+              const productDetails = await Item.findById(productId).select('name batch qty unit price').lean();
+              if (!productDetails) {
+                console.log(`⚠️ Product not found in database: ${productId}`);
+                continue;
+              }
+
+              // Use product details - batch field contains the batch value we need
+              productName = productName || productDetails.name;
+              // Use batch value if available, otherwise fallback to qty or 1
+              qtyPerBatch = productDetails.batch ? parseInt(productDetails.batch) || productDetails.qty || 1 : productDetails.qty || 1;
+
+              console.log(`   Using product name: ${productName}`);
+              console.log(`   Product qtyPerBatch: ${qtyPerBatch}`);
+              console.log(`   Product details: batch=${productDetails.batch}, qty=${productDetails.qty}, unit=${productDetails.unit}, price=${productDetails.price}`);
+
+              // Check if ProductDailySummary entry already exists for this product and date
+              const existingSummary = await ProductDailySummary.findOne({
+                productId: productId,
+                date: order.orderDate,
+                companyId: order.companyId
+              });
+
+              if (existingSummary) {
+                // Update existing entry - set productionFinalBatches to 0 instead of adding quantity
+                const oldBatches = existingSummary.productionFinalBatches;
+                existingSummary.productionFinalBatches = 0; // Always set to 0 as requested
+
+                // Update qtyPerBatch if it was 0 or not set
+                if (!existingSummary.qtyPerBatch || existingSummary.qtyPerBatch === 0) {
+                  existingSummary.qtyPerBatch = qtyPerBatch;
+                  console.log(`   📝 Updated qtyPerBatch from ${existingSummary.qtyPerBatch} to ${qtyPerBatch}`);
+                }
+
+                await existingSummary.save();
+                console.log(`   ✅ Updated ProductDailySummary: ${productName}, ${oldBatches} set to 0 (was ${oldBatches})`);
+              } else {
+                // Create new ProductDailySummary entry with proper qtyPerBatch
+                const newSummary = new ProductDailySummary({
+                  productId: productId,
+                  productName: productName,
+                  date: order.orderDate,
+                  companyId: order.companyId,
+                  productionFinalBatches: 0, // Always set to 0 as requested
+                  qtyPerBatch: qtyPerBatch, // ✅ SET FROM ITEM DATA
+                  totalRequirements: productItem.quantity,
+                  createdAt: new Date(),
+                  updatedAt: new Date()
+                });
+
+                await newSummary.save();
+                console.log(`   ✅ Created new ProductDailySummary: ${productName}`);
+                console.log(`      - ProductionFinalBatches: 0 (always set to 0)`);
+                console.log(`      - QtyPerBatch: ${qtyPerBatch}`);
+                console.log(`      - TotalRequirements: ${productItem.quantity}`);
+              }
+            }
+
+            console.log(`🎉 Successfully updated ProductDailySummary for order ${order.orderCode}`);
+          } catch (summaryError) {
+            console.error('❌ Failed to update ProductDailySummary:', summaryError);
+            console.error('Error details:', summaryError.message);
+            console.error('Stack trace:', summaryError.stack);
+            // Log error but don't fail the order approval
+          }
+
+          // Update order status
+          const newHistoryEntry = {
+            status: 'approved',
+            updatedBy: user._id,
+            updatedAt: new Date(),
+            notes: `Bulk approved by Unit Manager: ${user.fullName || user.username}`,
+            previousStatus: previousStatus
+          };
+
+          await Order.findByIdAndUpdate(
+            order._id,
+            {
+              $set: {
+                status: 'approved',
+                updatedAt: new Date()
+              },
+              $push: {
+                statusHistory: newHistoryEntry
+              }
+            },
+            {
+              new: true,
+              runValidators: false
+            }
+          );
+
+          approvedCount++;
+          console.log(`✅ Approved order ${order.orderCode}`);
+        } catch (error) {
+          console.error(`❌ Error approving order ${order.orderCode}:`, error.message);
+          errors.push({ orderCode: order.orderCode, error: error.message });
+        }
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: `Successfully approved ${approvedCount} orders`,
+        approvedCount,
+        totalOrders: orders.length,
+        errors: errors.length > 0 ? errors : undefined
+      });
+    }
+
+    // 🎯 SINGLE ORDER STATUS UPDATE
+    // Validate status for single order update
+    if (!status) {
+      return res.status(400).json({
+        success: false,
+        message: 'Status is required for single order update'
+      });
+    }
+
     const allowedStatuses = ['pending', 'approved', 'rejected'];
     if (!allowedStatuses.includes(status)) {
       return res.status(400).json({
@@ -112,7 +294,7 @@ export const updateOrderStatus = async (req, res) => {
     const baseFilter = {
       companyId: user.companyId
     };
-    
+
     // Add unit to filter only if it exists (backward compatibility)
     if (user.unit) {
       baseFilter.unit = user.unit;
@@ -122,7 +304,7 @@ export const updateOrderStatus = async (req, res) => {
     const order = await Order.findOne({ _id: orderId, ...baseFilter })
       .populate('products.product', 'name code');
     console.log('🔍 Found order:', order ? `${order.orderCode} (${order.status})` : 'NOT FOUND');
-    
+
     if (!order) {
       return res.status(404).json({
         success: false,
@@ -132,7 +314,7 @@ export const updateOrderStatus = async (req, res) => {
 
     // Update order status and add new history entry without validating existing entries
     const previousStatus = order.status; // Store previous status before updating
-    
+
     // 🎯 CREATE PRODUCTDAILYSUMMARY ENTRIES WHEN ORDER IS APPROVED
     if (status === 'approved') {
       console.log('📊 Creating ProductDailySummary entries for approved order by Unit Manager...');
@@ -145,18 +327,18 @@ export const updateOrderStatus = async (req, res) => {
         orderDate: order.orderDate,
         companyId: order.companyId
       });
-      
+
       try {
         for (const productItem of order.products) {
           console.log(`\n🔍 Processing product: ${productItem.product?.name || 'Unknown'}`);
           console.log(`   Product ID: ${productItem.product?._id}`);
           console.log(`   Quantity: ${productItem.quantity}`);
-          
+
           // Get complete product details including qtyPerBatch
           let productName = productItem.product?.name;
           const productId = productItem.product?._id || productItem.product;
           let qtyPerBatch = 0;
-          
+
           // Always fetch complete product details for batch information
           console.log(`📦 Fetching complete product details from database...`);
           const productDetails = await Item.findById(productId).select('name batch qty unit price').lean();
@@ -164,16 +346,16 @@ export const updateOrderStatus = async (req, res) => {
             console.log(`⚠️ Product not found in database: ${productId}`);
             continue;
           }
-          
+
           // Use product details - batch field contains the batch value we need
           productName = productName || productDetails.name;
           // Use batch value if available, otherwise fallback to qty or 1
           qtyPerBatch = productDetails.batch ? parseInt(productDetails.batch) || productDetails.qty || 1 : productDetails.qty || 1;
-          
+
           console.log(`   Using product name: ${productName}`);
           console.log(`   Product qtyPerBatch: ${qtyPerBatch}`);
           console.log(`   Product details: batch=${productDetails.batch}, qty=${productDetails.qty}, unit=${productDetails.unit}, price=${productDetails.price}`);
-          
+
           // Check if ProductDailySummary entry already exists for this product and date
           const existingSummary = await ProductDailySummary.findOne({
             productId: productId,
@@ -185,13 +367,13 @@ export const updateOrderStatus = async (req, res) => {
             // Update existing entry - set productionFinalBatches to 0 instead of adding quantity
             const oldBatches = existingSummary.productionFinalBatches;
             existingSummary.productionFinalBatches = 0; // Always set to 0 as requested
-            
+
             // Update qtyPerBatch if it was 0 or not set
             if (!existingSummary.qtyPerBatch || existingSummary.qtyPerBatch === 0) {
               existingSummary.qtyPerBatch = qtyPerBatch;
               console.log(`   📝 Updated qtyPerBatch from ${existingSummary.qtyPerBatch} to ${qtyPerBatch}`);
             }
-            
+
             await existingSummary.save();
             console.log(`   ✅ Updated ProductDailySummary: ${productName}, ${oldBatches} set to 0 (was ${oldBatches})`);
           } else {
@@ -207,7 +389,7 @@ export const updateOrderStatus = async (req, res) => {
               createdAt: new Date(),
               updatedAt: new Date()
             });
-            
+
             await newSummary.save();
             console.log(`   ✅ Created new ProductDailySummary: ${productName}`);
             console.log(`      - ProductionFinalBatches: 0 (always set to 0)`);
@@ -215,7 +397,7 @@ export const updateOrderStatus = async (req, res) => {
             console.log(`      - TotalRequirements: ${productItem.quantity}`);
           }
         }
-        
+
         console.log(`🎉 Successfully updated ProductDailySummary for order ${order.orderCode}`);
       } catch (summaryError) {
         console.error('❌ Failed to update ProductDailySummary:', summaryError);
@@ -226,7 +408,7 @@ export const updateOrderStatus = async (req, res) => {
     } else {
       console.log(`ℹ️ Order status '${status}' - ProductDailySummary creation skipped (only for 'approved' status)`);
     }
-    
+
     const newHistoryEntry = {
       status: status,
       updatedBy: user._id,
@@ -239,15 +421,15 @@ export const updateOrderStatus = async (req, res) => {
     const updatedOrder = await Order.findByIdAndUpdate(
       orderId,
       {
-        $set: { 
+        $set: {
           status: status,
           updatedAt: new Date()
         },
-        $push: { 
-          statusHistory: newHistoryEntry 
+        $push: {
+          statusHistory: newHistoryEntry
         }
       },
-      { 
+      {
         new: true,
         runValidators: false // Skip validation to avoid issues with existing invalid entries
       }
@@ -280,7 +462,7 @@ export const updateOrderStatus = async (req, res) => {
 export const fixOrdersSalesPersonAssignment = async (req, res) => {
   try {
     const user = req.user;
-    
+
     // Only allow Unit Manager or Super Admin role for this operation
     if (user.role !== 'Unit Manager' && user.role !== 'Super Admin') {
       return res.status(403).json({
@@ -296,7 +478,7 @@ export const fixOrdersSalesPersonAssignment = async (req, res) => {
         ...findQuery,
         companyId: user.companyId
       };
-      
+
       // Add unit to filter only if it exists (backward compatibility)
       if (user.unit) {
         findQuery.unit = user.unit;
@@ -343,7 +525,7 @@ export const getOrders = async (req, res) => {
   try {
     console.log('🚀 NEW ENHANCED getOrders FUNCTION CALLED 🚀');
     const user = req.user;
-    
+
     // Only allow Unit Manager role
     if (user.role !== 'Unit Manager') {
       return res.status(403).json({
@@ -366,7 +548,7 @@ export const getOrders = async (req, res) => {
 
     // Build filter query - company filtering handled through salesPerson
     const filterQuery = {};
-    
+
     if (status && status !== 'all') {
       filterQuery.status = status;
     }
@@ -375,34 +557,34 @@ export const getOrders = async (req, res) => {
     if (user.companyId) {
       // Enhanced debugging - find all users with different filters
       console.log('=== DEBUGGING USER FILTERING ===');
-      
+
       // Check all users in the same company
-      const allCompanyUsers = await User.find({ 
+      const allCompanyUsers = await User.find({
         companyId: user.companyId
       }).select('_id username role fullName').lean();
-      
+
       console.log('All users in company:', allCompanyUsers.map(u => ({
         id: u._id,
         username: u.username,
         role: u.role,
         fullName: u.fullName
       })));
-      
+
       // Check specifically for Sales role variations
-      const salesUsers = await User.find({ 
+      const salesUsers = await User.find({
         companyId: user.companyId,
         role: { $regex: /sales/i }
       }).select('_id username role fullName').lean();
-      
+
       console.log('Sales users (case insensitive):', salesUsers.map(u => ({
         id: u._id,
         username: u.username,
         role: u.role,
         fullName: u.fullName
       })));
-      
+
       // Use broader role matching for sales
-      const companySalesPersons = await User.find({ 
+      const companySalesPersons = await User.find({
         companyId: user.companyId,
         $or: [
           { role: 'Sales' },
@@ -412,17 +594,17 @@ export const getOrders = async (req, res) => {
           { role: { $regex: /sales/i } } // Case insensitive sales role
         ]
       }).select('_id username role fullName').lean();
-      
+
       console.log('Found company sales persons:', companySalesPersons.map(u => ({
         id: u._id,
         username: u.username,
         role: u.role,
         fullName: u.fullName
       })));
-      
+
       const salesPersonIds = companySalesPersons.map(sp => sp._id);
       console.log('Company sales person IDs:', salesPersonIds);
-      
+
       // Filter orders by sales persons from the same company
       filterQuery.salesPerson = { $in: salesPersonIds };
       console.log('Filtering orders by sales persons from companyId:', user.companyId);
@@ -431,7 +613,7 @@ export const getOrders = async (req, res) => {
     }
 
     console.log('Filter query:', filterQuery);
-    
+
     const [orders, totalOrders] = await Promise.all([
       Order.find(filterQuery)
         .populate('customer', 'name email phone')
@@ -444,7 +626,7 @@ export const getOrders = async (req, res) => {
 
     console.log('=== ENHANCED API PROCESSING ===');
     console.log('Total orders found:', orders.length);
-    
+
     // Debug: Check which sales persons have orders
     const ordersGroupedBySalesPerson = orders.reduce((acc, order) => {
       const spId = order.salesPerson?._id?.toString() || 'unassigned';
@@ -460,7 +642,7 @@ export const getOrders = async (req, res) => {
       });
       return acc;
     }, {});
-    
+
     console.log('Orders grouped by sales person:');
     Object.entries(ordersGroupedBySalesPerson).forEach(([spId, data]) => {
       console.log(`  ${data.name} (${spId}): ${data.count} orders`);
@@ -468,24 +650,24 @@ export const getOrders = async (req, res) => {
         console.log(`    - ${order.orderCode} (${order.customer}) - ${order.status}`);
       });
     });
-    
+
     console.log('Processing product-salesperson-quantity grouping...');
 
     // Create product-based grouping with salesperson quantities
     const productGrouping = {};
-    
+
     // Process each order to build the product-salesperson structure
     orders.forEach(order => {
       const orderProducts = order.products || [];
-      
+
       orderProducts.forEach(orderProduct => {
         if (!orderProduct.product) return;
-        
+
         const product = orderProduct.product;
         const productKey = product._id.toString();
         const productName = product.name || 'Unknown Product';
         const quantity = orderProduct.quantity || 0;
-        
+
         // Initialize product group if not exists
         if (!productGrouping[productKey]) {
           productGrouping[productKey] = {
@@ -497,15 +679,15 @@ export const getOrders = async (req, res) => {
             salesPersons: {}
           };
         }
-        
+
         // Count this order for the product
         productGrouping[productKey].totalOrders += 1;
         productGrouping[productKey].totalQuantity += quantity;
-        
+
         // Handle salesperson data
         if (order.salesPerson && order.salesPerson._id) {
           const salesPersonKey = order.salesPerson._id.toString();
-          
+
           if (!productGrouping[productKey].salesPersons[salesPersonKey]) {
             productGrouping[productKey].salesPersons[salesPersonKey] = {
               _id: order.salesPerson._id,
@@ -518,7 +700,7 @@ export const getOrders = async (req, res) => {
               orders: []
             };
           }
-          
+
           productGrouping[productKey].salesPersons[salesPersonKey].totalQuantity += quantity;
           productGrouping[productKey].salesPersons[salesPersonKey].orderCount += 1;
           productGrouping[productKey].salesPersons[salesPersonKey].orders.push({
@@ -543,7 +725,7 @@ export const getOrders = async (req, res) => {
               orders: []
             };
           }
-          
+
           productGrouping[productKey].salesPersons['unassigned'].totalQuantity += quantity;
           productGrouping[productKey].salesPersons['unassigned'].orderCount += 1;
           productGrouping[productKey].salesPersons['unassigned'].orders.push({
@@ -598,10 +780,10 @@ export const getOrders = async (req, res) => {
 
   } catch (error) {
     console.error('Error in Unit Manager getOrders:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       message: 'Failed to fetch orders',
-      error: error.message 
+      error: error.message
     });
   }
 };
@@ -610,7 +792,7 @@ export const getOrders = async (req, res) => {
 export const getDashboardStats = async (req, res) => {
   try {
     const user = req.user;
-    
+
     // Only allow Unit Manager role
     if (user.role !== 'Unit Manager') {
       return res.status(403).json({
@@ -635,7 +817,7 @@ export const getDashboardStats = async (req, res) => {
     const baseFilter = {
       companyId: user.companyId
     };
-    
+
     // Add unit to filter only if it exists (backward compatibility)
     if (user.unit) {
       baseFilter.unit = user.unit;
@@ -739,36 +921,36 @@ export const getDashboardStats = async (req, res) => {
           $facet: {
             total: [{ $count: "count" }],
             lowStock: [
-              { 
-                $match: { 
+              {
+                $match: {
                   $or: [
-                    { currentStock: { $lte: 10 } }, 
+                    { currentStock: { $lte: 10 } },
                     { stock: { $lte: 10 } },
                     { qty: { $lte: 10 } }
-                  ] 
-                } 
+                  ]
+                }
               },
-              { 
-                $project: { 
-                  name: 1, 
-                  category: 1, 
-                  currentStock: 1, 
-                  stock: 1, 
+              {
+                $project: {
+                  name: 1,
+                  category: 1,
+                  currentStock: 1,
+                  stock: 1,
                   qty: 1,
                   minStockLevel: 1,
                   minStock: 1
-                } 
+                }
               }
             ],
             lowStockCount: [
-              { 
-                $match: { 
+              {
+                $match: {
                   $or: [
-                    { currentStock: { $lte: 10 } }, 
+                    { currentStock: { $lte: 10 } },
                     { stock: { $lte: 10 } },
                     { qty: { $lte: 10 } }
-                  ] 
-                } 
+                  ]
+                }
               },
               { $count: "count" }
             ],
@@ -777,23 +959,23 @@ export const getDashboardStats = async (req, res) => {
                 $group: {
                   _id: "$category",
                   count: { $sum: 1 },
-                  totalValue: { 
-                    $sum: { 
+                  totalValue: {
+                    $sum: {
                       $multiply: [
-                        { 
+                        {
                           $ifNull: [
-                            "$currentStock", 
+                            "$currentStock",
                             { $ifNull: ["$stock", { $ifNull: ["$qty", 0] }] }
-                          ] 
-                        }, 
-                        { 
+                          ]
+                        },
+                        {
                           $ifNull: [
-                            "$price", 
+                            "$price",
                             { $ifNull: ["$salePrice", { $ifNull: ["$purchaseCost", 0] }] }
                           ]
                         }
-                      ] 
-                    } 
+                      ]
+                    }
                   }
                 }
               },
@@ -807,8 +989,8 @@ export const getDashboardStats = async (req, res) => {
 
     // Get sales person performance with more inclusive role matching - filtered by Unit Manager's unit/company
     const salesPersonStats = await User.aggregate([
-      { 
-        $match: { 
+      {
+        $match: {
           ...baseFilter, // Add unit/company filtering
           $or: [
             { role: 'Sales' },
@@ -819,7 +1001,7 @@ export const getDashboardStats = async (req, res) => {
             { role: 'sales person' },
             { role: { $regex: /sales/i } }
           ]
-        } 
+        }
       },
       {
         $lookup: {
@@ -892,11 +1074,11 @@ export const getDashboardStats = async (req, res) => {
     const totalRevenue = orderStats[0].totalRevenue[0]?.total || 0;
     const thisMonthData = orderStats[0].thisMonth[0] || { count: 0, revenue: 0 };
     const lastMonthData = orderStats[0].lastMonth[0] || { count: 0, revenue: 0 };
-    
-    const orderGrowth = lastMonthData.count > 0 ? 
+
+    const orderGrowth = lastMonthData.count > 0 ?
       ((thisMonthData.count - lastMonthData.count) / lastMonthData.count * 100) : 0;
-    
-    const revenueGrowth = lastMonthData.revenue > 0 ? 
+
+    const revenueGrowth = lastMonthData.revenue > 0 ?
       ((thisMonthData.revenue - lastMonthData.revenue) / lastMonthData.revenue * 100) : 0;
 
     const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
@@ -974,7 +1156,7 @@ export const getDashboardStats = async (req, res) => {
 export const getSalesPersons = async (req, res) => {
   try {
     const user = req.user;
-    
+
     // Only allow Unit Manager role
     if (user.role !== 'Unit Manager') {
       return res.status(403).json({
@@ -984,10 +1166,10 @@ export const getSalesPersons = async (req, res) => {
     }
 
     console.log('🔍 Unit Manager getSalesPersons - Company filtering enabled');
-    console.log('User details:', { 
-      username: user.username, 
-      companyId: user.companyId, 
-      unit: user.unit 
+    console.log('User details:', {
+      username: user.username,
+      companyId: user.companyId,
+      unit: user.unit
     });
 
     // Validate Unit Manager has proper company assignment
@@ -1000,7 +1182,7 @@ export const getSalesPersons = async (req, res) => {
     }
 
     // Get users with Sales-related roles from the same company only
-    const salesPersons = await User.find({ 
+    const salesPersons = await User.find({
       companyId: user.companyId, // Filter by same company
       $or: [
         { role: 'Sales' },
@@ -1012,9 +1194,9 @@ export const getSalesPersons = async (req, res) => {
       ],
       isActive: { $ne: false } // Include users where isActive is true or undefined
     })
-    .select('_id username email fullName role companyId')
-    .sort({ username: 1 })
-    .lean();
+      .select('_id username email fullName role companyId')
+      .sort({ username: 1 })
+      .lean();
 
     console.log(`✅ Found ${salesPersons.length} sales persons from same company`);
 
@@ -1037,7 +1219,7 @@ export const getSalesPersons = async (req, res) => {
 export const getAllOrders = async (req, res) => {
   try {
     const user = req.user;
-    
+
     // Only allow Unit Manager role
     if (user.role !== 'Unit Manager') {
       return res.status(403).json({
@@ -1054,15 +1236,15 @@ export const getAllOrders = async (req, res) => {
       companyId: user.companyId
     });
 
-    const { 
-      page = 1, 
-      limit = 10, 
-      status, 
-      customerId, 
+    const {
+      page = 1,
+      limit = 10,
+      status,
+      customerId,
       salesPersonId,
-      dateFrom, 
+      dateFrom,
       dateTo,
-      search 
+      search
     } = req.query;
 
     // Calculate skip for pagination
@@ -1100,14 +1282,14 @@ export const getAllOrders = async (req, res) => {
 
     // COMPANY FILTERING: Only show orders from sales persons in the same company
     if (user.companyId) {
-      const companySalesPersons = await User.find({ 
+      const companySalesPersons = await User.find({
         companyId: user.companyId,
         role: { $in: ['Sales', 'Unit Manager', 'Unit Head'] }
       }).select('_id').lean();
-      
+
       const salesPersonIds = companySalesPersons.map(sp => sp._id);
       console.log('Company sales person IDs for filtering:', salesPersonIds.length);
-      
+
       // Filter orders by sales persons from the same company
       matchConditions.push({ 'salesPerson._id': { $in: salesPersonIds } });
       console.log('Applied company-based filtering for companyId:', user.companyId);
@@ -1195,7 +1377,7 @@ export const getAllOrders = async (req, res) => {
 
     // Calculate summary statistics using the same base conditions
     const summaryPipeline = [];
-    
+
     // Add lookups for summary as well
     summaryPipeline.push({
       $lookup: {
@@ -1205,7 +1387,7 @@ export const getAllOrders = async (req, res) => {
         as: 'customer'
       }
     });
-    
+
     summaryPipeline.push({
       $lookup: {
         from: 'users',
@@ -1275,7 +1457,7 @@ export const getOrderById = async (req, res) => {
   try {
     const user = req.user;
     const { id: orderId } = req.params;
-    
+
     // Only allow Unit Manager role
     if (user.role !== 'Unit Manager') {
       return res.status(403).json({
@@ -1288,7 +1470,7 @@ export const getOrderById = async (req, res) => {
     const baseFilter = {
       companyId: user.companyId
     };
-    
+
     // Add unit to filter only if it exists (backward compatibility)
     if (user.unit) {
       baseFilter.unit = user.unit;

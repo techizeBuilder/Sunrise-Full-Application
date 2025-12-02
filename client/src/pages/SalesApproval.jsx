@@ -24,13 +24,13 @@ const SalesApproval = () => {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [filteredOrders, setFilteredOrders] = useState([]);
-  
+
   // Search and Filter states
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [showFilters, setShowFilters] = useState(false);
   const [filteredProducts, setFilteredProducts] = useState([]);
-  
+
   // Production calculation states
   const [productionData, setProductionData] = useState({});
   // Structure: { productName: { packing: 0, physicalStock: 0, batchAdjusted: 0, qtyPerBatch: 0, toBeProducedDay: 0 } }
@@ -83,12 +83,12 @@ const SalesApproval = () => {
 
       const data = getProductionData(productName);
       const today = new Date().toISOString().split('T')[0];
-      
+
       // Calculate dependent fields
       const qtyPerBatch = data.qtyPerBatch || 1;
       const productionFinalBatches = data.productionFinalBatches || 0;
       const toBeProducedDay = data.toBeProducedDay || 0;
-      
+
       // Auto-calculate dependent values
       const batchAdjusted = Math.round((productionFinalBatches / qtyPerBatch) * 100) / 100;
       const produceBatches = Math.round((toBeProducedDay / qtyPerBatch) * 100) / 100;
@@ -117,7 +117,7 @@ const SalesApproval = () => {
       if (response.ok) {
         const result = await response.json();
         console.log('Production data saved with calculations:', result);
-        
+
         // Update local state with calculated values
         setProductionData(prev => ({
           ...prev,
@@ -127,7 +127,7 @@ const SalesApproval = () => {
             produceBatches: produceBatches
           }
         }));
-        
+
         toast({
           title: 'Success',
           description: `Production data saved for ${productName}`
@@ -197,24 +197,24 @@ const SalesApproval = () => {
   // Filter and search functions
   const applyFilters = () => {
     let filtered = [...products];
-    
+
     // Apply search filter
     if (searchTerm.trim()) {
-      filtered = filtered.filter(product => 
+      filtered = filtered.filter(product =>
         product.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
-    
+
     setFilteredProducts(filtered);
   };
-  
+
   // Clear all filters
   const clearFilters = () => {
     setSearchTerm('');
     setSelectedDate(new Date().toISOString().split('T')[0]);
     setFilteredProducts(products);
   };
-  
+
   // Apply filters when search term or products change
   useEffect(() => {
     applyFilters();
@@ -223,12 +223,12 @@ const SalesApproval = () => {
   // Filter orders by date range
   const filterOrdersByDate = (orders) => {
     if (!dateFrom && !dateTo) return orders;
-    
+
     return orders.filter(order => {
       const orderDate = new Date(order.orderDate);
       const fromDate = dateFrom ? new Date(dateFrom) : null;
       const toDate = dateTo ? new Date(dateTo) : null;
-      
+
       if (fromDate && orderDate < fromDate) return false;
       if (toDate && orderDate > toDate) return false;
       return true;
@@ -311,11 +311,11 @@ const SalesApproval = () => {
         // Check for duplicate names in productSalesData to determine if we need username
         const duplicateNames = productSalesData?.data?.flatMap(p => p.salesPersons)
           .filter(sp => sp.fullName === order.salesPerson.fullName) || [];
-        
-        const name = duplicateNames.length > 1 
+
+        const name = duplicateNames.length > 1
           ? `${order.salesPerson.fullName || order.salesPerson.username} (${order.salesPerson.username})`
           : order.salesPerson.fullName || order.salesPerson.username || 'Unknown';
-        
+
         console.log('Extracted name from populated salesPerson:', name);
         return name;
       }
@@ -337,7 +337,7 @@ const SalesApproval = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      
+
       const productSummaryResponse = await fetch(`/api/sales/product-summary`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -350,11 +350,11 @@ const SalesApproval = () => {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
-      
+
       if (productSummaryResponse.ok && individualOrdersResponse.ok) {
         const productSummaryData = await productSummaryResponse.json();
         const individualOrdersData = await individualOrdersResponse.json();
-        
+
         console.log('=== PRODUCT SUMMARY API RESPONSE ===');
         console.log('Response structure:', Object.keys(productSummaryData));
         console.log('Products array length:', productSummaryData.products?.length || 0);
@@ -362,19 +362,19 @@ const SalesApproval = () => {
         console.log('Individual orders count:', individualOrdersData.orders?.length || 0);
         console.log('Sample order statuses:', individualOrdersData.orders?.slice(0, 5)?.map(o => o.status) || []);
         console.log('=== END API RESPONSE ===');
-        
+
         // Set individual orders for status counting
         if (individualOrdersData.success && individualOrdersData.orders) {
           setIndividualOrders(individualOrdersData.orders);
         }
-        
+
         if (productSummaryData.success && productSummaryData.products) {
           // Transform product summary data to match the expected unit-manager format
           // Include ALL products, even those with empty salesBreakdown
           const transformedData = productSummaryData.products.map(product => {
             // Handle products with empty salesBreakdown
             const hasSalesData = product.salesBreakdown && product.salesBreakdown.length > 0;
-            
+
             return {
               productId: product.productId,
               productName: product.productName,
@@ -396,14 +396,14 @@ const SalesApproval = () => {
 
           console.log('=== TRANSFORMED DATA ===');
           console.log('Transformed data:', transformedData);
-          
+
           // Set the transformed data to match the expected format
           setOrders(transformedData);
-          
+
           // Extract products and sales persons from the transformed response
           const products = transformedData.map(item => item.productName);
           const allSalesPersons = new Map(); // Use Map to store unique salespeople with full info
-          
+
           // Collect all sales persons from ALL products (even empty ones)
           transformedData.forEach(product => {
             product.salesPersons.forEach(sp => {
@@ -417,7 +417,7 @@ const SalesApproval = () => {
               }
             });
           });
-          
+
           // If no sales persons found from products, create a default entry to show "0" values
           if (allSalesPersons.size === 0) {
             allSalesPersons.set('no-sales', {
@@ -426,45 +426,45 @@ const SalesApproval = () => {
               username: 'no-sales'
             });
           }
-          
+
           // Convert to array and create display names
           const salesPersonsArray = Array.from(allSalesPersons.values());
           const salesPersonsWithDisplayNames = salesPersonsArray.map(sp => {
             // Check if there are multiple people with the same fullName
             const duplicateNames = salesPersonsArray.filter(p => p.fullName === sp.fullName);
-            const displayName = duplicateNames.length > 1 
+            const displayName = duplicateNames.length > 1
               ? `${sp.fullName || sp.username} (${sp.username})`
               : sp.fullName || sp.username || 'Unknown';
-            
+
             return {
               ...sp,
               displayName
             };
           });
-          
+
           setProducts(products);
           setSalesPersons(salesPersonsWithDisplayNames.map(sp => sp.displayName));
-          
+
           console.log('Products found:', products);
           console.log('Sales persons found:', salesPersonsWithDisplayNames.map(sp => sp.displayName));
-          
+
           // Create grid data structure for frontend display
           const grid = {};
           transformedData.forEach(product => {
             grid[product.productName] = {};
-            
+
             // Initialize all sales persons for this product using display names
             salesPersonsWithDisplayNames.forEach(salesPersonObj => {
               grid[product.productName][salesPersonObj.displayName] = [];
             });
-            
+
             // Fill in actual data from the API response using display names
             if (product.salesPersons.length > 0) {
               product.salesPersons.forEach(sp => {
                 // Find the display name for this salesperson
                 const salesPersonObj = salesPersonsWithDisplayNames.find(spObj => spObj.id === sp._id);
                 const displayName = salesPersonObj ? salesPersonObj.displayName : sp.fullName;
-                
+
                 if (grid[product.productName][displayName]) {
                   // Create mock order data since salesBreakdown doesn't have individual orders
                   grid[product.productName][displayName] = [{
@@ -482,7 +482,7 @@ const SalesApproval = () => {
               console.log(`Product ${product.productName} has no sales data - showing 0 for all sales persons`);
             }
           });
-          
+
           // Store the product data separately for total calculations
           const productData = {};
           transformedData.forEach(product => {
@@ -491,12 +491,12 @@ const SalesApproval = () => {
               totalOrders: product.totalOrders
             };
           });
-          
+
           setGridData(grid);
-          
+
           // Store product totals for easy access
           window.productTotals = productData;
-          
+
           console.log('=== FINAL GRID STRUCTURE ===');
           Object.entries(grid).forEach(([productName, salesData]) => {
             const productInfo = productData[productName];
@@ -533,19 +533,19 @@ const SalesApproval = () => {
 
   const handleBulkStatusUpdate = async () => {
     if (!selectedProductOrders.length || !selectedStatus) return;
-    
+
     try {
       setUpdating(true);
-      
+
       // Update all orders for the selected product
-      const updatePromises = selectedProductOrders.map(order => 
+      const updatePromises = selectedProductOrders.map(order =>
         fetch(`/api/orders/${order._id}/status`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           },
-          body: JSON.stringify({ 
+          body: JSON.stringify({
             status: selectedStatus,
             notes: `Bulk status update for ${selectedProduct} via Sales Approval dashboard`
           })
@@ -554,16 +554,16 @@ const SalesApproval = () => {
 
       const responses = await Promise.all(updatePromises);
       const results = await Promise.all(responses.map(res => res.json()));
-      
+
       // Check if all updates were successful
       const allSuccessful = responses.every(res => res.ok);
-      
+
       if (allSuccessful) {
         toast({
           title: 'Success',
           description: `Updated ${selectedProductOrders.length} orders for ${selectedProduct} to ${selectedStatus.replace('_', ' ')}`
         });
-        
+
         setIsModalOpen(false);
         setSelectedOrder(null);
         setSelectedProduct(null);
@@ -601,7 +601,7 @@ const SalesApproval = () => {
     // COMMENTED OUT - Modal functionality disabled as requested
     // Get the orders for this specific product and sales person
     // const ordersForProductSales = gridData[productName]?.[salesPersonName] || [];
-    
+
     // if (ordersForProductSales.length > 0) {
     //   console.log(`Clicked on ${salesPersonName} for ${productName}:`, ordersForProductSales);
     //   
@@ -710,7 +710,7 @@ const SalesApproval = () => {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-3 lg:p-4">
             <div className="flex items-center justify-between">
@@ -726,7 +726,7 @@ const SalesApproval = () => {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-3 lg:p-4">
             <div className="flex items-center justify-between">
@@ -742,7 +742,7 @@ const SalesApproval = () => {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-3 lg:p-4">
             <div className="flex items-center justify-between">
@@ -769,13 +769,13 @@ const SalesApproval = () => {
               <div>
                 Product Sales Management
               </div>
-              
+
               {/* Right Side - Filter Controls */}
               <div className="flex flex-col lg:flex-row items-start lg:items-center gap-3 lg:gap-4">
                 {/* Mobile Filter Toggle */}
                 <div className="lg:hidden w-full">
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     onClick={() => setShowFilters(!showFilters)}
                     className="w-full flex items-center justify-center gap-2"
                     size="sm"
@@ -784,7 +784,7 @@ const SalesApproval = () => {
                     {showFilters ? 'Hide Filters' : 'Show Filters'}
                   </Button>
                 </div>
-                
+
                 {/* Filter Controls */}
                 <div className={`flex flex-col lg:flex-row items-start lg:items-center gap-3 lg:gap-4 w-full lg:w-auto ${showFilters || 'hidden lg:flex'}`}>
                   {/* Search */}
@@ -812,7 +812,7 @@ const SalesApproval = () => {
                       )}
                     </div>
                   </div>
-                  
+
                   {/* Clear Button and Results */}
                   <div className="flex items-center gap-2">
                     <Button
@@ -824,7 +824,7 @@ const SalesApproval = () => {
                       <X className="h-3 w-3" />
                       Clear
                     </Button>
-                    
+
                     <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
                       {filteredProducts.length} of {products.length}
                     </div>
@@ -896,7 +896,7 @@ const SalesApproval = () => {
                       <div className="text-xs font-semibold text-gray-900">/Day</div>
                     </div>
                   </th>
-                  
+
                   {/* Dynamic Sales Person Columns */}
                   {salesPersons.map((salesPersonName, index) => (
                     <th key={salesPersonName} className="p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[120px] lg:min-w-[150px]">
@@ -908,7 +908,7 @@ const SalesApproval = () => {
                       </div>
                     </th>
                   ))}
-                  
+
                   {/* Total Indent Salesman Column */}
                   <th className="p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[90px] lg:min-w-[120px] bg-gradient-to-r from-green-50 to-green-100">
                     <div className="flex flex-col items-center gap-1">
@@ -933,9 +933,9 @@ const SalesApproval = () => {
                   const productData = orders.find(p => p.productName === product);
                   const totalQuantity = productData ? productData.totalQuantity : 0;
                   const totalOrderCount = productData ? productData.totalOrders : 0;
-                  
+
                   // Get all orders for this product from all sales persons for modal functionality
-                  const productOrders = productData ? 
+                  const productOrders = productData ?
                     productData.salesPersons.flatMap(sp => sp.orders || []) : [];
 
                   return (
@@ -1029,7 +1029,7 @@ const SalesApproval = () => {
                       {salesPersons.map((salesPersonName) => {
                         const salesPersonData = gridData[product]?.[salesPersonName] || [];
                         const totalQty = salesPersonData.reduce((sum, order) => sum + (order.quantity || 0), 0);
-                        
+
                         return (
                           <td key={`${product}-${salesPersonName}`} className="bg-white p-1 lg:p-2 border-r text-center align-middle">
                             {salesPersonData.length === 0 ? (
@@ -1085,8 +1085,8 @@ const SalesApproval = () => {
                   {searchTerm ? (
                     <>
                       Try adjusting your search term: "{searchTerm}" or{' '}
-                      <button 
-                        onClick={clearFilters} 
+                      <button
+                        onClick={clearFilters}
                         className="text-blue-500 hover:text-blue-700 underline"
                       >
                         clear filters
@@ -1108,7 +1108,7 @@ const SalesApproval = () => {
           <DialogHeader>
             <DialogTitle>Update Product Orders Status</DialogTitle>
           </DialogHeader>
-          
+
           {selectedProduct && selectedProductOrders.length > 0 && (
             <div className="space-y-4">
               {/* Product Details */}
@@ -1160,7 +1160,7 @@ const SalesApproval = () => {
               {/* Status Selection Dropdown */}
               <div className="space-y-3">
                 <div className="text-sm font-medium text-gray-700">Select New Status for All Orders:</div>
-                
+
                 <Select value={selectedStatus} onValueChange={setSelectedStatus}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Choose status..." />
@@ -1197,7 +1197,7 @@ const SalesApproval = () => {
                 {selectedStatus && (
                   <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
                     <div className="text-sm text-amber-800">
-                      <strong>Warning:</strong> This will update the status of all {selectedProductOrders.length} orders 
+                      <strong>Warning:</strong> This will update the status of all {selectedProductOrders.length} orders
                       for "{selectedProduct}" to "<span className="font-medium">{selectedStatus.replace('_', ' ')}</span>".
                     </div>
                   </div>
@@ -1205,16 +1205,16 @@ const SalesApproval = () => {
               </div>
             </div>
           )}
-          
+
           <DialogFooter className="gap-2">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setIsModalOpen(false)}
               disabled={updating}
             >
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={handleBulkStatusUpdate}
               disabled={updating || !selectedStatus}
               className="bg-blue-600 hover:bg-blue-700"
