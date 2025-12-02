@@ -385,11 +385,7 @@ app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
     // this serves both the API and the client.
     // It is the only port that is not firewalled.
     const port = config.PORT;
-    server.listen({
-      port,
-      host: "0.0.0.0",
-      reusePort: true,
-    }, () => {
+    server.listen(port, '0.0.0.0', () => {
       log(`Server running on port ${port} in ${config.NODE_ENV} environment`);
     });
   } catch (error) {

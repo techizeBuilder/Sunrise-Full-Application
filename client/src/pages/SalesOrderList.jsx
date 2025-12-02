@@ -36,10 +36,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Search, 
-  Eye, 
-  Filter, 
+import {
+  Search,
+  Eye,
+  Filter,
   RefreshCw,
   Package,
   Calendar,
@@ -105,6 +105,7 @@ export default function SalesOrderList() {
   });
   const [dateFrom, setDateFrom] = useState(null);
   const [dateTo, setDateTo] = useState(null);
+  const [isBulkApproveOpen, setIsBulkApproveOpen] = useState(false);
   const queryClient = useQueryClient();
 
   // Fetch orders
@@ -143,10 +144,11 @@ export default function SalesOrderList() {
 
   // Update order status mutation
   const updateStatusMutation = useMutation({
-    mutationFn: ({ orderId, status, notes }) => 
+    mutationFn: ({ orderId, status, notes }) =>
       apiRequest('PUT', `/api/unit-manager/orders/${orderId}/status`, { status, notes }),
     onSuccess: () => {
       showSuccessToast('Success', 'Order status updated successfully');
+      queryClient.invalidateQueries({ queryKey: ['/api/unit-manager/all-orders'] });
       queryClient.invalidateQueries({ queryKey: ['/api/unit-manager/sales-order-list'] });
       setIsDetailsOpen(false);
       setIsStatusUpdateOpen(false);
@@ -155,6 +157,21 @@ export default function SalesOrderList() {
     },
     onError: (error) => {
       showSmartToast(error, 'Failed to update order status');
+    }
+  });
+
+  // Bulk approve orders mutation (using same API with bulkApprove flag)
+  const bulkApproveMutation = useMutation({
+    mutationFn: () =>
+      apiRequest('PUT', '/api/unit-manager/orders/bulk-approve/status', { bulkApprove: true }),
+    onSuccess: () => {
+      showSuccessToast('Success', 'All orders approved successfully');
+      queryClient.invalidateQueries({ queryKey: ['/api/unit-manager/sales-order-list'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/unit-manager/all-orders'] });
+      setIsBulkApproveOpen(false);
+    },
+    onError: (error) => {
+      showSmartToast(error, 'Failed to approve orders');
     }
   });
 
@@ -168,14 +185,14 @@ export default function SalesOrderList() {
   // Helper function to generate unique salesperson display names
   const getSalespersonDisplayName = (salesPerson) => {
     if (!salesPerson) return 'N/A';
-    
+
     // Check if there are multiple people with the same fullName
     const duplicateNames = salespersons.filter(p => p.fullName === salesPerson.fullName);
-    
+
     if (duplicateNames.length > 1) {
       return `${salesPerson.fullName || salesPerson.username} (${salesPerson.username})`;
     }
-    
+
     return salesPerson.fullName || salesPerson.username || salesPerson.email || 'Unknown';
   };
 
@@ -203,6 +220,10 @@ export default function SalesOrderList() {
         notes: statusUpdateForm.notes
       });
     }
+  };
+
+  const handleBulkApprove = () => {
+    bulkApproveMutation.mutate();
   };
 
   const handleSearch = (value) => {
@@ -275,8 +296,8 @@ export default function SalesOrderList() {
           <CardContent className="pt-6">
             <div className="text-center text-red-600">
               <p>Error loading orders: {error.message}</p>
-              <Button 
-                onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/unit-manager/sales-order-list'] })}
+              <Button
+                onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/unit-manager/all-orders'] })}
                 className="mt-4"
               >
                 <RefreshCw className="w-4 h-4 mr-2" />
@@ -316,7 +337,7 @@ export default function SalesOrderList() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="p-6">
             <div className="flex items-center">
@@ -328,7 +349,7 @@ export default function SalesOrderList() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="p-6">
             <div className="flex items-center">
@@ -340,7 +361,7 @@ export default function SalesOrderList() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="p-6">
             <div className="flex items-center">
@@ -451,10 +472,10 @@ export default function SalesOrderList() {
                     salespersons.filter(person => person._id).map((person) => {
                       // Check if there are multiple people with the same fullName
                       const duplicateNames = salespersons.filter(p => p.fullName === person.fullName);
-                      const displayName = duplicateNames.length > 1 
+                      const displayName = duplicateNames.length > 1
                         ? `${person.fullName || person.username} (${person.username})`
                         : person.fullName || person.username || person.email || 'Unknown';
-                      
+
                       return (
                         <SelectItem key={person._id} value={person._id}>
                           {displayName}
@@ -530,9 +551,9 @@ export default function SalesOrderList() {
                 Apply
               </Button>
               {(filters.dateFrom || filters.dateTo) && (
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => {
                     setDateFrom(null);
                     setDateTo(null);
@@ -560,8 +581,20 @@ export default function SalesOrderList() {
                 {filters.search && ` (filtered by "${filters.search}")`}
               </CardDescription>
             </div>
-            {/* Responsive Pagination Controls */}
+            {/* Bulk Actions and Pagination Controls */}
             <div className="flex items-center gap-2">
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => setIsBulkApproveOpen(true)}
+                disabled={isLoading || orders.length === 0}
+                className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
+              >
+                <CheckCircle className="h-4 w-4" />
+                <span className="hidden sm:inline">Approve All Orders</span>
+                <span className="sm:hidden">Approve All</span>
+              </Button>
+              <div className="h-6 w-px bg-gray-300"></div>
               <Button
                 variant="outline"
                 size="sm"
@@ -599,8 +632,8 @@ export default function SalesOrderList() {
               <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-gray-600 mb-2">No orders found</h3>
               <p className="text-gray-500">
-                {activeFiltersCount > 0 
-                  ? 'Try adjusting your filters to see more results.' 
+                {activeFiltersCount > 0
+                  ? 'Try adjusting your filters to see more results.'
                   : 'No orders have been placed yet.'}
               </p>
             </div>
@@ -694,7 +727,7 @@ export default function SalesOrderList() {
                               {order.status?.replace('_', ' ').toUpperCase()}
                             </Badge>
                           </div>
-                          
+
                           <div className="grid grid-cols-2 gap-3 text-sm">
                             <div>
                               <p className="text-gray-600">Customer</p>
@@ -709,7 +742,7 @@ export default function SalesOrderList() {
                               <p className="font-medium">{getSalespersonDisplayName(order.salesPerson)}</p>
                             </div>
                           </div>
-                          
+
                           <div className="flex gap-2 pt-2">
                             <Button
                               variant="outline"
@@ -796,7 +829,7 @@ export default function SalesOrderList() {
               View and manage order information
             </DialogDescription>
           </DialogHeader>
-          
+
           {isDetailsLoading ? (
             <div className="flex items-center justify-center h-32">
               <RefreshCw className="h-6 w-6 animate-spin" />
@@ -915,6 +948,76 @@ export default function SalesOrderList() {
         </DialogContent>
       </Dialog>
 
+      {/* Bulk Approve Confirmation Dialog */}
+      <Dialog open={isBulkApproveOpen} onOpenChange={setIsBulkApproveOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-orange-600">
+              <CheckCircle className="h-5 w-5" />
+              Approve All Orders?
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to approve all orders? This action will approve every order in the system.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <div className="bg-yellow-100 rounded-full p-2">
+                  <Clock className="h-5 w-5 text-yellow-600" />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-yellow-800 mb-1">Warning</h4>
+                  <p className="text-sm text-yellow-700">
+                    This will approve all pending orders across all customers and salespersons. This action cannot be undone.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Package className="h-4 w-4 text-blue-600" />
+                <span className="font-semibold text-blue-800">Summary</span>
+              </div>
+              <div className="space-y-1 text-sm text-blue-700">
+                <p>• Total Orders: <strong>{summary.total || 0}</strong></p>
+                <p>• Pending Orders: <strong>{summary.pending || 0}</strong></p>
+                <p>• Will be Approved: <strong>{summary.pending || 0}</strong></p>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsBulkApproveOpen(false)}
+              disabled={bulkApproveMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleBulkApprove}
+              disabled={bulkApproveMutation.isPending}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {bulkApproveMutation.isPending ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Approving...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Yes, Approve All
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Status Update Dialog */}
       <Dialog open={isStatusUpdateOpen} onOpenChange={setIsStatusUpdateOpen}>
         <DialogContent className="max-w-md">
@@ -924,12 +1027,12 @@ export default function SalesOrderList() {
               Select a new status for the order and add optional notes.
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4">
             <div>
               <Label htmlFor="status">New Status</Label>
-              <Select 
-                value={statusUpdateForm.newStatus} 
+              <Select
+                value={statusUpdateForm.newStatus}
                 onValueChange={(value) => setStatusUpdateForm(prev => ({ ...prev, newStatus: value }))}
               >
                 <SelectTrigger>
@@ -964,14 +1067,14 @@ export default function SalesOrderList() {
           </div>
 
           <DialogFooter>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setIsStatusUpdateOpen(false)}
               disabled={updateStatusMutation.isPending}
             >
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={handleStatusUpdateSubmit}
               disabled={updateStatusMutation.isPending || !statusUpdateForm.newStatus}
             >

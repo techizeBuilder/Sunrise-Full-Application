@@ -47,7 +47,7 @@ router.get('/test', (req, res) => {
 router.get('/debug', async (req, res) => {
   try {
     const user = req.user;
-    
+
     if (user.role !== 'Unit Manager') {
       return res.status(403).json({
         success: false,
@@ -56,10 +56,10 @@ router.get('/debug', async (req, res) => {
     }
 
     // Check users in same company
-    const companyUsers = await User.find({ 
-      companyId: user.companyId 
+    const companyUsers = await User.find({
+      companyId: user.companyId
     }).select('_id username role fullName companyId').lean();
-    
+
     // Check orders for these users
     const userIds = companyUsers.map(u => u._id);
     const orders = await Order.find({
@@ -118,24 +118,24 @@ router.get('/customers', async (req, res) => {
   try {
     const { authenticateToken } = await import('../middleware/auth.js');
     const Customer = (await import('../models/Customer.js')).default;
-    
+
     // Get user's company ID for filtering
     const userCompanyId = req.user.companyId;
-    
+
     if (!userCompanyId) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'User company not found' 
+      return res.status(400).json({
+        success: false,
+        message: 'User company not found'
       });
     }
-    
+
     // Get customers only for the unit manager's company
-    const customers = await Customer.find({ 
-      companyId: userCompanyId 
+    const customers = await Customer.find({
+      companyId: userCompanyId
     }, 'name email phone companyId').sort({ name: 1 }).lean();
-    
+
     console.log(`Unit Manager customers API: Found ${customers.length} customers for company ${userCompanyId}`);
-    
+
     res.json({ success: true, data: customers });
   } catch (error) {
     console.error('Unit Manager customers API error:', error);
@@ -145,12 +145,12 @@ router.get('/customers', async (req, res) => {
 router.get('/salespersons', async (req, res) => {
   try {
     const User = (await import('../models/User.js')).default;
-    
+
     // Get all sales persons for dropdown - using multiple role variations
-    const salesPersons = await User.find({ 
+    const salesPersons = await User.find({
       role: { $in: ['Sales', 'sales', 'SALES', 'Sales Person', 'SalesPerson'] }
     }, 'fullName email username').sort({ fullName: 1 }).lean();
-    
+
     res.json({ success: true, data: salesPersons });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Failed to fetch salespersons', error: error.message });
@@ -158,7 +158,7 @@ router.get('/salespersons', async (req, res) => {
 }); // Get salespersons for filter dropdown
 router.get('/fix-orders', fixOrdersSalesPersonAssignment); // Utility to fix existing orders
 // router.get('/users', getSalesPersons); // Commented - data now included in /orders
-router.put('/orders/:id/status', updateOrderStatus);
+router.put('/orders/:id/status', updateOrderStatus); // Single or bulk approve
 router.patch('/orders/:id/status', updateOrderStatus); // Add PATCH support
 router.get('/dashboard/stats', getDashboardStats);
 
