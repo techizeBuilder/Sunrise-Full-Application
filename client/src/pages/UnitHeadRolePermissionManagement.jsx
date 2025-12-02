@@ -186,10 +186,37 @@ const convertDBPermissionsToUI = (dbPermissions) => {
 };
 
 // Convert UI permission format back to database format
-const convertUIPermissionsToDB = (uiPermissions) => {
+// Get role-specific modules based on selected role
+const getRoleSpecificModules = (selectedRole) => {
+  switch (selectedRole) {
+    case 'Unit Manager':
+      return ['unitManager'];
+    case 'Sales':
+      return ['sales'];
+    case 'Production':
+      return ['production'];
+    case 'Accounts':
+      return ['accounts'];
+    case 'Dispatch':
+      return ['dispatch'];
+    case 'Packing':
+      return ['packing'];
+    default:
+      return [];
+  }
+};
+
+const convertUIPermissionsToDB = (uiPermissions, selectedRole) => {
   const modules = [];
+  const allowedModules = getRoleSpecificModules(selectedRole);
   
+  // Only include modules that are appropriate for the selected role
   Object.keys(uiPermissions).forEach(moduleName => {
+    // Skip modules that are not allowed for this role
+    if (!allowedModules.includes(moduleName)) {
+      return;
+    }
+    
     const moduleFeatures = [];
     const modulePermissions = uiPermissions[moduleName];
     
@@ -510,7 +537,7 @@ const UnitHeadRolePermissionManagement = () => {
     if (isAddingUser) {
       const userData = {
         ...formData,
-        permissions: convertUIPermissionsToDB(formData.permissions)
+        permissions: convertUIPermissionsToDB(formData.permissions, formData.role)
       };
       createUserMutation.mutate(userData);
     } else if (isEditingUser) {
@@ -519,7 +546,7 @@ const UnitHeadRolePermissionManagement = () => {
       delete updateData.confirmPassword;
       
       if (updateData.permissions) {
-        updateData.permissions = convertUIPermissionsToDB(updateData.permissions);
+        updateData.permissions = convertUIPermissionsToDB(updateData.permissions, updateData.role);
       }
       
       updateUserMutation.mutate({ userId: selectedUser._id, userData: updateData });
@@ -902,17 +929,21 @@ const UnitHeadRolePermissionManagement = () => {
                     size="sm"
                     onClick={() => {
                       const allEnabled = {};
-                      UNIT_HEAD_MODULES.forEach(module => {
-                        allEnabled[module.name] = {};
-                        module.features.forEach(feature => {
-                          allEnabled[module.name][feature.key] = {
-                            view: true,
-                            add: true,
-                            edit: true,
-                            delete: true
-                          };
+                      const allowedModules = getRoleSpecificModules(formData.role);
+                      
+                      UNIT_HEAD_MODULES
+                        .filter(module => allowedModules.includes(module.name))
+                        .forEach(module => {
+                          allEnabled[module.name] = {};
+                          module.features.forEach(feature => {
+                            allEnabled[module.name][feature.key] = {
+                              view: true,
+                              add: true,
+                              edit: true,
+                              delete: true
+                            };
+                          });
                         });
-                      });
                       setFormData(prev => ({
                         ...prev,
                         permissions: allEnabled
@@ -928,17 +959,21 @@ const UnitHeadRolePermissionManagement = () => {
                     size="sm"
                     onClick={() => {
                       const allDisabled = {};
-                      UNIT_HEAD_MODULES.forEach(module => {
-                        allDisabled[module.name] = {};
-                        module.features.forEach(feature => {
-                          allDisabled[module.name][feature.key] = {
-                            view: false,
-                            add: false,
-                            edit: false,
-                            delete: false
-                          };
+                      const allowedModules = getRoleSpecificModules(formData.role);
+                      
+                      UNIT_HEAD_MODULES
+                        .filter(module => allowedModules.includes(module.name))
+                        .forEach(module => {
+                          allDisabled[module.name] = {};
+                          module.features.forEach(feature => {
+                            allDisabled[module.name][feature.key] = {
+                              view: false,
+                              add: false,
+                              edit: false,
+                              delete: false
+                            };
+                          });
                         });
-                      });
                       setFormData(prev => ({
                         ...prev,
                         permissions: allDisabled
