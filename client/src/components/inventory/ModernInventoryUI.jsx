@@ -36,6 +36,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Package,
   Plus,
@@ -191,6 +192,8 @@ export default function ModernInventoryUI() {
   const [editingItem, setEditingItem] = useState(null);
   const [viewItem, setViewItem] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, item: null });
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState({ isOpen: false, items: [] });
+  const [selectedItems, setSelectedItems] = useState(new Set());
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedStore, setSelectedStore] = useState('all');
@@ -247,6 +250,33 @@ export default function ModernInventoryUI() {
     },
     onError: (error) => {
       showSmartToast(error, 'Delete Item');
+    }
+  });
+
+  const bulkDeleteItemsMutation = useMutation({
+    mutationFn: (itemIds) => apiRequest('POST', `${apiBasePath}/items/bulk-delete`, { itemIds }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries([`${apiBasePath}/items`]);
+      queryClient.invalidateQueries([`${apiBasePath}/stats`]);
+      setSelectedItems(new Set());
+      setBulkDeleteConfirm({ isOpen: false, items: [] });
+      
+      // Show detailed success message
+      const { deletedCount, requestedCount, warning } = data;
+      let message = `Successfully deleted ${deletedCount} item${deletedCount === 1 ? '' : 's'}`;
+      if (warning) {
+        message += ` (${warning})`;
+      }
+      
+      toast({
+        title: "Bulk Delete Complete",
+        description: message,
+        variant: deletedCount === requestedCount ? "default" : "destructive"
+      });
+    },
+    onError: (error) => {
+      showSmartToast(error, 'Bulk Delete');
+      setBulkDeleteConfirm({ isOpen: false, items: [] });
     }
   });
 
@@ -349,6 +379,42 @@ export default function ModernInventoryUI() {
       description: `Are you sure you want to delete this inventory item?`,
       itemName: item.name
     });
+  };
+
+  // Bulk delete handlers
+  const handleSelectItem = (itemId, checked) => {
+    const newSelected = new Set(selectedItems);
+    if (checked) {
+      newSelected.add(itemId);
+    } else {
+      newSelected.delete(itemId);
+    }
+    setSelectedItems(newSelected);
+  };
+
+  const handleSelectAll = (checked) => {
+    if (checked) {
+      const allCurrentPageItemIds = paginatedItems.map(item => item._id);
+      setSelectedItems(new Set([...selectedItems, ...allCurrentPageItemIds]));
+    } else {
+      const currentPageItemIds = paginatedItems.map(item => item._id);
+      const newSelected = new Set(selectedItems);
+      currentPageItemIds.forEach(id => newSelected.delete(id));
+      setSelectedItems(newSelected);
+    }
+  };
+
+  const handleBulkDelete = () => {
+    const selectedItemsArray = items.filter(item => selectedItems.has(item._id));
+    setBulkDeleteConfirm({
+      isOpen: true,
+      items: selectedItemsArray
+    });
+  };
+
+  const confirmBulkDelete = () => {
+    const itemIds = Array.from(selectedItems);
+    bulkDeleteItemsMutation.mutate(itemIds);
   };
 
   const confirmDelete = () => {
@@ -570,10 +636,51 @@ export default function ModernInventoryUI() {
               </div>
             </div>
 
+            {/* Bulk Actions Bar */}
+            {selectedItems.size > 0 && inventoryPermissions.canDelete && (
+              <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                      {selectedItems.size} item{selectedItems.size === 1 ? '' : 's'} selected
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedItems(new Set())}
+                      className="text-blue-600 hover:text-blue-700"
+                    >
+                      Clear selection
+                    </Button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={handleBulkDelete}
+                      disabled={bulkDeleteItemsMutation.isPending}
+                      className="bg-red-600 hover:bg-red-700"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      {bulkDeleteItemsMutation.isPending ? 'Deleting...' : `Delete ${selectedItems.size} item${selectedItems.size === 1 ? '' : 's'}`}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-gray-50 dark:bg-gray-800/50">
+                    {inventoryPermissions.canDelete && (
+                      <TableHead className="w-[50px] font-semibold text-gray-900 dark:text-gray-100">
+                        <Checkbox
+                          checked={paginatedItems.length > 0 && paginatedItems.every(item => selectedItems.has(item._id))}
+                          onCheckedChange={handleSelectAll}
+                        />
+                      </TableHead>
+                    )}
                     <TableHead className="font-semibold text-gray-900 dark:text-gray-100">Image</TableHead>
                     <TableHead className="font-semibold text-gray-900 dark:text-gray-100">Name</TableHead>
                     <TableHead className="font-semibold text-gray-900 dark:text-gray-100">Category</TableHead>
@@ -587,13 +694,13 @@ export default function ModernInventoryUI() {
                 <TableBody>
                   {itemsLoading ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8">
+                      <TableCell colSpan={inventoryPermissions.canDelete ? 9 : 8} className="text-center py-8">
                         Loading items...
                       </TableCell>
                     </TableRow>
                   ) : filteredItems.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={inventoryPermissions.canDelete ? 9 : 8} className="text-center py-8 text-muted-foreground">
                         No items found. Add your first inventory item to get started.
                       </TableCell>
                     </TableRow>
@@ -603,8 +710,16 @@ export default function ModernInventoryUI() {
                         key={item._id} 
                         className={`hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${
                           index % 2 === 0 ? 'bg-white dark:bg-gray-900' : 'bg-gray-50/50 dark:bg-gray-800/20'
-                        }`}
+                        } ${selectedItems.has(item._id) ? 'bg-blue-50 dark:bg-blue-950/30' : ''}`}
                       >
+                        {inventoryPermissions.canDelete && (
+                          <TableCell className="py-4">
+                            <Checkbox
+                              checked={selectedItems.has(item._id)}
+                              onCheckedChange={(checked) => handleSelectItem(item._id, checked)}
+                            />
+                          </TableCell>
+                        )}
                         <TableCell className="py-4">
                           <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
                             {item.image ? (
@@ -796,15 +911,33 @@ export default function ModernInventoryUI() {
       />
 
       {inventoryPermissions.canDelete && (
-        <DeleteConfirmDialog
-          isOpen={deleteConfirm.isOpen}
-          onClose={() => setDeleteConfirm({ isOpen: false, item: null })}
-          onConfirm={confirmDelete}
-          title="Delete Inventory Item"
-          description="Are you sure you want to delete this inventory item?"
-          itemName={deleteConfirm.item?.name}
-          isLoading={deleteItemMutation.isPending}
-        />
+        <>
+          <DeleteConfirmDialog
+            isOpen={deleteConfirm.isOpen}
+            onClose={() => setDeleteConfirm({ isOpen: false, item: null })}
+            onConfirm={confirmDelete}
+            title="Delete Inventory Item"
+            description="Are you sure you want to delete this inventory item?"
+            itemName={deleteConfirm.item?.name}
+            isLoading={deleteItemMutation.isPending}
+          />
+          
+          <DeleteConfirmDialog
+            isOpen={bulkDeleteConfirm.isOpen}
+            onClose={() => setBulkDeleteConfirm({ isOpen: false, items: [] })}
+            onConfirm={confirmBulkDelete}
+            title="Bulk Delete Items"
+            description={`Are you sure you want to delete ${bulkDeleteConfirm.items.length} item${bulkDeleteConfirm.items.length === 1 ? '' : 's'}? This action cannot be undone.`}
+            itemName={bulkDeleteConfirm.items.length > 0 ? 
+              bulkDeleteConfirm.items.length === 1 
+                ? bulkDeleteConfirm.items[0].name
+                : `${bulkDeleteConfirm.items.length} items: ${bulkDeleteConfirm.items.slice(0, 3).map(item => item.name).join(', ')}${bulkDeleteConfirm.items.length > 3 ? '...' : ''}`
+              : ''
+            }
+            confirmText={`Delete ${bulkDeleteConfirm.items.length} item${bulkDeleteConfirm.items.length === 1 ? '' : 's'}`}
+            isLoading={bulkDeleteItemsMutation.isPending}
+          />
+        </>
       )}
 
       {/* Category Management Modals - Show based on permissions */}

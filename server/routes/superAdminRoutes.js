@@ -32,6 +32,7 @@ import {
   createItem,
   updateItem,
   deleteItem,
+  bulkDeleteItems,
   adjustStock,
   getCategories,
   createCategory,
@@ -53,6 +54,16 @@ const router = express.Router();
 
 // Apply authentication to all routes
 router.use(authenticateToken);
+
+// Debug logging
+console.log('🔧 Super Admin routes loading...');
+console.log('📁 Available functions:', { 
+  getItems: !!getItems,
+  createItem: !!createItem,
+  bulkDeleteItems: !!bulkDeleteItems,
+  deleteItem: !!deleteItem,
+  updateItem: !!updateItem
+});
 
 // Test endpoint to verify Super Admin API structure
 router.get('/test', (req, res) => {
@@ -126,6 +137,26 @@ router.delete('/companies/:id', deleteCompany);
 router.get('/inventory/items', getItems);
 router.get('/inventory/items/:id', getItemById);
 router.post('/inventory/items', createItem);
+
+// Test route to debug bulk delete
+router.post('/inventory/items/bulk-delete-test', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Test bulk delete route working',
+    receivedBody: req.body,
+    timestamp: new Date().toISOString()
+  });
+});
+
+router.post('/inventory/items/bulk-delete', (req, res, next) => {
+  console.log('🎯 Bulk delete route hit!', {
+    method: req.method,
+    path: req.path,
+    body: req.body,
+    user: req.user?.username
+  });
+  next();
+}, bulkDeleteItems);
 router.put('/inventory/items/:id', updateItem);
 router.delete('/inventory/items/:id', deleteItem);
 router.post('/inventory/items/:id/adjust-stock', adjustStock);

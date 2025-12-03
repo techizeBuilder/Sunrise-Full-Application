@@ -57,6 +57,7 @@ import {
   createItem,
   updateItem,
   deleteItem,
+  bulkDeleteItems,
   adjustStock,
   getCategories,
   createCategory,
@@ -201,6 +202,11 @@ router.get('/inventory/items/:id',
 router.post('/inventory/items', 
   checkPermission('unitHead', 'inventory', 'add'), 
   createItem
+);
+
+router.post('/inventory/items/bulk-delete', 
+  checkPermission('unitHead', 'inventory', 'delete'), 
+  bulkDeleteItems
 );
 
 router.put('/inventory/items/:id', 

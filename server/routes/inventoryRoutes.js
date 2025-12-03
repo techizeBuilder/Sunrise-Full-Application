@@ -8,6 +8,7 @@ import {
   createItem,
   updateItem,
   deleteItem,
+  bulkDeleteItems,
   adjustStock,
   
   // Category routes
@@ -39,6 +40,7 @@ const router = express.Router();
 router.get('/items', auth, getItems);
 router.get('/items/:id', auth, getItemById);
 router.post('/items', auth, createItem);
+router.post('/items/bulk-delete', auth, bulkDeleteItems);
 router.put('/items/:id', auth, updateItem);
 router.delete('/items/:id', auth, deleteItem);
 router.post('/items/:id/adjust-stock', auth, adjustStock);

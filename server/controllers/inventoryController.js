@@ -808,12 +808,114 @@ export const deleteItem = async (req, res) => {
       return res.status(404).json({ message: 'Item not found' });
     }
 
+    // Delete the item
     await Item.findByIdAndDelete(id);
+
+    // Clean up production summary entries for this item
+    try {
+      const deleteResult = await ProductDailySummary.deleteMany({ 
+        productId: id 
+      });
+      console.log(`🗑️ Cleaned up ${deleteResult.deletedCount} production summary entries for deleted item: ${item.name}`);
+    } catch (cleanupError) {
+      console.error('⚠️ Warning: Failed to clean up production summary entries:', cleanupError);
+      // Don't fail the main deletion if cleanup fails
+    }
 
     res.json({ message: 'Item deleted successfully' });
   } catch (error) {
     console.error('Delete item error:', error);
     res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+// Bulk delete multiple items
+export const bulkDeleteItems = async (req, res) => {
+  try {
+    if (!checkInventoryPermission(req.user, 'delete')) {
+      return res.status(403).json({ message: 'Access denied. Insufficient permissions.' });
+    }
+
+    const { itemIds } = req.body;
+
+    // Validate input
+    if (!Array.isArray(itemIds) || itemIds.length === 0) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'itemIds must be a non-empty array' 
+      });
+    }
+
+    // Validate all IDs are valid ObjectIds
+    const mongoose = await import('mongoose');
+    const invalidIds = itemIds.filter(id => !mongoose.Types.ObjectId.isValid(id));
+    if (invalidIds.length > 0) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Invalid item IDs provided',
+        invalidIds 
+      });
+    }
+
+    console.log(`🗑️ Bulk delete request for ${itemIds.length} items by ${req.user.username} (${req.user.role})`);
+
+    // Check which items exist before deletion
+    const existingItems = await Item.find({ _id: { $in: itemIds } });
+    const existingIds = existingItems.map(item => item._id.toString());
+    const notFoundIds = itemIds.filter(id => !existingIds.includes(id));
+
+    if (existingItems.length === 0) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'No items found with the provided IDs',
+        notFoundIds: itemIds
+      });
+    }
+
+    // Perform bulk deletion
+    const deleteResult = await Item.deleteMany({ _id: { $in: existingIds } });
+
+    // Clean up production summary entries for deleted items
+    try {
+      const summaryDeleteResult = await ProductDailySummary.deleteMany({ 
+        productId: { $in: existingIds } 
+      });
+      console.log(`🗑️ Cleaned up ${summaryDeleteResult.deletedCount} production summary entries for ${deleteResult.deletedCount} deleted items`);
+    } catch (cleanupError) {
+      console.error('⚠️ Warning: Failed to clean up production summary entries:', cleanupError);
+      // Don't fail the main deletion if cleanup fails
+    }
+
+    console.log(`✅ Bulk delete completed: ${deleteResult.deletedCount} items deleted`);
+    
+    // Prepare response with detailed information
+    const response = {
+      success: true,
+      message: `Successfully deleted ${deleteResult.deletedCount} item${deleteResult.deletedCount === 1 ? '' : 's'}`,
+      deletedCount: deleteResult.deletedCount,
+      requestedCount: itemIds.length,
+      deletedItems: existingItems.map(item => ({
+        id: item._id,
+        name: item.name,
+        code: item.code
+      }))
+    };
+
+    // Include information about items that weren't found
+    if (notFoundIds.length > 0) {
+      response.warning = `${notFoundIds.length} item${notFoundIds.length === 1 ? '' : 's'} not found`;
+      response.notFoundIds = notFoundIds;
+    }
+
+    res.json(response);
+
+  } catch (error) {
+    console.error('Bulk delete items error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Internal server error during bulk deletion',
+      error: error.message 
+    });
   }
 };
 

@@ -380,7 +380,7 @@ const SalesApproval = () => {
               productName: product.productName,
               productCode: product.productCode || '',
               totalOrders: hasSalesData ? product.salesBreakdown.reduce((sum, sp) => sum + sp.orderCount, 0) : 0,
-              totalQuantity: product.totalQuantity || 0, // Use totalQuantity directly from API response
+              totalQuantity: hasSalesData ? product.salesBreakdown.reduce((sum, sp) => sum + sp.totalQuantity, 0) : 0, // Calculate total from salesBreakdown
               salesPersons: hasSalesData ? product.salesBreakdown.map(sp => ({
                 _id: sp.salesPersonId,
                 fullName: sp.salesPersonName,
