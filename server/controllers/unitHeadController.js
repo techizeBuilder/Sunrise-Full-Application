@@ -1989,10 +1989,14 @@ export const createUnitHeadProductionGroup = async (req, res) => {
       name: { $regex: new RegExp(`^${name.trim()}$`, 'i') },
       company: req.user.companyId,
       isActive: true
-    });
+    }).populate('company', 'name');
 
     if (existingGroup) {
-      return res.status(400).json({ success: false, message: 'Production group with this name already exists' });
+      const companyName = existingGroup.company?.name || 'your company';
+      return res.status(400).json({ 
+        success: false, 
+        message: `Production group "${name.trim()}" already exists in ${companyName}` 
+      });
     }
 
     // Validate items if provided
@@ -2067,7 +2071,56 @@ export const createUnitHeadProductionGroup = async (req, res) => {
     });
   } catch (error) {
     console.error('Error creating production group:', error);
-    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+    
+    // Handle duplicate key error (MongoDB E11000)
+    if (error.code === 11000) {
+      if (error.keyPattern && error.keyPattern.name) {
+        // Try to get company name for better error message
+        try {
+          const { Company } = await import('../models/Company.js');
+          const company = await Company.findById(req.user.companyId).select('name');
+          const companyName = company?.name || 'your company';
+          return res.status(400).json({ 
+            success: false, 
+            message: `Production group with this name already exists in ${companyName}` 
+          });
+        } catch (companyError) {
+          return res.status(400).json({ 
+            success: false, 
+            message: 'Production group with this name already exists in your company' 
+          });
+        }
+      } else {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Duplicate entry detected. Production group name must be unique within your company.' 
+        });
+      }
+    }
+    
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      const validationErrors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Validation failed', 
+        errors: validationErrors 
+      });
+    }
+    
+    // Handle other known errors
+    if (error.name === 'CastError') {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invalid data format provided' 
+      });
+    }
+    
+    // Generic server error for unknown errors
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to create production group. Please try again.' 
+    });
   }
 };
 
@@ -2124,10 +2177,14 @@ export const updateUnitHeadProductionGroup = async (req, res) => {
         company: req.user.companyId,
         isActive: true,
         _id: { $ne: req.params.id }
-      });
+      }).populate('company', 'name');
 
       if (duplicateGroup) {
-        return res.status(400).json({ success: false, message: 'Production group with this name already exists' });
+        const companyName = duplicateGroup.company?.name || 'your company';
+        return res.status(400).json({ 
+          success: false, 
+          message: `Production group "${name.trim()}" already exists in ${companyName}` 
+        });
       }
     }
 
@@ -2234,7 +2291,56 @@ export const updateUnitHeadProductionGroup = async (req, res) => {
     });
   } catch (error) {
     console.error('Error updating production group:', error);
-    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+    
+    // Handle duplicate key error (MongoDB E11000)
+    if (error.code === 11000) {
+      if (error.keyPattern && error.keyPattern.name) {
+        // Try to get company name for better error message
+        try {
+          const { Company } = await import('../models/Company.js');
+          const company = await Company.findById(req.user.companyId).select('name');
+          const companyName = company?.name || 'your company';
+          return res.status(400).json({ 
+            success: false, 
+            message: `Production group with this name already exists in ${companyName}` 
+          });
+        } catch (companyError) {
+          return res.status(400).json({ 
+            success: false, 
+            message: 'Production group with this name already exists in your company' 
+          });
+        }
+      } else {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Duplicate entry detected. Production group name must be unique within your company.' 
+        });
+      }
+    }
+    
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      const validationErrors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Validation failed', 
+        errors: validationErrors 
+      });
+    }
+    
+    // Handle other known errors
+    if (error.name === 'CastError') {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invalid data format provided' 
+      });
+    }
+    
+    // Generic server error for unknown errors
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to update production group. Please try again.' 
+    });
   }
 };
 

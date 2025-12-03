@@ -86,11 +86,13 @@ const SalesApproval = () => {
 
       // Calculate dependent fields
       const qtyPerBatch = data.qtyPerBatch || 1;
-      const productionFinalBatches = data.productionFinalBatches || 0;
-      const toBeProducedDay = data.toBeProducedDay || 0;
+      const batchAdjusted = data.batchAdjusted || 0;
+      const productionFinalBatches = Math.round((batchAdjusted * qtyPerBatch) * 100) / 100;
+      const totalIndentSalesman = product.totalQuantity || 0;
+      const physicalStock = data.physicalStock || 0;
+      const toBeProducedDay = Math.max(0, totalIndentSalesman - physicalStock);
 
       // Auto-calculate dependent values
-      const batchAdjusted = Math.round((productionFinalBatches / qtyPerBatch) * 100) / 100;
       const produceBatches = Math.round((toBeProducedDay / qtyPerBatch) * 100) / 100;
 
       const response = await fetch('/api/sales/update-product-summary', {
@@ -103,10 +105,9 @@ const SalesApproval = () => {
           date: today,
           productId: product.productId || product._id,
           updates: {
-            packing: data.packing || 0,
             productionFinalBatches: productionFinalBatches,
             physicalStock: data.physicalStock || 0,
-            batchAdjusted: batchAdjusted,
+            batchAdjusted: data.batchAdjusted || 0,
             qtyPerBatch: data.qtyPerBatch || 0,
             toBeProducedDay: toBeProducedDay,
             produceBatches: produceBatches
@@ -123,7 +124,7 @@ const SalesApproval = () => {
           ...prev,
           [productName]: {
             ...prev[productName],
-            batchAdjusted: batchAdjusted,
+            productionFinalBatches: productionFinalBatches,
             produceBatches: produceBatches
           }
         }));
@@ -148,11 +149,9 @@ const SalesApproval = () => {
   // Calculate Production with final batches = Batch_Adjusted * Qty_per_Batch
   const getProductionWithFinalBatches = (productName) => {
     const data = getProductionData(productName);
-    // Use backend-calculated value if available, otherwise calculate
-    if (data.productionFinalBatches !== undefined) {
-      return data.productionFinalBatches;
-    }
-    return Math.round((data.batchAdjusted * data.qtyPerBatch) * 100) / 100;
+    const batchAdjusted = data.batchAdjusted || 0;
+    const qtyPerBatch = data.qtyPerBatch || 1;
+    return Math.round((batchAdjusted * qtyPerBatch) * 100) / 100;
   };
 
   // Calculate Expiry/Shortage = Production_with_final_batches - To_be_produced_day
@@ -175,12 +174,10 @@ const SalesApproval = () => {
     return Math.round((toBeProducedDay / qtyPerBatch) * 100) / 100;
   };
 
-  // Calculate Batch Adjusted = productionFinalBatches / qtyPerBatch
+  // Get Batch Adjusted - user entered value
   const getBatchAdjusted = (productName) => {
     const data = getProductionData(productName);
-    const qtyPerBatch = data.qtyPerBatch || 1;
-    const productionFinalBatches = data.productionFinalBatches || getProductionWithFinalBatches(productName);
-    return Math.round((productionFinalBatches / qtyPerBatch) * 100) / 100;
+    return data.batchAdjusted || 0;
   };
 
   // Calculate To be produced/Batches = To_be_produced_day / Qty_per_Batch
@@ -848,13 +845,6 @@ const SalesApproval = () => {
                       <span className="text-xs lg:text-sm">Products</span>
                     </div>
                   </th>
-                  {/* 2. Packing Column */}
-                  <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[70px] lg:min-w-[90px]">
-                    <div className="flex flex-col items-center gap-1">
-                      <Package className="h-3 w-3 lg:h-4 lg:w-4 text-blue-600" />
-                      <div className="text-xs font-semibold text-gray-900">Packing</div>
-                    </div>
-                  </th>
                   {/* 3. Production with final batches Column */}
                   <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[90px] lg:min-w-[110px]">
                     <div className="flex flex-col items-center gap-1">
@@ -950,28 +940,12 @@ const SalesApproval = () => {
                         </div>
                       </td>
 
-                      {/* 2. Packing Column */}
+                      {/* 3. Production with final batches Column - AUTO CALCULATED */}
                       <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
                         <div className="text-center">
-                          <div className="text-sm font-bold text-blue-600">
-                            {getProductionData(product).packing || 0}
+                          <div className="text-sm font-bold text-green-600">
+                            {getProductionWithFinalBatches(product)}
                           </div>
-                        </div>
-                      </td>
-
-                      {/* 3. Production with final batches Column - EDITABLE */}
-                      <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
-                        <div className="text-center">
-                          <Input
-                            type="number"
-                            value={getProductionData(product).productionFinalBatches || ''}
-                            onChange={(e) => updateProductionField(product, 'productionFinalBatches', e.target.value)}
-                            onBlur={() => saveProductionData(product)}
-                            className="w-24 h-8 text-center text-sm font-bold text-green-600 border-none bg-transparent focus:ring-1 focus:ring-green-300"
-                            min="0"
-                            step="0.01"
-                            placeholder="0"
-                          />
                         </div>
                       </td>
 
@@ -1000,28 +974,28 @@ const SalesApproval = () => {
                         </div>
                       </td>
 
-                      {/* 6. Batch Adjusted Column - AUTO CALCULATED */}
-                      <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
-                        <div className="text-center">
-                          <div className="text-sm font-bold text-cyan-600">
-                            {getBatchAdjusted(product)}
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* 7. To be Produced/Day Column - EDITABLE */}
+                      {/* 6. Batch Adjusted Column - EDITABLE */}
                       <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
                         <div className="text-center">
                           <Input
                             type="number"
-                            value={getProductionData(product).toBeProducedDay || ''}
-                            onChange={(e) => updateProductionField(product, 'toBeProducedDay', e.target.value)}
+                            value={getProductionData(product).batchAdjusted || ''}
+                            onChange={(e) => updateProductionField(product, 'batchAdjusted', e.target.value)}
                             onBlur={() => saveProductionData(product)}
-                            className="w-24 h-8 text-center text-sm font-bold text-amber-600 border-none bg-transparent focus:ring-1 focus:ring-amber-300"
+                            className="w-24 h-8 text-center text-sm font-bold text-cyan-600 border-none bg-transparent focus:ring-1 focus:ring-cyan-300"
                             min="0"
                             step="0.01"
                             placeholder="0"
                           />
+                        </div>
+                      </td>
+
+                      {/* 7. To be Prod/Day Column - AUTO CALCULATED */}
+                      <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
+                        <div className="text-center">
+                          <div className="text-sm font-bold text-amber-600">
+                            {Math.max(0, totalQuantity - (getProductionData(product).physicalStock || 0))}
+                          </div>
                         </div>
                       </td>
 

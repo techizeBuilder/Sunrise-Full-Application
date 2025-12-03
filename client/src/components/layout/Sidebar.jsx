@@ -243,19 +243,15 @@ const packingMenuItems = [
     label: 'Dashboard',
     path: '/packing-dashboard',
     icon: LayoutDashboard,
-    module: 'dashboard'
+    module: 'packing',
+    feature: 'dashboard'
   },
   {
-    label: 'Orders',
-    path: '/orders',
-    icon: Receipt,
-    module: 'orders'
-  },
-  {
-    label: 'Inventory',
-    path: '/inventory',
-    icon: Package,
-    module: 'inventory'
+    label: 'Packing Sheet',
+    path: '/packing/packing-sheet',
+    icon: FileText,
+    module: 'packing',
+    feature: 'packingSheet'
   }
 ];
 
@@ -433,6 +429,24 @@ export default function Sidebar({ isOpen, onClose }) {
       }
       
       return false; // Hide all non-production items for Production users
+    });
+  } else if (user?.role === 'Packing') {
+    // For Packing users, only show packing-related items and profile
+    filteredMenuItems = roleMenuItems.filter(item => {
+      // Always show items without module restriction (like profile)
+      if (!item.module) return true;
+      
+      // Only show packing module items
+      if (item.module === 'packing') {
+        // If item has a specific feature requirement, check feature access
+        if (item.feature) {
+          const hasFeature = hasFeatureAccess(item.module, item.feature, 'view');
+          return hasFeature;
+        }
+        return true;
+      }
+      
+      return false; // Hide all non-packing items for Packing users
     });
   } else {
     // For other roles, use the existing filtering logic

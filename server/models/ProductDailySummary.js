@@ -84,10 +84,8 @@ productDailySummarySchema.index({ productId: 1, date: 1 });
 
 // Helper method to calculate formulas
 productDailySummarySchema.methods.calculateFormulas = function() {
-  // batchAdjusted = productionFinalBatches / qtyPerBatch
-  if (this.qtyPerBatch > 0) {
-    this.batchAdjusted = Math.round((this.productionFinalBatches / this.qtyPerBatch) * 100) / 100;
-  }
+  // productionFinalBatches = batchAdjusted * qtyPerBatch
+  this.productionFinalBatches = Math.round((this.batchAdjusted * this.qtyPerBatch) * 100) / 100;
   
   // produceBatches = toBeProducedDay / qtyPerBatch
   if (this.qtyPerBatch > 0) {

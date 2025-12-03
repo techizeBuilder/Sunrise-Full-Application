@@ -43,8 +43,8 @@ const updateProductSummaryQtyPerBatch = async (productId, productName, qtyPerBat
       return;
     }
     
-    // Find existing summary by PRODUCT + COMPANY only (ignore date)
-    // We want ONE record per product, not per date
+    // Find existing summary by PRODUCT + COMPANY only (COMPLETELY ignore date)
+    // We want EXACTLY ONE record per product per company
     const query = {
       companyId: new mongoose.Types.ObjectId(companyId),
       productId: new mongoose.Types.ObjectId(productId)
@@ -1532,39 +1532,18 @@ export const importItemsFromExcel = [upload.single('file'), async (req, res) => 
 
         const trimmedName = itemData.name.trim();
 
-        // Check for duplicate item name (case-insensitive) within the SAME company
-        const escapedName = trimmedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // 🚫 REMOVED DUPLICATE CHECKING - Import without limitations
+        console.log(`📦 Importing item "${trimmedName}" without duplicate restrictions`);
         
-        // Determine company ID for duplicate checking (same logic as manual creation)
+        // Determine company ID for storage
         let companyIdForCheck = req.user.companyId;
         if (itemData.store) {
           companyIdForCheck = itemData.store;
         }
         
-        console.log(`📋 Import duplicate check for "${trimmedName}" in company: ${companyIdForCheck}`);
+        console.log(`📋 Item will be stored in company: ${companyIdForCheck}`);
         
-        // Only check duplicates within the same company - same name allowed in different companies
-        if (companyIdForCheck) {
-          const query = {
-            name: { $regex: new RegExp(`^${escapedName}$`, 'i') },
-            $or: [
-              { companyId: companyIdForCheck },
-              { store: companyIdForCheck }
-            ]
-          };
-          
-          console.log(`📋 Duplicate query:`, query);
-          
-          const existingItemByName = await Item.findOne(query);
-          
-          if (existingItemByName) {
-            throw new Error(`Item "${trimmedName}" already exists in this company location. Same item names are allowed in different companies, but not within the same company`);
-          } else {
-            console.log(`✅ Item name "${trimmedName}" is unique within company ${companyIdForCheck}`);
-          }
-        } else {
-          console.log(`⚠️ No company ID found for duplicate checking - allowing item`);
-        }
+        // ⚠️ Note: Same item names are now allowed even within the same company
 
         // Ensure type has a valid value
         const validTypes = ['Product', 'Service', 'Raw Material', 'Finished Good'];
@@ -1614,6 +1593,47 @@ export const importItemsFromExcel = [upload.single('file'), async (req, res) => 
         itemData.code = uniqueCode;
         console.log(`Auto-generated globally unique code for ${trimmedName}: ${itemData.code} (Company: ${companyIdForCheck})`);
 
+        // 🆕 AUTO-CREATE CATEGORY if it doesn't exist
+        if (itemData.category && itemData.category.trim()) {
+          const categoryExists = await Category.findOne({ 
+            name: { $regex: new RegExp(`^${itemData.category.trim()}$`, 'i') } 
+          });
+          
+          if (!categoryExists) {
+            console.log(`🆕 Creating new category: "${itemData.category.trim()}"`);
+            try {
+              const newCategory = await Category.create({
+                name: itemData.category.trim(),
+                description: `Auto-created during import for ${trimmedName}`,
+                subcategories: itemData.subCategory ? [itemData.subCategory.trim()] : []
+              });
+              console.log(`✅ Category created successfully: ${newCategory.name}`);
+            } catch (categoryError) {
+              console.log(`⚠️ Category creation failed (may already exist): ${categoryError.message}`);
+            }
+          } else {
+            console.log(`✅ Category "${itemData.category.trim()}" already exists`);
+            
+            // Add subcategory if it doesn't exist
+            if (itemData.subCategory && itemData.subCategory.trim()) {
+              const subCategoryExists = categoryExists.subcategories.some(
+                sub => sub.toLowerCase() === itemData.subCategory.trim().toLowerCase()
+              );
+              
+              if (!subCategoryExists) {
+                console.log(`🆕 Adding subcategory "${itemData.subCategory.trim()}" to existing category`);
+                try {
+                  categoryExists.subcategories.push(itemData.subCategory.trim());
+                  await categoryExists.save();
+                  console.log(`✅ Subcategory added successfully`);
+                } catch (subCategoryError) {
+                  console.log(`⚠️ Subcategory addition failed: ${subCategoryError.message}`);
+                }
+              }
+            }
+          }
+        }
+
         // Resolve store location to company name (already validated above - just get the name)
         if (itemData.store) {
           try {
@@ -1650,6 +1670,54 @@ export const importItemsFromExcel = [upload.single('file'), async (req, res) => 
           companyId: newItem.companyId,
           store: newItem.store
         });
+
+        // 🆕 AUTO-CREATE ProductDailySummary ENTRY for production
+        if (companyIdForCheck) {
+          try {
+            console.log(`🏭 Creating ProductDailySummary entry for ${trimmedName}...`);
+            
+            // Check if entry already exists for this product and company (IGNORE DATE)
+            const existingSummary = await ProductDailySummary.findOne({
+              productId: newItem._id,
+              companyId: companyIdForCheck
+            });
+            
+            if (!existingSummary) {
+              const summaryData = {
+                productId: newItem._id,
+                productName: newItem.name,
+                companyId: companyIdForCheck,
+                date: new Date().toISOString().split('T')[0], // Today's date
+                totalQuantity: newItem.qty || 0,
+                physicalStock: newItem.qty || 0,
+                qtyPerBatch: parseFloat(newItem.batch) || 0,
+                batchAdjusted: 0,
+                productionQuantity: 0,
+                createdAt: new Date(),
+                updatedAt: new Date()
+              };
+              
+              const newSummary = await ProductDailySummary.create(summaryData);
+              console.log(`✅ ProductDailySummary created successfully for ${trimmedName} (ID: ${newSummary._id})`);
+            } else {
+              console.log(`📊 ProductDailySummary already exists for ${trimmedName}, updating stock quantities...`);
+              
+              // Update existing entry with new stock information
+              existingSummary.totalQuantity = (existingSummary.totalQuantity || 0) + (newItem.qty || 0);
+              existingSummary.physicalStock = (existingSummary.physicalStock || 0) + (newItem.qty || 0);
+              if (!existingSummary.qtyPerBatch && newItem.batch) {
+                existingSummary.qtyPerBatch = parseFloat(newItem.batch) || 0;
+              }
+              existingSummary.updatedAt = new Date();
+              
+              await existingSummary.save();
+              console.log(`✅ ProductDailySummary updated for ${trimmedName}`);
+            }
+          } catch (summaryError) {
+            console.error(`⚠️ Failed to create/update ProductDailySummary for ${trimmedName}:`, summaryError.message);
+            // Don't fail the entire import for ProductDailySummary errors
+          }
+        }
 
         results.successful++;
       } catch (rowError) {

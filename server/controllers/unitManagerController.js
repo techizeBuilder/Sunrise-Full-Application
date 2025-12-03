@@ -364,7 +364,7 @@ export const updateOrderStatus = async (req, res) => {
           console.log(`   📅 Normalized summary date: ${summaryDate}`);
           
           // Check if ProductDailySummary entry already exists for this product and company
-          // Remove date from query to prevent duplicates - we want ONE entry per product per company
+          // FIXED: Use only company+product ID, completely ignore date
           const existingSummary = await ProductDailySummary.findOne({
             productId: productId,
             companyId: order.companyId

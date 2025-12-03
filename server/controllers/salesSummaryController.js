@@ -253,14 +253,13 @@ export const updateSalesSummary = async (req, res) => {
       });
     }
 
-    // Find existing summary document OR create if updating through API
+    // Find existing summary document - FIXED: Use only company + product, ignore date completely
     console.log('🔍 Searching for existing summary with:');
-    console.log('  📅 Date:', summaryDate.toISOString());
     console.log('  🏢 Company ID:', summaryCompanyId);
     console.log('  📦 Product ID:', productId);
+    console.log('  ⚠️ IGNORING DATE - Using only company + product for lookup');
     
     let summary = await ProductDailySummary.findOne({
-      date: summaryDate,
       companyId: summaryCompanyId,
       productId: new mongoose.Types.ObjectId(productId)
     });

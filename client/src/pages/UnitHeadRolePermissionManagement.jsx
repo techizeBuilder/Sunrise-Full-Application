@@ -69,8 +69,7 @@ const UNIT_HEAD_MODULES = [
     label: 'Unit Manager',
     features: [
       { key: 'salesApproval', label: 'Sales Approval' },
-      { key: 'salesOrderList', label: 'Sales Order List' },
-      { key: 'productionGroup', label: 'Production Group' }
+      { key: 'salesOrderList', label: 'Sales Order List' }
     ]
   },
   {
@@ -94,6 +93,14 @@ const UNIT_HEAD_MODULES = [
     ]
   },
   {
+    name: 'packing',
+    label: 'Packing',
+    features: [
+      { key: 'dashboard', label: 'Dashboard' },
+      { key: 'packingSheet', label: 'Packing Sheet' }
+    ]
+  },
+  {
     name: 'accounts',
     label: 'Accounts',
     features: [
@@ -111,16 +118,6 @@ const UNIT_HEAD_MODULES = [
       { key: 'createDispatch', label: 'Create Dispatch' },
       { key: 'trackingInfo', label: 'Tracking Info' },
       { key: 'deliveryStatus', label: 'Delivery Status' }
-    ]
-  },
-  {
-    name: 'packing',
-    label: 'Packing',
-    features: [
-      { key: 'packingOrders', label: 'Packing Orders' },
-      { key: 'packingList', label: 'Packing List' },
-      { key: 'qualityCheck', label: 'Quality Check' },
-      { key: 'packingReports', label: 'Packing Reports' }
     ]
   },
   {

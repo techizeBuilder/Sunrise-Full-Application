@@ -52,6 +52,7 @@ import ProductionDashboard from "@/pages/production/ProductionDashboard";
 import ProductionModule from "@/components/production/ProductionModule";
 import ProductionShift from "@/pages/production/ProductionShift";
 import PackingDashboard from "@/pages/PackingDashboard";
+import PackingSheet from "@/pages/PackingSheet";
 import DispatchDashboard from "@/pages/DispatchDashboard";
 import AccountsDashboard from "@/pages/AccountsDashboard";
 import SalesApproval from "@/pages/SalesApproval";
@@ -305,6 +306,11 @@ function Router() {
       <Route path="/packing-dashboard">
         <ProtectedRoute requiredRole="Packing">
           <PackingDashboard />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/packing/packing-sheet">
+        <ProtectedRoute requiredRole="Packing">
+          <PackingSheet />
         </ProtectedRoute>
       </Route>
       <Route path="/dispatch-dashboard">

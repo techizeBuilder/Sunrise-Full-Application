@@ -52,9 +52,8 @@ export const updateProductSummary = async (productId, date, companyId) => {
 
     const totalIndent = aggregationResult.length > 0 ? aggregationResult[0].totalIndent : 0;
 
-    // Find existing summary document (NO AUTO-CREATION)
+    // Find existing summary document (IGNORE DATE - use only company+product)
     let summary = await ProductDailySummary.findOne({
-      date: summaryDate,
       companyId: new mongoose.Types.ObjectId(companyId),
       productId: new mongoose.Types.ObjectId(productId)
     });

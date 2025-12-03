@@ -86,8 +86,7 @@ const MODULES = [
     label: 'Unit Manager',
     features: [
       { key: 'salesApproval', label: 'Sales Approval' },
-      { key: 'salesOrderList', label: 'Sales Order List' },
-      { key: 'productionGroup', label: 'Production Group' }
+      { key: 'salesOrderList', label: 'Sales Order List' }
     ]
   },
   {
@@ -150,6 +149,14 @@ const MODULES = [
       { key: 'productionDashboard', label: 'Production Dashboard' },
       { key: 'productionReports', label: 'Production Reports' },
       { key: 'productionSheet', label: 'Production Sheet' }
+    ]
+  },
+  {
+    name: 'packing',
+    label: 'Packing',
+    features: [
+      { key: 'dashboard', label: 'Dashboard' },
+      { key: 'packingSheet', label: 'Packing Sheet' }
     ]
   },
   {
@@ -576,6 +583,17 @@ export default function RolePermissionManagement() {
               { key: 'myDeliveries', view: true, add: false, edit: false, delete: false, alter: false },
               { key: 'myInvoices', view: true, add: false, edit: false, delete: false, alter: false },
               { key: 'refundReturn', view: true, add: true, edit: true, delete: true, alter: true }
+            ]
+          }
+        ];
+      case 'Packing':
+        return [
+          {
+            name: 'packing',
+            dashboard: true,
+            features: [
+              { key: 'dashboard', view: true, add: true, edit: true, delete: true },
+              { key: 'packingSheet', view: true, add: true, edit: true, delete: true }
             ]
           }
         ];

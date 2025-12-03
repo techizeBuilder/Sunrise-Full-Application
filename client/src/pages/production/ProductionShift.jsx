@@ -341,21 +341,35 @@ export default function ProductionShift() {
           />
         </TableCell>
         
-        {/* Total Qty/Batch for entire group - Sum of all item qtyPerBatch values */}
+        {/* Qty/Batch for group - Show first non-zero qtyPerBatch value */}
         <TableCell className="text-center">
-          <div className="font-medium">{group.totalBatchQuantity || 0}</div>
-          {/* <div className="text-xs text-gray-500">
-            Total Value: ₹{group.items?.reduce((sum, item) => sum + ((item.price || 0) * (item.qty || 0)), 0).toLocaleString() || '0'}
-          </div> */}
+          <div className="font-medium">
+            {(() => {
+              if (!group.items || group.items.length === 0) return 0;
+              // Find first non-zero qtyPerBatch value
+              const nonZeroQty = group.items.find(item => item.qtyPerBatch && item.qtyPerBatch > 0);
+              return nonZeroQty ? nonZeroQty.qtyPerBatch : 0;
+            })()}
+          </div>
         </TableCell>
         
-        {/* Qty Achieved/Batch (auto-calculated) - Use batch quantity in calculation */}
+        {/* Qty Achieved/Batch (auto-calculated) - Use first non-zero qtyPerBatch in calculation */}
         <TableCell className="text-center">
           <span className="text-green-600 font-medium">
-            {(group.totalBatchQuantity || 0) - (batch.productionLoss || 0)}
+            {(() => {
+              if (!group.items || group.items.length === 0) return 0;
+              const nonZeroQty = group.items.find(item => item.qtyPerBatch && item.qtyPerBatch > 0);
+              const qtyPerBatch = nonZeroQty ? nonZeroQty.qtyPerBatch : 0;
+              return qtyPerBatch - (batch.productionLoss || 0);
+            })()}
           </span>
           <div className="text-xs text-green-500">
-            {group.totalBatchQuantity || 0} - {batch.productionLoss || 0}
+            {(() => {
+              if (!group.items || group.items.length === 0) return '0 - 0';
+              const nonZeroQty = group.items.find(item => item.qtyPerBatch && item.qtyPerBatch > 0);
+              const qtyPerBatch = nonZeroQty ? nonZeroQty.qtyPerBatch : 0;
+              return `${qtyPerBatch} - ${batch.productionLoss || 0}`;
+            })()}
           </div>
         </TableCell>
         
@@ -548,16 +562,27 @@ export default function ProductionShift() {
                   <p className="text-lg font-semibold text-red-600">{selectedBatch.productionLoss}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Total Qty/Batch</label>
-                  <p className="text-lg font-semibold">{selectedBatch.group?.totalBatchQuantity || 0}</p>
-                  <p className="text-xs text-gray-500">Sum of all item qtyPerBatch values</p>
+                  <label className="text-sm font-medium text-gray-500">Qty/Batch (First Non-Zero)</label>
+                  <p className="text-lg font-semibold">
+                    {(() => {
+                      if (!selectedBatch.group?.items || selectedBatch.group.items.length === 0) return 0;
+                      const nonZeroQty = selectedBatch.group.items.find(item => item.qtyPerBatch && item.qtyPerBatch > 0);
+                      return nonZeroQty ? nonZeroQty.qtyPerBatch : 0;
+                    })()}
+                  </p>
+                  <p className="text-xs text-gray-500">First non-zero qtyPerBatch value</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-500">Qty Achieved</label>
                   <p className="text-lg font-semibold text-green-600">
-                    {(selectedBatch.group?.totalBatchQuantity || 0) - (selectedBatch.productionLoss || 0)}
+                    {(() => {
+                      if (!selectedBatch.group?.items || selectedBatch.group.items.length === 0) return 0;
+                      const nonZeroQty = selectedBatch.group.items.find(item => item.qtyPerBatch && item.qtyPerBatch > 0);
+                      const qtyPerBatch = nonZeroQty ? nonZeroQty.qtyPerBatch : 0;
+                      return qtyPerBatch - (selectedBatch.productionLoss || 0);
+                    })()}
                   </p>
-                  <p className="text-xs text-gray-500">Batch quantity - Production loss</p>
+                  <p className="text-xs text-gray-500">Non-zero qty/batch - Production loss</p>
                 </div>
               </div>
 

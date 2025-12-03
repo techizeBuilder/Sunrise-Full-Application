@@ -714,6 +714,9 @@ export const getSalespersonItems = async (req, res) => {
     }
     // Super Admin can see all items (no filtering)
 
+    // IMPORTANT: Only show items with type = "Product" for sales orders
+    query.type = "Product";
+
     // Search filter
     if (search) {
       query.$or = [
@@ -723,10 +726,11 @@ export const getSalespersonItems = async (req, res) => {
       ];
     }
 
-    // Type filter
-    if (type) {
-      query.type = type;
+    // Type filter (override to ensure only Product type)
+    if (type && type !== "Product") {
+      console.log(`🚫 Sales API: Overriding type filter ${type} to Product`);
     }
+    // Force type to be Product regardless of query parameter
 
     // Category filter
     if (category) {

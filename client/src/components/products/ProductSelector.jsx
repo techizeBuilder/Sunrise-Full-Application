@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -20,6 +20,8 @@ const ProductSelector = React.memo(({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBrand, setSelectedBrand] = useState('all');
   const [expandedBrands, setExpandedBrands] = useState({});
+  const [localQuantities, setLocalQuantities] = useState({});
+  const quantityRefs = useRef({});
   const { toast } = useToast();
   const { user } = useAuthContext();
 
@@ -49,6 +51,14 @@ const ProductSelector = React.memo(({
       try {
         const response = await apiRequest('GET', getItemsEndpoint());
         console.log('✅ ProductSelector: API Response:', response);
+        
+        // Filter items to only show type = "Product" on frontend as well
+        if (response?.items) {
+          const originalCount = response.items.length;
+          response.items = response.items.filter(item => item.type === 'Product');
+          console.log(`🎯 ProductSelector: Filtered ${originalCount} items to ${response.items.length} Product items`);
+        }
+        
         return response;
       } catch (error) {
         console.error('❌ ProductSelector: API Error:', error);
@@ -121,42 +131,25 @@ const ProductSelector = React.memo(({
     return brandsSet;
   }, [selectedProducts]);
 
-  // Keep brands with quantities expanded automatically
+  // Auto-expand all brands when products are loaded and keep them expanded for navigation
   React.useEffect(() => {
-    setExpandedBrands(prev => {
-      const newExpanded = { ...prev };
-      brandsWithQuantities.forEach(brand => {
-        newExpanded[brand] = true;
+    if (Object.keys(productsByBrand).length > 0) {
+      setExpandedBrands(prev => {
+        const newExpanded = { ...prev };
+        // Auto-expand all brands so navigation works across categories
+        Object.keys(productsByBrand).forEach(brandName => {
+          newExpanded[brandName] = true;
+        });
+        return newExpanded;
       });
-      return newExpanded;
-    });
-  }, [brandsWithQuantities]);
+    }
+  }, [productsByBrand]);
 
   const toggleBrandExpansion = (brandName) => {
-    setExpandedBrands(prev => {
-      const isCurrentlyExpanded = prev[brandName];
-      const hasQuantities = brandsWithQuantities.has(brandName);
-      
-      const newExpanded = {};
-      
-      // Always keep brands with quantities open
-      brandsWithQuantities.forEach(brand => {
-        newExpanded[brand] = true;
-      });
-      
-      // Accordion behavior for brands without quantities
-      if (!hasQuantities) {
-        if (isCurrentlyExpanded) {
-          // If currently expanded and no quantities, close it
-          // newExpanded already has brands with quantities, so we don't add this brand
-        } else {
-          // If not expanded, open it (and others without quantities will be closed)
-          newExpanded[brandName] = true;
-        }
-      }
-      
-      return newExpanded;
-    });
+    setExpandedBrands(prev => ({
+      ...prev,
+      [brandName]: !prev[brandName]
+    }));
   };
 
   const handleProductToggle = (product) => {
@@ -172,8 +165,24 @@ const ProductSelector = React.memo(({
     }
   };
 
+  // Handle local quantity changes to prevent focus loss
+  const handleLocalQuantityChange = (productId, value) => {
+    setLocalQuantities(prev => ({
+      ...prev,
+      [productId]: value
+    }));
+  };
+
+  // Handle quantity submission/blur to update parent
   const handleQuantityUpdate = (productId, value) => {
     const numQuantity = parseInt(value) || 0;
+    
+    // Clear local quantity
+    setLocalQuantities(prev => {
+      const newState = { ...prev };
+      delete newState[productId];
+      return newState;
+    });
     
     if (numQuantity <= 0) {
       onProductRemove(productId);
@@ -200,9 +209,76 @@ const ProductSelector = React.memo(({
     }
   };
 
-  const getSelectedQuantity = (productId) => {
+  // Get all visible product IDs in order across all brands (regardless of expansion state for navigation)
+  const getAllVisibleProductIds = React.useMemo(() => {
+    const allIds = [];
+    Object.entries(productsByBrand)
+      .filter(([categoryName]) => selectedBrand === 'all' || categoryName === selectedBrand)
+      .forEach(([brandName, brandProducts]) => {
+        // Include ALL products for navigation, regardless of expansion state
+        brandProducts.forEach(product => {
+          allIds.push(product._id);
+        });
+      });
+    console.log('🚀 All navigation product IDs:', allIds);
+    return allIds;
+  }, [productsByBrand, selectedBrand]);
+
+  // Handle Enter key navigation to next quantity input across all visible products
+  const handleKeyDown = (e, productId) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      console.log('🔍 Enter key pressed for product:', productId);
+      console.log('📝 All visible product IDs:', getAllVisibleProductIds);
+      
+      // Submit current quantity
+      const currentValue = e.target.value;
+      handleQuantityUpdate(productId, currentValue);
+      
+      // Find current product index in the global list
+      const currentGlobalIndex = getAllVisibleProductIds.indexOf(productId);
+      const nextGlobalIndex = currentGlobalIndex + 1;
+      
+      console.log('📊 Current index:', currentGlobalIndex, 'Next index:', nextGlobalIndex);
+      
+      // Move to next product across all visible products
+      if (nextGlobalIndex < getAllVisibleProductIds.length) {
+        const nextProductId = getAllVisibleProductIds[nextGlobalIndex];
+        
+        console.log('➡️ Moving to next product:', nextProductId);
+        
+        // Focus the next input with a short delay
+        setTimeout(() => {
+          const nextInput = quantityRefs.current[nextProductId];
+          console.log('🎯 Next input element:', nextInput);
+          
+          if (nextInput) {
+            try {
+              nextInput.focus();
+              nextInput.select();
+              console.log('✅ Successfully focused next input');
+            } catch (error) {
+              console.error('❌ Error focusing next input:', error);
+            }
+          } else {
+            console.log('❌ Next input not found in refs');
+          }
+        }, 150);
+      } else {
+        console.log('🏁 Reached end of product list');
+      }
+    }
+  };
+
+  const getDisplayQuantity = (productId) => {
+    // Use local quantity if available (user is typing), otherwise use selected quantity
+    if (localQuantities.hasOwnProperty(productId)) {
+      return localQuantities[productId];
+    }
     const selectedProduct = selectedProducts.find(p => p._id === productId);
-    return selectedProduct?.quantity || 0;
+    return selectedProduct?.quantity || '';
   };
 
   if (itemsError) {
@@ -315,9 +391,9 @@ const ProductSelector = React.memo(({
                     
                     {/* Product Rows */}
                     <div className="space-y-0 divide-y">
-                      {brandProducts.map(product => {
-                        const selectedQuantity = getSelectedQuantity(product._id);
-                        const isSelected = selectedQuantity > 0;
+                      {brandProducts.map((product, productIndex) => {
+                        const displayQuantity = getDisplayQuantity(product._id);
+                        const isSelected = selectedProducts.some(p => p._id === product._id && p.quantity > 0);
 
                       return (
                         <div
@@ -356,29 +432,39 @@ const ProductSelector = React.memo(({
 
                           <div className="w-20" onClick={(e) => e.stopPropagation()}>
                             <Input
+                              ref={(el) => {
+                                if (el) {
+                                  quantityRefs.current[product._id] = el;
+                                }
+                              }}
                               type="number"
                               min="0"
                               placeholder="0"
-                              defaultValue={selectedQuantity || ''}
+                              value={displayQuantity}
                               onChange={(e) => {
                                 e.stopPropagation();
-                                handleQuantityUpdate(product._id, e.target.value);
+                                handleLocalQuantityChange(product._id, e.target.value);
                               }}
                               onFocus={(e) => {
                                 e.stopPropagation();
                                 e.target.placeholder = '';
+                                // Select all text on focus for easy editing
+                                setTimeout(() => e.target.select(), 0);
                               }}
                               onBlur={(e) => {
                                 e.stopPropagation();
                                 if (!e.target.value) {
                                   e.target.placeholder = "0";
                                 }
+                                // Submit quantity on blur
+                                handleQuantityUpdate(product._id, e.target.value);
                               }}
                               onClick={(e) => {
                                 e.stopPropagation();
                               }}
                               onKeyDown={(e) => {
                                 e.stopPropagation();
+                                handleKeyDown(e, product._id);
                               }}
                               className="w-full text-center text-sm h-8"
                             />
