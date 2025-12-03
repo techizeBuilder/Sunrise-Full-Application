@@ -161,25 +161,25 @@ const MODULES = [
       { key: 'reports', label: 'Financial Reports' }
     ]
   },
-  {
-    name: 'inventory',
-    label: 'Inventory',
-    features: [
-      { key: 'items', label: 'Items' },
-      { key: 'categories', label: 'Categories' },
-      { key: 'stockIn', label: 'Stock In' },
-      { key: 'stockOut', label: 'Stock Out' }
-    ]
-  },
-  {
-    name: 'customers',
-    label: 'Customers',
-    features: [
-      { key: 'allCustomers', label: 'All Customers' },
-      { key: 'createCustomer', label: 'Create Customer' },
-      { key: 'customerReports', label: 'Customer Reports' }
-    ]
-  },
+  // {
+  //   name: 'inventory',
+  //   label: 'Inventory',
+  //   features: [
+  //     { key: 'items', label: 'Items' },
+  //     { key: 'categories', label: 'Categories' },
+  //     { key: 'stockIn', label: 'Stock In' },
+  //     { key: 'stockOut', label: 'Stock Out' }
+  //   ]
+  // },
+  // {
+  //   name: 'customers',
+  //   label: 'Customers',
+  //   features: [
+  //     { key: 'allCustomers', label: 'All Customers' },
+  //     { key: 'createCustomer', label: 'Create Customer' },
+  //     { key: 'customerReports', label: 'Customer Reports' }
+  //   ]
+  // },
   {
     name: 'settings',
     label: 'Settings',

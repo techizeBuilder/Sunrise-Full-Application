@@ -100,7 +100,7 @@ const ProductSelector = React.memo(({
         _id: item._id,
         name: item.name,
         price: item.salePrice || 0,
-        image: item.image || 'https://images.unsplash.com/photo-1586953208448-b95a79798f07?w=150&h=150&fit=crop',
+        image: item.image || null,
         brand: categoryName,
         stock: item.qty || 0,
         unit: item.unit || 'pcs',
@@ -327,14 +327,22 @@ const ProductSelector = React.memo(({
                           }`}
                         >
                           <div className="flex items-center gap-3 flex-1">
-                            <img
-                              src={product.image}
-                              alt={product.name}
-                              className="w-12 h-12 rounded object-cover"
-                              onError={(e) => {
-                                e.target.src = '/uploads/products/default-product.jpg';
-                              }}
-                            />
+                            {product.image ? (
+                              <img
+                                src={product.image}
+                                alt={product.name}
+                                className="w-12 h-12 rounded object-cover"
+                                onError={(e) => {
+                                  e.target.style.display = 'none';
+                                  e.target.nextSibling.style.display = 'flex';
+                                }}
+                              />
+                            ) : null}
+                            <div 
+                              className={`w-12 h-12 rounded bg-gray-200 dark:bg-gray-700 flex items-center justify-center ${product.image ? 'hidden' : 'flex'}`}
+                            >
+                              <Package className="w-6 h-6 text-gray-400" />
+                            </div>
                             <div>
                               <h4 className="font-medium">{product.name}</h4>
                               <p className="text-sm text-green-600 font-semibold">
