@@ -98,9 +98,15 @@ const SalesApproval = () => {
     return value === 0 ? '' : value.toString();
   };
 
-  // Handle input blur - clean up temporary input value
+  // Handle input blur - clean up temporary input value and save
   const handleInputBlur = (productName, field) => {
     const inputKey = `${productName}_${field}`;
+    
+    console.log(`💾 Saving ${productName}.${field} on blur`);
+    
+    // Save the current data immediately on blur
+    saveProductionData(productName);
+    
     // Clear the temporary input value so it shows the saved value
     setInputValues(prev => {
       const newValues = { ...prev };
@@ -109,8 +115,10 @@ const SalesApproval = () => {
     });
   };
 
-  // Update production data field with debouncing
+  // Update production data field with debouncing  
   const updateProductionField = (productName, field, value) => {
+    console.log(`📝 Input: ${productName}.${field} = ${value}`);
+    
     // Store the raw input value immediately for display (no parsing)
     const inputKey = `${productName}_${field}`;
     setInputValues(prev => ({
@@ -122,31 +130,24 @@ const SalesApproval = () => {
     const numValue = value === '' ? 0 : parseFloat(value);
     const finalValue = isNaN(numValue) ? 0 : numValue;
     
-    // Update local state for calculations
-    setProductionData(prev => ({
-      ...prev,
-      [productName]: {
-        ...prev[productName],
-        [field]: finalValue
-      }
-    }));
-    
-    // Clear existing timer for this field
-    if (saveTimers[inputKey]) {
-      clearTimeout(saveTimers[inputKey]);
-    }
-    
-    // Set a new timer to save after 1.5 seconds of no typing
-    const newTimer = setTimeout(() => {
-      console.log(`🔄 Auto-saving ${field} for ${productName}:`, finalValue);
-      saveProductionData(productName);
-      // Keep the input value after saving (don't clear it)
-    }, 1500);
-    
-    setSaveTimers(prev => ({
-      ...prev,
-      [inputKey]: newTimer
-    }));
+    // IMMEDIATE UPDATE - Update local state for calculations
+    setProductionData(prev => {
+      const updated = {
+        ...prev,
+        [productName]: {
+          ...prev[productName],
+          [field]: finalValue
+        }
+      };
+      
+      // FORCE IMMEDIATE SAVE with current value
+      setTimeout(() => {
+        console.log(`🔥 IMMEDIATE SAVE for ${productName}.${field} = ${finalValue}`);
+        saveProductionDataWithValue(productName, field, finalValue);
+      }, 100); // Very short delay to ensure state update
+      
+      return updated;
+    });
   };
 
   // Individual approve function
@@ -346,25 +347,45 @@ const SalesApproval = () => {
     }
   };
 
-  // Save production data to backend
-  const saveProductionData = async (productName) => {
+  // Save production data with specific field value
+  const saveProductionDataWithValue = async (productName, field, value) => {
     try {
       const product = orders.find(p => p.productName === productName);
-      if (!product) return;
+      if (!product) {
+        console.error(`❌ Product not found for: ${productName}`);
+        return;
+      }
 
-      const data = getProductionData(productName);
+      // Get current data and override the specific field with the new value
+      const currentData = getProductionData(productName);
+      const updatedData = { ...currentData, [field]: value };
+      
+      const physicalStock = Number(updatedData.physicalStock) || 0;
+      const batchAdjusted = Number(updatedData.batchAdjusted) || 0;
+      const qtyPerBatch = Number(updatedData.qtyPerBatch) || 1;
+      
+      console.log(`🔥 FORCE SAVE ${productName}.${field}=${value} | physicalStock=${physicalStock}, batchAdjusted=${batchAdjusted}, qtyPerBatch=${qtyPerBatch}`);
+      
       const today = new Date().toISOString().split('T')[0];
-
-      // Calculate dependent fields
-      const qtyPerBatch = data.qtyPerBatch || 1;
-      const batchAdjusted = data.batchAdjusted || 0;
       const productionFinalBatches = Math.round((batchAdjusted * qtyPerBatch) * 100) / 100;
       const totalIndentSalesman = product.totalQuantity || 0;
-      const physicalStock = data.physicalStock || 0;
       const toBeProducedDay = Math.max(0, totalIndentSalesman - physicalStock);
-
-      // Auto-calculate dependent values
       const produceBatches = Math.round((toBeProducedDay / qtyPerBatch) * 100) / 100;
+
+      const apiPayload = {
+        date: today,
+        productId: product.productId || product._id,
+        updates: {
+          productionFinalBatches: productionFinalBatches,
+          physicalStock: physicalStock,
+          batchAdjusted: batchAdjusted,
+          qtyPerBatch: qtyPerBatch,
+          toBeProducedDay: toBeProducedDay,
+          produceBatches: produceBatches
+        }
+      };
+      
+      console.log(`🔥 EXACT API PAYLOAD:`, JSON.stringify(apiPayload, null, 2));
 
       const response = await fetch(`${config.baseURL}/api/sales/update-product-summary`, {
         method: 'POST',
@@ -372,18 +393,77 @@ const SalesApproval = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
-        body: JSON.stringify({
-          date: today,
-          productId: product.productId || product._id,
-          updates: {
-            productionFinalBatches: productionFinalBatches,
-            physicalStock: data.physicalStock || 0,
-            batchAdjusted: data.batchAdjusted || 0,
-            qtyPerBatch: data.qtyPerBatch || 0,
-            toBeProducedDay: toBeProducedDay,
-            produceBatches: produceBatches
-          }
-        })
+        body: JSON.stringify(apiPayload)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`✅ SAVED ${productName}.${field}=${value}:`, result.summary);
+      }
+    } catch (error) {
+      console.error('Error saving with value:', error);
+    }
+  };
+
+  // Save production data to backend
+  const saveProductionData = async (productName) => {
+    try {
+      const product = orders.find(p => p.productName === productName);
+      if (!product) {
+        console.error(`❌ Product not found for: ${productName}`);
+        return;
+      }
+
+      // FIXED: Get current values directly from input state and production data
+      const savedData = getProductionData(productName);
+      
+      // Check for any pending input values and use them instead
+      const physicalStockInput = inputValues[`${productName}_physicalStock`];
+      const batchAdjustedInput = inputValues[`${productName}_batchAdjusted`];
+      const qtyPerBatchInput = inputValues[`${productName}_qtyPerBatch`];
+      
+      const physicalStock = physicalStockInput !== undefined ? 
+        Number(physicalStockInput) || 0 : Number(savedData.physicalStock) || 0;
+      const batchAdjusted = batchAdjustedInput !== undefined ? 
+        Number(batchAdjustedInput) || 0 : Number(savedData.batchAdjusted) || 0;
+      const qtyPerBatch = qtyPerBatchInput !== undefined ? 
+        Number(qtyPerBatchInput) || 1 : Number(savedData.qtyPerBatch) || 1;
+      
+      console.log(`🚀 Saving ${productName}: physicalStock=${physicalStock}, batchAdjusted=${batchAdjusted}, qtyPerBatch=${qtyPerBatch}`);
+      console.log(`📝 Input values used: physicalStock="${physicalStockInput}", batchAdjusted="${batchAdjustedInput}", qtyPerBatch="${qtyPerBatchInput}"`);
+      
+      const today = new Date().toISOString().split('T')[0];
+
+      // Calculate dependent fields
+      const productionFinalBatches = Math.round((batchAdjusted * qtyPerBatch) * 100) / 100;
+      const totalIndentSalesman = product.totalQuantity || 0;
+      const toBeProducedDay = Math.max(0, totalIndentSalesman - physicalStock);
+
+      // Auto-calculate dependent values
+      const produceBatches = Math.round((toBeProducedDay / qtyPerBatch) * 100) / 100;
+
+      const apiPayload = {
+        date: today,
+        productId: product.productId || product._id,
+        updates: {
+          productionFinalBatches: productionFinalBatches,
+          physicalStock: physicalStock,  // Use parsed value
+          batchAdjusted: batchAdjusted,  // Use parsed value
+          qtyPerBatch: qtyPerBatch,      // Use parsed value
+          toBeProducedDay: toBeProducedDay,
+          produceBatches: produceBatches
+        }
+      };
+      
+      console.log(`🚀 API Payload for ${productName}:`, apiPayload);
+
+      const response = await fetch(`${config.baseURL}/api/sales/update-product-summary`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify(apiPayload)
       });
 
       if (response.ok) {
