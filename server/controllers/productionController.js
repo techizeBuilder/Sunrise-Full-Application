@@ -31,6 +31,18 @@ export const getProductionDashboard = async (req, res) => {
       console.log('⚠️ Warning: User has no company ID, showing all data');
     }
 
+    // ACTIVE STATUS FILTERING: Only show active production groups
+    query.isActive = true;
+    console.log('Filtering by isActive: true');
+
+    // UNIT/LOCATION FILTERING: Only show production groups assigned to this user
+    // Unit Heads and Unit Managers should only see their assigned production groups
+    if (req.user.role === 'Unit Head' || req.user.role === 'Unit Manager') {
+      query.unitHeadOrManager = req.user._id;
+      console.log('Filtering by unitHeadOrManager:', req.user._id, '(Role:', req.user.role, ')');
+    }
+    // Super Admin and other roles can see all production groups in their company
+
     // Get all production groups with error handling
     console.log('Querying ProductionGroup with filter:', query);
     

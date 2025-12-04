@@ -285,11 +285,7 @@ export default function ProductionDashboard() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Item Name</TableHead>
-                        <TableHead>Category</TableHead>
-                        <TableHead className="text-center">Quantity</TableHead>
-                        <TableHead className="text-center">Unit</TableHead>
                         <TableHead className="text-center">Production Final Batches</TableHead>
-                        <TableHead className="text-center">Qty/Batch</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -325,20 +321,13 @@ export default function ProductionDashboard() {
                                 {item.name}
                               </div>
                             </TableCell>
-                          
-                            <TableCell>{item.category}</TableCell>
-                            <TableCell className="text-center">{item.qty}</TableCell>
-                            <TableCell className="text-center">{item.unit}</TableCell>
+                      
                             <TableCell className="text-center">
                               <Badge variant={item.productionFinalBatches > 0 ? "default" : "secondary"}>
                                 {item.productionFinalBatches || 0}
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-center">
-                              <Badge variant={item.qtyPerBatch > 0 ? "default" : "secondary"}>
-                                {item.qtyPerBatch || 0}
-                              </Badge>
-                            </TableCell>
+                       
                           </TableRow>
                         ))
                       )}
