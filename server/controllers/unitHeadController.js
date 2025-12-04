@@ -2184,8 +2184,8 @@ export const updateUnitHeadProductionGroup = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Access denied. Unit Head or Unit Manager role required.' });
     }
 
-    const { name, description, items = [], qtyPerBatch, qtyAchievedPerBatch } = req.body;
-    console.log('📝 Update data:', { name, description, itemsCount: items.length, qtyPerBatch, qtyAchievedPerBatch, items });
+    const { name, description, items = [], qtyPerBatch: providedQtyPerBatch, qtyAchievedPerBatch } = req.body;
+    console.log('📝 Update data:', { name, description, itemsCount: items.length, providedQtyPerBatch, qtyAchievedPerBatch, items });
 
     // Validation
     if (!name || name.trim().length === 0) {
@@ -2197,7 +2197,7 @@ export const updateUnitHeadProductionGroup = async (req, res) => {
     }
 
     // Validate batch quantities if provided
-    if (qtyPerBatch !== undefined && qtyPerBatch < 0) {
+    if (providedQtyPerBatch !== undefined && providedQtyPerBatch < 0) {
       return res.status(400).json({ success: false, message: 'Quantity per batch cannot be negative' });
     }
 
@@ -2312,8 +2312,8 @@ export const updateUnitHeadProductionGroup = async (req, res) => {
         console.log('🎯 Recalculated qtyPerBatch from ProductDailySummary (max value):', calculatedQtyPerBatch);
         console.log('📈 All qtyPerBatch values from ProductDailySummary:', summaryQtyPerBatch);
         
-        // Override qtyPerBatch with calculated value from ProductDailySummary
-        qtyPerBatch = calculatedQtyPerBatch;
+        // Use calculated value from ProductDailySummary instead of provided value
+        // This ensures qtyPerBatch is always based on the actual ProductDailySummary data
       } else {
         console.log('⚠️ No ProductDailySummary found for items, keeping existing qtyPerBatch');
       }
@@ -2324,7 +2324,7 @@ export const updateUnitHeadProductionGroup = async (req, res) => {
       name: name.trim(),
       description: description?.trim() || '',
       itemCount: validatedItems.length,
-      qtyPerBatch,
+      calculatedQtyPerBatch,
       qtyAchievedPerBatch,
       items: validatedItems
     });
@@ -2333,10 +2333,13 @@ export const updateUnitHeadProductionGroup = async (req, res) => {
     existingGroup.description = description?.trim() || '';
     existingGroup.items = validatedItems;
     
-    // Update batch quantities if provided
-    if (qtyPerBatch !== undefined) {
-      existingGroup.qtyPerBatch = parseFloat(qtyPerBatch) || 0;
+    // Update batch quantities - use calculated value if items changed, otherwise use provided value
+    if (validatedItems.length > 0 && calculatedQtyPerBatch > 0) {
+      existingGroup.qtyPerBatch = calculatedQtyPerBatch;
+    } else if (providedQtyPerBatch !== undefined) {
+      existingGroup.qtyPerBatch = parseFloat(providedQtyPerBatch) || 0;
     }
+    
     if (qtyAchievedPerBatch !== undefined) {
       existingGroup.qtyAchievedPerBatch = parseFloat(qtyAchievedPerBatch) || 0;
     }
