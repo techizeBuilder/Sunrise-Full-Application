@@ -644,12 +644,11 @@ export default function SalesOrderList() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="min-w-[100px]">Order #</TableHead>
-                      <TableHead className="min-w-[120px]">Customer</TableHead>
                       <TableHead className="min-w-[100px]">Date</TableHead>
-                      <TableHead className="min-w-[80px]">Amount</TableHead>
-                      <TableHead className="min-w-[100px]">Status</TableHead>
                       <TableHead className="min-w-[120px]">Salesperson</TableHead>
+                      <TableHead className="min-w-[120px]">Total Qtys Indent</TableHead>
+                      <TableHead className="min-w-[100px]">Order No.</TableHead>
+                      <TableHead className="min-w-[100px]">Status</TableHead>
                       <TableHead className="min-w-[140px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -658,24 +657,20 @@ export default function SalesOrderList() {
                       const StatusIcon = statusIcons[order.status] || Clock;
                       return (
                         <TableRow key={order._id}>
+                          <TableCell>{formatDate(order.createdAt)}</TableCell>
+                          <TableCell>{getSalespersonDisplayName(order.salesPerson)}</TableCell>
+                          <TableCell>
+                            {order.products ? order.products.reduce((total, product) => total + (product.quantity || 0), 0) : 0}
+                          </TableCell>
                           <TableCell className="font-medium">
                             {order.orderCode || order._id.slice(-6)}
                           </TableCell>
-                          <TableCell>
-                            <div>
-                              <p className="font-medium">{order.customer?.name || 'N/A'}</p>
-                              <p className="text-xs text-gray-500">{order.customer?.email}</p>
-                            </div>
-                          </TableCell>
-                          <TableCell>{formatDate(order.createdAt)}</TableCell>
-                          <TableCell>{formatCurrency(order.totalAmount || 0)}</TableCell>
                           <TableCell>
                             <Badge className={`${statusColors[order.status]} flex items-center gap-1`}>
                               <StatusIcon className="h-3 w-3" />
                               {order.status?.replace('_', ' ').toUpperCase()}
                             </Badge>
                           </TableCell>
-                          <TableCell>{getSalespersonDisplayName(order.salesPerson)}</TableCell>
                           <TableCell>
                             <div className="flex gap-2">
                               <Button
@@ -730,16 +725,14 @@ export default function SalesOrderList() {
 
                           <div className="grid grid-cols-2 gap-3 text-sm">
                             <div>
-                              <p className="text-gray-600">Customer</p>
-                              <p className="font-medium">{order.customer?.name || 'N/A'}</p>
-                            </div>
-                            <div>
-                              <p className="text-gray-600">Amount</p>
-                              <p className="font-medium">{formatCurrency(order.totalAmount || 0)}</p>
-                            </div>
-                            <div className="col-span-2">
                               <p className="text-gray-600">Salesperson</p>
                               <p className="font-medium">{getSalespersonDisplayName(order.salesPerson)}</p>
+                            </div>
+                            <div>
+                              <p className="text-gray-600">Total Qtys Indent</p>
+                              <p className="font-medium">
+                                {order.products ? order.products.reduce((total, product) => total + (product.quantity || 0), 0) : 0}
+                              </p>
                             </div>
                           </div>
 

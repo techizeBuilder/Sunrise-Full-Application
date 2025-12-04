@@ -89,6 +89,7 @@ const MyOrders = () => {
     mutationFn: ({ id, status }) => orderApi.updateStatus(id, status),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/sales/orders'] });
       toast({
         title: "Status Updated",
         description: data.message || "Order status updated successfully",
@@ -110,7 +111,7 @@ const MyOrders = () => {
     mutationFn: (id) => orderApi.delete(id),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/orders'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/sales/orders'] });
       toast({
         title: "Order Deleted",
         description: data.message || "Order deleted successfully",
@@ -236,6 +237,7 @@ const MyOrders = () => {
         setIsCreateModalOpen(false);
         // Refresh orders list
         queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/sales/orders'] });
         refetchOrders();
       } else {
         toast({
@@ -582,7 +584,9 @@ const MyOrders = () => {
         description: "Order updated successfully",
         variant: "default"
       });
+      // Invalidate both order caches to ensure refresh
       queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/sales/orders'] });
       setIsEditModalOpen(false);
       setSelectedOrder(null);
     },

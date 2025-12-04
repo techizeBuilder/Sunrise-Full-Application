@@ -120,6 +120,7 @@ const SalesDashboard = () => {
     status: order.status || 'Created',
     statusColor: getStatusColor(order.status),
     customer: order.customerName || 'Unknown Customer',
+    salesperson: order.salesPerson?.fullName || order.salesPerson?.username || 'N/A',
     items: Array.isArray(order.products) ? order.products.length : (order.totalItems || 0),
     totalQuantity: order.totalQuantity || 0,
     amount: order.totalAmount || order.amount || 0
@@ -242,8 +243,10 @@ const SalesDashboard = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Order #</TableHead>
-                <TableHead>Order Date</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Salesperson</TableHead>
+                <TableHead>Total Qtys Indent</TableHead>
+                <TableHead>Order No.</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -251,15 +254,26 @@ const SalesDashboard = () => {
             <TableBody>
               {recentOrders.length === 0 && !isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-gray-500 py-8">
+                  <TableCell colSpan={6} className="text-center text-gray-500 py-8">
                     No orders found
+                  </TableCell>
+                </TableRow>
+              ) : isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8">
+                    <div className="flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
+                      <span className="ml-2">Loading orders...</span>
+                    </div>
                   </TableCell>
                 </TableRow>
               ) : (
                 recentOrders.map((order) => (
                   <TableRow key={order.id}>
-                    <TableCell className="font-medium">{order.id}</TableCell>
                     <TableCell>{order.orderDate}</TableCell>
+                    <TableCell className="font-medium">{order.salesperson || 'N/A'}</TableCell>
+                    <TableCell>{order.totalQuantity || 0}</TableCell>
+                    <TableCell className="font-medium">{order.id}</TableCell>
                     <TableCell>
                       <Badge 
                         variant={getStatusBadgeVariant(order.statusColor)}

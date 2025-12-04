@@ -4,6 +4,7 @@ import Sale from '../models/Sale.js';
 import { Item } from '../models/Inventory.js';
 import User from '../models/User.js';
 import ProductionGroup from '../models/ProductionGroup.js';
+import ProductDailySummary from '../models/ProductDailySummary.js';
 import { USER_ROLES } from '../../shared/schema.js';
 
 // Debug: Ensure models are loaded
@@ -1973,7 +1974,7 @@ export const createUnitHeadProductionGroup = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid user session. Missing companyId.' });
     }
 
-    const { name, description, items = [] } = req.body;
+    const { name, description, items = [], qtyPerBatch = 0, qtyAchievedPerBatch = 0 } = req.body;
 
     // Validation
     if (!name || name.trim().length === 0) {
@@ -1982,6 +1983,15 @@ export const createUnitHeadProductionGroup = async (req, res) => {
 
     if (name.trim().length > 100) {
       return res.status(400).json({ success: false, message: 'Group name cannot exceed 100 characters' });
+    }
+
+    // Validate batch quantities
+    if (qtyPerBatch < 0) {
+      return res.status(400).json({ success: false, message: 'Quantity per batch cannot be negative' });
+    }
+
+    if (qtyAchievedPerBatch < 0) {
+      return res.status(400).json({ success: false, message: 'Achieved quantity per batch cannot be negative' });
     }
 
     // Check if group name already exists for this company
@@ -1999,16 +2009,43 @@ export const createUnitHeadProductionGroup = async (req, res) => {
       });
     }
 
-    // Validate items if provided
+    // Validate items if provided and calculate qtyPerBatch from ProductDailySummary
     let validatedItems = [];
+    let calculatedQtyPerBatch = 0;
+    
     if (items.length > 0) {
-      // Check if items exist and belong to the same company
+      // Check if items exist and belong to the same company - get full item data
       const inventoryItems = await Item.find({
         _id: { $in: items },
         store: req.user.companyId
-      }).select('_id');
+      }).select('_id name qty');
 
       validatedItems = inventoryItems.map(item => item._id);
+      
+      // Get ProductDailySummary data for these items to calculate qtyPerBatch
+      const productSummaries = await ProductDailySummary.find({
+        productId: { $in: validatedItems },
+        companyId: req.user.companyId
+      }).select('productId qtyPerBatch');
+
+      console.log('📊 ProductDailySummary data found:', productSummaries.map(summary => ({
+        productId: summary.productId,
+        qtyPerBatch: summary.qtyPerBatch || 0
+      })));
+
+      if (productSummaries.length > 0) {
+        // Calculate qtyPerBatch as the MAXIMUM qtyPerBatch from ProductDailySummary
+        const summaryQtyPerBatch = productSummaries.map(summary => summary.qtyPerBatch || 0);
+        calculatedQtyPerBatch = Math.max(...summaryQtyPerBatch, 0);
+        console.log('🎯 Calculated qtyPerBatch from ProductDailySummary (max value):', calculatedQtyPerBatch);
+        console.log('📈 All qtyPerBatch values:', summaryQtyPerBatch);
+      } else {
+        // Fallback to inventory qty if no ProductDailySummary found
+        const itemQuantities = inventoryItems.map(item => item.qty || 0);
+        calculatedQtyPerBatch = Math.max(...itemQuantities, 0);
+        console.log('⚠️ No ProductDailySummary found, using inventory quantities as fallback');
+        console.log('🎯 Calculated qtyPerBatch (max inventory qty):', calculatedQtyPerBatch);
+      }
 
       // Check if any items are already assigned to other groups
       const existingAssignments = await ProductionGroup.find({
@@ -2042,7 +2079,12 @@ export const createUnitHeadProductionGroup = async (req, res) => {
       description: description?.trim() || '',
       company: req.user.companyId,
       createdBy: req.user.userId,
-      items: validatedItems
+      items: validatedItems,
+      // Batch quantity fields - qtyPerBatch auto-calculated from max item quantity
+      qtyPerBatch: calculatedQtyPerBatch,
+      qtyAchievedPerBatch: parseFloat(qtyAchievedPerBatch) || 0,
+      // Unit head or manager who created this group
+      unitHeadOrManager: req.user.userId
     });
 
     console.log('💾 Saving production group...');
@@ -2142,8 +2184,8 @@ export const updateUnitHeadProductionGroup = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Access denied. Unit Head or Unit Manager role required.' });
     }
 
-    const { name, description, items = [] } = req.body;
-    console.log('📝 Update data:', { name, description, itemsCount: items.length, items });
+    const { name, description, items = [], qtyPerBatch, qtyAchievedPerBatch } = req.body;
+    console.log('📝 Update data:', { name, description, itemsCount: items.length, qtyPerBatch, qtyAchievedPerBatch, items });
 
     // Validation
     if (!name || name.trim().length === 0) {
@@ -2152,6 +2194,15 @@ export const updateUnitHeadProductionGroup = async (req, res) => {
 
     if (name.trim().length > 100) {
       return res.status(400).json({ success: false, message: 'Group name cannot exceed 100 characters' });
+    }
+
+    // Validate batch quantities if provided
+    if (qtyPerBatch !== undefined && qtyPerBatch < 0) {
+      return res.status(400).json({ success: false, message: 'Quantity per batch cannot be negative' });
+    }
+
+    if (qtyAchievedPerBatch !== undefined && qtyAchievedPerBatch < 0) {
+      return res.status(400).json({ success: false, message: 'Achieved quantity per batch cannot be negative' });
     }
 
     // Find the group to update
@@ -2242,6 +2293,30 @@ export const updateUnitHeadProductionGroup = async (req, res) => {
           });
         }
       }
+
+      // Recalculate qtyPerBatch from ProductDailySummary when items are updated
+      const productSummaries = await ProductDailySummary.find({
+        productId: { $in: validatedItems },
+        companyId: req.user.companyId
+      }).select('productId qtyPerBatch');
+
+      console.log('📊 ProductDailySummary data for update:', productSummaries.map(summary => ({
+        productId: summary.productId,
+        qtyPerBatch: summary.qtyPerBatch || 0
+      })));
+
+      if (productSummaries.length > 0) {
+        // Calculate qtyPerBatch as the MAXIMUM qtyPerBatch from ProductDailySummary
+        const summaryQtyPerBatch = productSummaries.map(summary => summary.qtyPerBatch || 0);
+        const calculatedQtyPerBatch = Math.max(...summaryQtyPerBatch, 0);
+        console.log('🎯 Recalculated qtyPerBatch from ProductDailySummary (max value):', calculatedQtyPerBatch);
+        console.log('📈 All qtyPerBatch values from ProductDailySummary:', summaryQtyPerBatch);
+        
+        // Override qtyPerBatch with calculated value from ProductDailySummary
+        qtyPerBatch = calculatedQtyPerBatch;
+      } else {
+        console.log('⚠️ No ProductDailySummary found for items, keeping existing qtyPerBatch');
+      }
     }
 
     // Update the group
@@ -2249,12 +2324,28 @@ export const updateUnitHeadProductionGroup = async (req, res) => {
       name: name.trim(),
       description: description?.trim() || '',
       itemCount: validatedItems.length,
+      qtyPerBatch,
+      qtyAchievedPerBatch,
       items: validatedItems
     });
 
     existingGroup.name = name.trim();
     existingGroup.description = description?.trim() || '';
     existingGroup.items = validatedItems;
+    
+    // Update batch quantities if provided
+    if (qtyPerBatch !== undefined) {
+      existingGroup.qtyPerBatch = parseFloat(qtyPerBatch) || 0;
+    }
+    if (qtyAchievedPerBatch !== undefined) {
+      existingGroup.qtyAchievedPerBatch = parseFloat(qtyAchievedPerBatch) || 0;
+    }
+    
+    // Update unit head/manager if different
+    if (!existingGroup.unitHeadOrManager || existingGroup.unitHeadOrManager.toString() !== req.user.userId) {
+      existingGroup.unitHeadOrManager = req.user.userId;
+    }
+    
     existingGroup.metadata = {
       totalItems: validatedItems.length,
       lastUpdated: new Date()

@@ -1,6 +1,7 @@
 import ProductDailySummary from '../models/ProductDailySummary.js';
 import { getSalesBreakdown } from '../services/productionSummaryService.js';
 import { Item } from '../models/Inventory.js';
+import ProductionGroup from '../models/ProductionGroup.js';
 import mongoose from 'mongoose';
 
 /**
@@ -126,6 +127,8 @@ export const getSalesSummary = async (req, res) => {
           qtyPerBatch: summary.qtyPerBatch,
           totalQuantity: summary.totalQuantity || 0, // ADD totalQuantity from database
           summary: {
+            _id: summary._id, // Add ProductDailySummary ID for approval
+            status: summary.status || 'pending', // Add status for approval workflow
             totalIndent: summary.totalIndent,
             physicalStock: summary.physicalStock,
             packing: summary.packing,
@@ -147,11 +150,66 @@ export const getSalesSummary = async (req, res) => {
     // Filter out null results
     const validProducts = products.filter(product => product !== null);
 
+    console.log(`✅ Valid products after processing: ${validProducts.length}`);
+
+    // Group products by production groups
+    const productionGroups = await ProductionGroup.find({ 
+      company: filterCompanyId || userCompanyId,
+      isActive: true 
+    }).populate('items', 'name').lean();
+
+    console.log(`🏭 Found ${productionGroups.length} production groups`);
+
+    // Create a map of productId to production group for quick lookup
+    const productGroupMap = {};
+    productionGroups.forEach(group => {
+      group.items.forEach(item => {
+        productGroupMap[item._id.toString()] = {
+          groupId: group._id,
+          groupName: group.name,
+          groupDescription: group.description
+        };
+      });
+    });
+
+    // Group products by their production groups
+    const groupedProducts = {};
+    const ungroupedProducts = [];
+
+    validProducts.forEach(product => {
+      const productIdStr = product.productId.toString();
+      const groupInfo = productGroupMap[productIdStr];
+      
+      if (groupInfo) {
+        const groupKey = groupInfo.groupId.toString();
+        if (!groupedProducts[groupKey]) {
+          groupedProducts[groupKey] = {
+            groupId: groupInfo.groupId,
+            groupName: groupInfo.groupName,
+            groupDescription: groupInfo.groupDescription,
+            products: []
+          };
+        }
+        groupedProducts[groupKey].products.push(product);
+      } else {
+        // Products not assigned to any production group
+        ungroupedProducts.push(product);
+      }
+    });
+
+    // Convert to array format
+    const productionGroupsData = Object.values(groupedProducts);
+    
+    console.log(`📊 Grouped into ${productionGroupsData.length} production groups`);
+    console.log(`🔄 ${ungroupedProducts.length} products without production group`);
+
     res.json({
       success: true,
       date: summaryDate ? summaryDate.toISOString().split('T')[0] : 'all-dates',
       companyId: filterCompanyId,
-      products: validProducts
+      totalProducts: validProducts.length,
+      productionGroups: productionGroupsData,
+      ungroupedProducts: ungroupedProducts // Products not assigned to any group
     });
 
   } catch (error) {
@@ -280,6 +338,7 @@ export const updateSalesSummary = async (req, res) => {
         productId: new mongoose.Types.ObjectId(productId),
         productName: product.name,
         totalIndent: 0,
+        status: 'pending', // Always set to pending for new summaries
         // Set default values for fields NOT being updated
         qtyPerBatch: updateFields.qtyPerBatch || 0,
         packing: updateFields.packing || 0,
@@ -295,6 +354,11 @@ export const updateSalesSummary = async (req, res) => {
       // Update existing summary - PRESERVE the original date
       console.log('🔄 Updating existing summary, preserving original date:', summary.date.toISOString());
       Object.assign(summary, updateFields);
+      
+      // IMPORTANT: Reset status to pending when production data is updated
+      summary.status = 'pending';
+      console.log('🔄 Status reset to pending due to production data update');
+      
       // DO NOT modify the date - keep original date
       console.log('📅 After update, summary date remains:', summary.date.toISOString());
     }
@@ -319,6 +383,7 @@ export const updateSalesSummary = async (req, res) => {
         productId: summary.productId,
         productName: summary.productName,
         date: summary.date.toISOString().split('T')[0],
+        status: summary.status, // Include status in response
         qtyPerBatch: summary.qtyPerBatch,
         packing: summary.packing,
         batchAdjusted: summary.batchAdjusted,

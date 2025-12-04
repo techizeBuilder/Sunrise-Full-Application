@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { CheckCircle, XCircle, ArrowRight, Package, User, Settings, Clock, TrendingUp, AlertTriangle, BarChart, Filter, Search, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { config } from '@/config/environment';
 
 const SalesApproval = () => {
   const [orders, setOrders] = useState([]); // Product-grouped data for grid
@@ -34,7 +35,27 @@ const SalesApproval = () => {
   // Production calculation states
   const [productionData, setProductionData] = useState({});
   // Structure: { productName: { packing: 0, physicalStock: 0, batchAdjusted: 0, qtyPerBatch: 0, toBeProducedDay: 0 } }
+  
+  // Approval status states
+  const [summaryStatusData, setSummaryStatusData] = useState({});
+  // Structure: { productName: { status: 'pending' | 'approved', summaryId: 'id' } }
+  
+  // Bulk approve states
+  const [selectedProducts, setSelectedProducts] = useState(new Set());
+  const [isAllSelected, setIsAllSelected] = useState(false);
+  const [approvingProducts, setApprovingProducts] = useState(new Set()); // Track which products are being approved
+  const [bulkApproving, setBulkApproving] = useState(false); // Separate state for bulk operations
+  
+  // Debouncing states for input fields
+  const [inputValues, setInputValues] = useState({}); // Store temporary input values
+  const [saveTimers, setSaveTimers] = useState({}); // Store timers for each field
+  
   const { toast } = useToast();
+  
+  // Debug logs for component re-rendering
+  console.log('🎯 SalesApproval render - summaryStatusData:', summaryStatusData);
+  console.log('🎯 SalesApproval render - products count:', products.length);
+  console.log('🎯 Current timestamp:', new Date().toISOString());
 
   // Initialize production data for a product
   const initializeProductionData = (productName) => {
@@ -62,17 +83,267 @@ const SalesApproval = () => {
       toBeProducedDay: 0
     };
   };
+  
+  // Get input value for display (shows user input or saved value)
+  const getInputValue = (productName, field) => {
+    const inputKey = `${productName}_${field}`;
+    // Always show the stored input value if it exists (user is typing)
+    if (inputValues[inputKey] !== undefined) {
+      return inputValues[inputKey];
+    }
+    // Otherwise show the saved production data value
+    const data = getProductionData(productName);
+    const value = data[field];
+    // Convert 0 to empty string for better UX
+    return value === 0 ? '' : value.toString();
+  };
 
-  // Update production data field
+  // Handle input blur - clean up temporary input value
+  const handleInputBlur = (productName, field) => {
+    const inputKey = `${productName}_${field}`;
+    // Clear the temporary input value so it shows the saved value
+    setInputValues(prev => {
+      const newValues = { ...prev };
+      delete newValues[inputKey];
+      return newValues;
+    });
+  };
+
+  // Update production data field with debouncing
   const updateProductionField = (productName, field, value) => {
+    // Store the raw input value immediately for display (no parsing)
+    const inputKey = `${productName}_${field}`;
+    setInputValues(prev => ({
+      ...prev,
+      [inputKey]: value // Keep the raw string value
+    }));
+    
+    // Parse for internal state only
     const numValue = value === '' ? 0 : parseFloat(value);
+    const finalValue = isNaN(numValue) ? 0 : numValue;
+    
+    // Update local state for calculations
     setProductionData(prev => ({
       ...prev,
       [productName]: {
         ...prev[productName],
-        [field]: isNaN(numValue) ? 0 : numValue
+        [field]: finalValue
       }
     }));
+    
+    // Clear existing timer for this field
+    if (saveTimers[inputKey]) {
+      clearTimeout(saveTimers[inputKey]);
+    }
+    
+    // Set a new timer to save after 1.5 seconds of no typing
+    const newTimer = setTimeout(() => {
+      console.log(`🔄 Auto-saving ${field} for ${productName}:`, finalValue);
+      saveProductionData(productName);
+      // Keep the input value after saving (don't clear it)
+    }, 1500);
+    
+    setSaveTimers(prev => ({
+      ...prev,
+      [inputKey]: newTimer
+    }));
+  };
+
+  // Individual approve function
+  const handleIndividualApprove = async (productName) => {
+    console.log('🔴 APPROVE BUTTON CLICKED for product:', productName);
+    
+    const summaryId = getSummaryId(productName);
+    console.log('Summary ID for', productName, ':', summaryId);
+    
+    if (!summaryId) {
+      toast({
+        title: 'No Summary Found',
+        description: `No ProductDailySummary found for ${productName}`,
+        variant: 'warning'
+      });
+      return;
+    }
+
+    try {
+      // Add this product to approving state
+      setApprovingProducts(prev => new Set([...prev, productName]));
+      
+      console.log('🚀 Making API call for:', productName, 'with summaryId:', summaryId);
+      
+      // Use the new single approve API
+      const response = await fetch(`${config.baseURL}/api/unit-manager/product-summary/approve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          summaryId: summaryId
+        })
+      });
+
+      console.log('📡 API Response status:', response.status);
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ API Success:', result);
+        
+        // Update local state immediately for better UX
+        setSummaryStatusData(prev => ({
+          ...prev,
+          [productName]: {
+            ...prev[productName],
+            status: 'approved'
+          }
+        }));
+        
+        toast({
+          title: 'Success',
+          description: result.message || `Approved ${productName} successfully`
+        });
+        
+        // Refresh data in background
+        loadSummaryStatusData();
+      } else {
+        const errorData = await response.json();
+        console.log('❌ API Error:', errorData);
+        toast({
+          title: 'Approval Failed',
+          description: errorData.message || `Failed to approve ${productName}`,
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      console.error('💥 Error approving product:', error);
+      toast({
+        title: 'Error',
+        description: `Network error while approving ${productName}`,
+        variant: 'destructive'
+      });
+    } finally {
+      // Remove this product from approving state
+      setApprovingProducts(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(productName);
+        return newSet;
+      });
+    }
+  };
+
+  // Bulk approve selected products
+  const handleBulkApprove = async () => {
+    if (selectedProducts.size === 0) {
+      toast({
+        title: 'No Selection',
+        description: 'Please select products to approve',
+        variant: 'warning'
+      });
+      return;
+    }
+
+    try {
+      setBulkApproving(true);
+      
+      const selectedProductNames = Array.from(selectedProducts);
+      
+      // Get summary IDs for the selected products
+      const summaryIds = selectedProductNames.map(productName => {
+        return getSummaryId(productName);
+      }).filter(id => id !== null);
+      
+      if (summaryIds.length === 0) {
+        toast({
+          title: 'No Summaries Found',
+          description: 'No ProductDailySummary found for selected products',
+          variant: 'warning'
+        });
+        return;
+      }
+
+      console.log('🔄 Bulk approving products:', selectedProductNames);
+      console.log('📋 Summary IDs:', summaryIds);
+
+      // Use the new bulk approve API
+      const response = await fetch(`${config.baseURL}/api/unit-manager/product-summary/approve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          summaryIds: summaryIds
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Bulk approval success:', result);
+        
+        // Update local state for all approved products
+        setSummaryStatusData(prev => {
+          const newData = { ...prev };
+          selectedProductNames.forEach(productName => {
+            if (newData[productName]) {
+              newData[productName] = {
+                ...newData[productName],
+                status: 'approved'
+              };
+            }
+          });
+          return newData;
+        });
+        
+        toast({
+          title: 'Bulk Approval Success',
+          description: `Approved ${selectedProductNames.length} product summaries`
+        });
+        
+        setSelectedProducts(new Set());
+        setIsAllSelected(false);
+        loadSummaryStatusData(); // Refresh data
+      } else {
+        const errorData = await response.json();
+        console.log('❌ Bulk approval error:', errorData);
+        toast({
+          title: 'Bulk Approval Failed',
+          description: errorData.message || 'Failed to approve selected product summaries',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      console.error('💥 Error bulk approving:', error);
+      toast({
+        title: 'Error',
+        description: 'Network error during bulk approval',
+        variant: 'destructive'
+      });
+    } finally {
+      setBulkApproving(false);
+    }
+  };
+
+  // Toggle product selection
+  const toggleProductSelection = (productName) => {
+    const newSelected = new Set(selectedProducts);
+    if (newSelected.has(productName)) {
+      newSelected.delete(productName);
+    } else {
+      newSelected.add(productName);
+    }
+    setSelectedProducts(newSelected);
+    setIsAllSelected(newSelected.size === filteredProducts.length && filteredProducts.length > 0);
+  };
+
+  // Toggle all products selection
+  const toggleAllSelection = () => {
+    if (isAllSelected) {
+      setSelectedProducts(new Set());
+      setIsAllSelected(false);
+    } else {
+      setSelectedProducts(new Set(filteredProducts));
+      setIsAllSelected(true);
+    }
   };
 
   // Save production data to backend
@@ -95,7 +366,7 @@ const SalesApproval = () => {
       // Auto-calculate dependent values
       const produceBatches = Math.round((toBeProducedDay / qtyPerBatch) * 100) / 100;
 
-      const response = await fetch('/api/sales/update-product-summary', {
+      const response = await fetch(`${config.baseURL}/api/sales/update-product-summary`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -118,6 +389,7 @@ const SalesApproval = () => {
       if (response.ok) {
         const result = await response.json();
         console.log('Production data saved with calculations:', result);
+        console.log('Status from API response:', result.summary?.status);
 
         // Update local state with calculated values
         setProductionData(prev => ({
@@ -128,6 +400,21 @@ const SalesApproval = () => {
             produceBatches: produceBatches
           }
         }));
+
+        // IMPORTANT: Update status data when production data changes
+        if (result.summary?.status) {
+          setSummaryStatusData(prev => ({
+            ...prev,
+            [productName]: {
+              ...prev[productName],
+              status: result.summary.status // Update status from API response
+            }
+          }));
+          console.log(`✅ Status updated to '${result.summary.status}' for ${productName}`);
+        }
+
+        // Also refresh all status data in the background
+        loadSummaryStatusData();
 
         toast({
           title: 'Success',
@@ -216,6 +503,15 @@ const SalesApproval = () => {
   useEffect(() => {
     applyFilters();
   }, [searchTerm, products]);
+  
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(saveTimers).forEach(timer => {
+        if (timer) clearTimeout(timer);
+      });
+    };
+  }, [saveTimers]);
 
   // Filter orders by date range
   const filterOrdersByDate = (orders) => {
@@ -232,10 +528,98 @@ const SalesApproval = () => {
     });
   };
 
+  // Load production summary status data
+  const loadSummaryStatusData = async () => {
+    console.log('🔄 Loading summary status data...');
+    try {
+      const response = await fetch(`${config.baseURL}/api/sales/product-summary`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      console.log('📡 Summary status API response status:', response.status);
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('📊 Summary status API result:', result);
+        
+        if (result.success) {
+          const newStatusData = {};
+          let allProducts = [];
+          
+          // Process production groups
+          if (result.productionGroups && result.productionGroups.length > 0) {
+            console.log('🏭 Processing production groups:', result.productionGroups.length);
+            
+            result.productionGroups.forEach(group => {
+              console.log(`📦 Group: ${group.groupName} (${group.products.length} products)`);
+              group.products.forEach(product => {
+                allProducts.push(product);
+                newStatusData[product.productName] = {
+                  status: product.summary?.status || 'pending',
+                  summaryId: product.summary?._id || null,
+                  productionGroup: {
+                    groupId: group.groupId,
+                    groupName: group.groupName,
+                    groupDescription: group.groupDescription
+                  }
+                };
+              });
+            });
+          }
+          
+          // Process ungrouped products
+          if (result.ungroupedProducts && result.ungroupedProducts.length > 0) {
+            console.log('🔄 Processing ungrouped products:', result.ungroupedProducts.length);
+            result.ungroupedProducts.forEach(product => {
+              allProducts.push(product);
+              newStatusData[product.productName] = {
+                status: product.summary?.status || 'pending',
+                summaryId: product.summary?._id || null,
+                productionGroup: null // No production group - won't show any tag
+              };
+            });
+          }
+          
+          setSummaryStatusData(newStatusData);
+          console.log('✅ Summary status data loaded:', newStatusData);
+          console.log(`📊 Total products processed: ${allProducts.length}`);
+        }
+      } else {
+        console.log('❌ Summary status API failed with status:', response.status);
+        console.log('No summary status data found, using defaults');
+      }
+    } catch (error) {
+      console.error('💥 Error loading summary status data:', error);
+    }
+  };
+
+  // Get summary status for a product
+  const getSummaryStatus = (productName) => {
+    return summaryStatusData[productName]?.status || 'pending';
+  };
+
+  // Get summary ID for a product
+  const getSummaryId = (productName) => {
+    return summaryStatusData[productName]?.summaryId || null;
+  };
+
+  // Get production group info for a product
+  const getProductionGroup = (productName) => {
+    return summaryStatusData[productName]?.productionGroup || null;
+  };
+
+  // Get production group name for display
+  const getProductionGroupName = (productName) => {
+    const group = getProductionGroup(productName);
+    return group?.groupName || 'Unknown Group';
+  };
+
   // Load production summary data
   const loadProductionSummary = async () => {
     try {
-      const response = await fetch(`/api/sales/product-summary`, {
+      const response = await fetch(`${config.baseURL}/api/sales/product-summary`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -243,10 +627,29 @@ const SalesApproval = () => {
 
       if (response.ok) {
         const result = await response.json();
-        if (result.success && result.products) {
+        if (result.success) {
+          // NEW: Handle the updated API response structure with productionGroups and ungroupedProducts
+          let allProducts = [];
+          
+          // Process production groups
+          if (result.productionGroups && result.productionGroups.length > 0) {
+            result.productionGroups.forEach(group => {
+              group.products.forEach(product => {
+                allProducts.push(product);
+              });
+            });
+          }
+          
+          // Process ungrouped products
+          if (result.ungroupedProducts && result.ungroupedProducts.length > 0) {
+            result.ungroupedProducts.forEach(product => {
+              allProducts.push(product);
+            });
+          }
+          
           // Convert API response to productionData format
           const newProductionData = {};
-          result.products.forEach(product => {
+          allProducts.forEach(product => {
             newProductionData[product.productName] = {
               packing: product.summary.packing || 0,
               physicalStock: product.summary.physicalStock || 0,
@@ -335,14 +738,17 @@ const SalesApproval = () => {
     try {
       setLoading(true);
 
-      const productSummaryResponse = await fetch(`/api/sales/product-summary`, {
+      const productSummaryResponse = await fetch(`${config.baseURL}/api/sales/product-summary`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
+      
+      console.log('🔗 API URL:', `${config.baseURL}/api/sales/product-summary`);
+      console.log('📡 Product Summary Response Status:', productSummaryResponse.status);
 
       // Fetch individual orders for status counting
-      const individualOrdersResponse = await fetch('/api/orders', {
+      const individualOrdersResponse = await fetch(`${config.baseURL}/api/orders`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -353,8 +759,10 @@ const SalesApproval = () => {
         const individualOrdersData = await individualOrdersResponse.json();
 
         console.log('=== PRODUCT SUMMARY API RESPONSE ===');
-        console.log('Response structure:', Object.keys(productSummaryData));
-        console.log('Products array length:', productSummaryData.products?.length || 0);
+        console.log('📊 Full API Response:', productSummaryData);
+        console.log('📦 Production Groups:', productSummaryData.productionGroups?.length || 0);
+        console.log('🔄 Ungrouped Products:', productSummaryData.ungroupedProducts?.length || 0);
+        console.log('✅ API Success:', productSummaryData.success);
         console.log('=== INDIVIDUAL ORDERS ===');
         console.log('Individual orders count:', individualOrdersData.orders?.length || 0);
         console.log('Sample order statuses:', individualOrdersData.orders?.slice(0, 5)?.map(o => o.status) || []);
@@ -365,10 +773,32 @@ const SalesApproval = () => {
           setIndividualOrders(individualOrdersData.orders);
         }
 
-        if (productSummaryData.success && productSummaryData.products) {
+        if (productSummaryData.success) {
+          // NEW: Handle the updated API response structure with productionGroups and ungroupedProducts
+          let allProducts = [];
+          
+          // Process production groups
+          if (productSummaryData.productionGroups && productSummaryData.productionGroups.length > 0) {
+            productSummaryData.productionGroups.forEach(group => {
+              group.products.forEach(product => {
+                allProducts.push(product);
+              });
+            });
+          }
+          
+          // Process ungrouped products
+          if (productSummaryData.ungroupedProducts && productSummaryData.ungroupedProducts.length > 0) {
+            productSummaryData.ungroupedProducts.forEach(product => {
+              allProducts.push(product);
+            });
+          }
+          
+          console.log('🔄 Total products from API:', allProducts.length);
+          console.log('🔄 Products details:', allProducts);
+          
           // Transform product summary data to match the expected unit-manager format
           // Include ALL products, even those with empty salesBreakdown
-          const transformedData = productSummaryData.products.map(product => {
+          const transformedData = allProducts.map(product => {
             // Handle products with empty salesBreakdown
             const hasSalesData = product.salesBreakdown && product.salesBreakdown.length > 0;
 
@@ -511,6 +941,9 @@ const SalesApproval = () => {
 
       // Load production summary data
       await loadProductionSummary();
+      
+      // Load summary status data
+      await loadSummaryStatusData();
 
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -525,8 +958,18 @@ const SalesApproval = () => {
   };
 
   useEffect(() => {
+    console.log('🔄 SalesApproval component mounted, fetching data...');
     fetchData();
   }, []); // Load data on mount
+
+  // Force refresh function for debugging
+  const forceRefresh = () => {
+    console.log('🔄 Force refreshing all data...');
+    setLoading(true);
+    setSummaryStatusData({});
+    setProductionData({});
+    fetchData();
+  };
 
   const handleBulkStatusUpdate = async () => {
     if (!selectedProductOrders.length || !selectedStatus) return;
@@ -536,7 +979,7 @@ const SalesApproval = () => {
 
       // Update all orders for the selected product
       const updatePromises = selectedProductOrders.map(order =>
-        fetch(`/api/orders/${order._id}/status`, {
+        fetch(`${config.baseURL}/api/orders/${order._id}/status`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -767,8 +1210,36 @@ const SalesApproval = () => {
                 Product Sales Management
               </div>
 
-              {/* Right Side - Filter Controls */}
+              {/* Right Side - Filter Controls and Actions */}
               <div className="flex flex-col lg:flex-row items-start lg:items-center gap-3 lg:gap-4">
+                {/* Bulk Actions - Show when products are selected */}
+                {selectedProducts.size > 0 && (
+                  <div className="flex items-center gap-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <CheckCircle className="h-4 w-4 text-blue-600" />
+                    <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                      {selectedProducts.size} selected
+                    </span>
+                    <Button
+                      onClick={handleBulkApprove}
+                      disabled={bulkApproving}
+                      size="sm"
+                      className="bg-green-600 hover:bg-green-700 text-white"
+                    >
+                      {bulkApproving ? (
+                        <>
+                          <Clock className="h-3 w-3 mr-1 animate-spin" />
+                          Approving...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Bulk Approve
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
+                
                 {/* Mobile Filter Toggle */}
                 <div className="lg:hidden w-full">
                   <Button
@@ -838,7 +1309,19 @@ const SalesApproval = () => {
               {/* Header Row - Fixed 10 columns */}
               <thead>
                 <tr className="border-b bg-gray-50">
-                  {/* 1. Products Column */}
+                  {/* 1. Selection Checkbox Column */}
+                  <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[50px]">
+                    <div className="flex items-center justify-center">
+                      <input
+                        type="checkbox"
+                        checked={isAllSelected && filteredProducts.length > 0}
+                        onChange={toggleAllSelection}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        title="Select all products"
+                      />
+                    </div>
+                  </th>
+                  {/* 2. Products Column */}
                   <th className="bg-gray-50 p-1 lg:p-2 text-left font-semibold text-gray-900 border-r min-w-[100px] lg:min-w-[160px]">
                     <div className="flex items-center gap-1 lg:gap-2">
                       <Package className="h-3 w-3 lg:h-4 lg:w-4" />
@@ -907,18 +1390,32 @@ const SalesApproval = () => {
                       <div className="text-xs font-bold text-gray-900">Salesman</div>
                     </div>
                   </th>
-                  {/* Qty/Batch Column - LAST COLUMN */}
+                  {/* Qty/Batch Column */}
                   <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[90px] lg:min-w-[110px]">
                     <div className="flex flex-col items-center gap-1">
                       <Package className="h-3 w-3 lg:h-4 lg:w-4 text-orange-600" />
                       <div className="text-xs font-semibold text-gray-900">Qty/Batch</div>
                     </div>
                   </th>
+                  {/* Status Column */}
+                  <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[80px] lg:min-w-[100px]">
+                    <div className="flex flex-col items-center gap-1">
+                      <CheckCircle className="h-3 w-3 lg:h-4 lg:w-4 text-blue-600" />
+                      <div className="text-xs font-semibold text-gray-900">Status</div>
+                    </div>
+                  </th>
+                  {/* Actions Column - LAST COLUMN */}
+                  <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 min-w-[120px]">
+                    <div className="flex flex-col items-center gap-1">
+                      <Settings className="h-3 w-3 lg:h-4 lg:w-4 text-gray-600" />
+                      <div className="text-xs font-semibold text-gray-900">Actions</div>
+                    </div>
+                  </th>
                 </tr>
               </thead>
 
-              <tbody>
-                {filteredProducts.map((product) => {
+              <tbody key={`table-${Date.now()}`}>
+                {filteredProducts.map((product, index) => {
                   // Get product data from our new API structure
                   const productData = orders.find(p => p.productName === product);
                   const totalQuantity = productData ? productData.totalQuantity : 0;
@@ -929,14 +1426,37 @@ const SalesApproval = () => {
                     productData.salesPersons.flatMap(sp => sp.orders || []) : [];
 
                   return (
-                    <tr key={product} className="border-b hover:bg-gray-50/50 transition-colors">
-                      {/* 1. Product Name Column */}
+                    <tr key={`${product}-${index}-${Object.keys(summaryStatusData).length}`} className="border-b hover:bg-gray-50/50 transition-colors">
+                      {/* 1. Selection Checkbox Column */}
+                      <td className="bg-white p-1 lg:p-2 text-center border-r">
+                        <input
+                          type="checkbox"
+                          checked={selectedProducts.has(product)}
+                          onChange={() => toggleProductSelection(product)}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          title={`Select ${product}`}
+                        />
+                      </td>
+                      {/* 2. Product Name Column */}
                       <td className="bg-white p-1 lg:p-2 font-medium text-gray-900 border-r max-w-[100px] lg:max-w-[160px]">
                         <div className="flex flex-col">
                           <span className="text-xs font-semibold text-gray-900 leading-tight break-words">{product}</span>
                           <span className="text-xs text-gray-500">
                             Total Qty: {totalQuantity} ({totalOrderCount} orders)
                           </span>
+                          {/* Production Group Tag */}
+                          {(() => {
+                            const group = getProductionGroup(product);
+                            console.log(`🏷️ Product ${product} group:`, group);
+                            if (group?.groupId) {
+                              return (
+                                <span className="inline-block mt-1 px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded-full">
+                                  {getProductionGroupName(product)}
+                                </span>
+                              );
+                            }
+                            return null;
+                          })()}
                         </div>
                       </td>
 
@@ -962,13 +1482,11 @@ const SalesApproval = () => {
                       <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
                         <div className="text-center">
                           <Input
-                            type="number"
-                            value={getProductionData(product).physicalStock || ''}
+                            type="text"
+                            value={getInputValue(product, 'physicalStock')}
                             onChange={(e) => updateProductionField(product, 'physicalStock', e.target.value)}
-                            onBlur={() => saveProductionData(product)}
+                            onBlur={() => handleInputBlur(product, 'physicalStock')}
                             className="w-24 h-8 text-center text-lg font-bold text-purple-600 border-none bg-transparent focus:ring-1 focus:ring-purple-300"
-                            min="0"
-                            step="0.01"
                             placeholder="0"
                           />
                         </div>
@@ -978,13 +1496,11 @@ const SalesApproval = () => {
                       <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
                         <div className="text-center">
                           <Input
-                            type="number"
-                            value={getProductionData(product).batchAdjusted || ''}
+                            type="text"
+                            value={getInputValue(product, 'batchAdjusted')}
                             onChange={(e) => updateProductionField(product, 'batchAdjusted', e.target.value)}
-                            onBlur={() => saveProductionData(product)}
+                            onBlur={() => handleInputBlur(product, 'batchAdjusted')}
                             className="w-24 h-8 text-center text-sm font-bold text-cyan-600 border-none bg-transparent focus:ring-1 focus:ring-cyan-300"
-                            min="0"
-                            step="0.01"
                             placeholder="0"
                           />
                         </div>
@@ -1035,12 +1551,49 @@ const SalesApproval = () => {
                         </div>
                       </td>
 
-                      {/* Qty/Batch Column - LAST COLUMN */}
+                      {/* Qty/Batch Column */}
                       <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
                         <div className="text-center">
                           <div className="text-sm font-bold text-orange-600">
                             {getProductionData(product).qtyPerBatch || 0}
                           </div>
+                        </div>
+                      </td>
+                      {/* Status Column */}
+                      <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
+                        <div className="text-center">
+                          <Badge 
+                            variant={getSummaryStatus(product) === 'approved' ? 'default' : 'secondary'}
+                            className={`text-xs ${getSummaryStatus(product) === 'approved' ? 'bg-green-100 text-green-800 border-green-200' : 'bg-yellow-100 text-yellow-800 border-yellow-200'}`}
+                          >
+                            {getSummaryStatus(product)}
+                          </Badge>
+                        </div>
+                      </td>
+                      {/* Actions Column - LAST COLUMN */}
+                      <td className="bg-white p-1 lg:p-2 text-center align-middle">
+                        <div className="flex items-center justify-center gap-1">
+                          <Button
+                            onClick={() => handleIndividualApprove(product)}
+                            disabled={approvingProducts.has(product) || totalQuantity === 0 || getSummaryStatus(product) === 'approved'}
+                            size="sm"
+                            className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 h-7 text-xs disabled:opacity-50"
+                            title={`Approve summary for ${product}`}
+                          >
+                            {approvingProducts.has(product) ? (
+                              <Clock className="h-3 w-3 animate-spin" />
+                            ) : getSummaryStatus(product) === 'approved' ? (
+                              <>
+                                <CheckCircle className="h-3 w-3 mr-1" />
+                                Approved
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle className="h-3 w-3 mr-1" />
+                                Approve
+                              </>
+                            )}
+                          </Button>
                         </div>
                       </td>
                     </tr>

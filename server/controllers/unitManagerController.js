@@ -395,6 +395,7 @@ export const updateOrderStatus = async (req, res) => {
                 productionFinalBatches: 0, // Initialize to 0
                 qtyPerBatch: qtyPerBatch, // ✅ SET FROM ITEM DATA
                 totalQuantity: productItem.quantity, // Set initial quantity
+                status: 'pending', // ✅ SET DEFAULT STATUS
                 createdAt: new Date(),
                 updatedAt: new Date()
               });
@@ -1536,6 +1537,613 @@ export const getOrderById = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch order details',
+      error: error.message
+    });
+  }
+};
+
+// Approve product daily summaries (individual or bulk)
+export const approveProductSummaries = async (req, res) => {
+  try {
+    const user = req.user;
+    const { summaryIds, summaryId } = req.body;
+
+    // Only allow Unit Manager role
+    if (user.role !== 'Unit Manager') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied - Unit Manager role required'
+      });
+    }
+
+    // Support both single ID and array of IDs
+    let idsToApprove = [];
+    if (summaryId) {
+      idsToApprove = [summaryId]; // Single approve
+    } else if (summaryIds && Array.isArray(summaryIds)) {
+      idsToApprove = summaryIds; // Bulk approve
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: 'Either summaryId or summaryIds array is required'
+      });
+    }
+
+    console.log('🔍 Approve summaries - IDs:', idsToApprove, 'companyId:', user.companyId);
+
+    // Update multiple product daily summaries
+    const updateResult = await ProductDailySummary.updateMany(
+      {
+        _id: { $in: idsToApprove },
+        companyId: user.companyId // Ensure company isolation
+      },
+      {
+        status: 'approved'
+      }
+    );
+
+    // Get updated summaries to return details
+    const updatedSummaries = await ProductDailySummary.find({
+      _id: { $in: idsToApprove },
+      companyId: user.companyId,
+      status: 'approved'
+    }).populate('productId', 'name code');
+
+    console.log('✅ Approval successful:', updateResult.modifiedCount, 'summaries updated');
+
+    const isPlural = idsToApprove.length > 1;
+    res.json({
+      success: true,
+      message: `Successfully approved ${updateResult.modifiedCount} product ${isPlural ? 'summaries' : 'summary'}`,
+      modifiedCount: updateResult.modifiedCount,
+      summaries: updatedSummaries
+    });
+
+  } catch (error) {
+    console.error('Error approving product summaries:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to approve product summaries',
+      error: error.message
+    });
+  }
+};
+
+// Import additional models needed for production groups
+import ProductionGroup from '../models/ProductionGroup.js';
+
+// Get all production groups for unit manager
+export const getUnitManagerProductionGroups = async (req, res) => {
+  try {
+    console.log('🚀 Unit Manager Production Groups Request:', {
+      role: req.user.role,
+      username: req.user.username,
+      companyId: req.user.companyId
+    });
+
+    // Only allow Unit Manager role
+    if (req.user.role !== 'Unit Manager') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied - Unit Manager role required'
+      });
+    }
+
+    const query = {
+      company: req.user.companyId,
+      isActive: true
+    };
+
+    const groups = await ProductionGroup.find(query)
+      .populate({
+        path: 'items',
+        select: 'name code category subCategory qty unit price'
+      })
+      .populate({
+        path: 'createdBy',
+        select: 'username fullName'
+      })
+      .populate({
+        path: 'company',
+        select: 'name location'
+      })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    console.log(`✅ Found ${groups.length} production groups for company: ${req.user.companyId}`);
+
+    res.json({
+      success: true,
+      message: 'Production groups fetched successfully',
+      data: {
+        groups: groups,
+        pagination: {
+          totalPages: 1,
+          currentPage: 1,
+          totalGroups: groups.length
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching unit manager production groups:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch production groups',
+      error: error.message
+    });
+  }
+};
+
+// Get single production group by ID for unit manager
+export const getUnitManagerProductionGroupById = async (req, res) => {
+  try {
+    console.log('🔍 Unit Manager Get Production Group by ID:', {
+      groupId: req.params.id,
+      role: req.user.role,
+      companyId: req.user.companyId
+    });
+
+    // Only allow Unit Manager role
+    if (req.user.role !== 'Unit Manager') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied - Unit Manager role required'
+      });
+    }
+
+    const group = await ProductionGroup.findOne({
+      _id: req.params.id,
+      company: req.user.companyId,
+      isActive: true
+    })
+      .populate({
+        path: 'items',
+        select: 'name code category subCategory qty unit price image description'
+      })
+      .populate({
+        path: 'createdBy',
+        select: 'username fullName email'
+      })
+      .populate({
+        path: 'company',
+        select: 'name location'
+      })
+      .lean();
+
+    if (!group) {
+      return res.status(404).json({
+        success: false,
+        message: 'Production group not found'
+      });
+    }
+
+    console.log('✅ Found production group:', group.name);
+
+    res.json({
+      success: true,
+      message: 'Production group fetched successfully',
+      data: group  // Return group directly, not nested in data.group
+    });
+
+  } catch (error) {
+    console.error('Error fetching unit manager production group by ID:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Request details:', {
+      groupId: req.params.id,
+      userId: req.user.userId,
+      companyId: req.user.companyId
+    });
+
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid group ID provided'
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch production group',
+      error: error.message
+    });
+  }
+};
+
+// Create new production group for unit manager
+export const createUnitManagerProductionGroup = async (req, res) => {
+  try {
+    console.log('🆕 Unit Manager Create Production Group:', {
+      role: req.user.role,
+      companyId: req.user.companyId,
+      body: req.body
+    });
+
+    // Only allow Unit Manager role
+    if (req.user.role !== 'Unit Manager') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied - Unit Manager role required'
+      });
+    }
+
+    const { name, description, items = [] } = req.body;
+
+    // Validation
+    if (!name || name.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Group name is required'
+      });
+    }
+
+    // Check for duplicate name
+    const existingGroup = await ProductionGroup.findOne({
+      name: { $regex: new RegExp(`^${name.trim()}$`, 'i') },
+      company: req.user.companyId,
+      isActive: true
+    });
+
+    if (existingGroup) {
+      return res.status(400).json({
+        success: false,
+        message: `Production group "${name.trim()}" already exists in your company`
+      });
+    }
+
+    // Validate and calculate qtyPerBatch from ProductDailySummary
+    let validatedItems = [];
+    let calculatedQtyPerBatch = 0;
+
+    if (items.length > 0) {
+      const inventoryItems = await Item.find({
+        _id: { $in: items },
+        store: req.user.companyId
+      }).select('_id name qty');
+
+      validatedItems = inventoryItems.map(item => item._id);
+
+      // Get ProductDailySummary data for qtyPerBatch calculation
+      const productSummaries = await ProductDailySummary.find({
+        productId: { $in: validatedItems },
+        companyId: req.user.companyId
+      }).select('productId qtyPerBatch');
+
+      if (productSummaries.length > 0) {
+        const summaryQtyPerBatch = productSummaries.map(summary => summary.qtyPerBatch || 0);
+        calculatedQtyPerBatch = Math.max(...summaryQtyPerBatch, 0);
+        console.log('🎯 Calculated qtyPerBatch from ProductDailySummary (max value):', calculatedQtyPerBatch);
+      }
+    }
+
+    // Create new production group
+    const newGroup = new ProductionGroup({
+      name: name.trim(),
+      description: description?.trim() || '',
+      company: req.user.companyId,
+      createdBy: req.user.userId,
+      items: validatedItems,
+      qtyPerBatch: calculatedQtyPerBatch,
+      qtyAchievedPerBatch: 0,
+      isActive: true,
+      metadata: {
+        totalItems: validatedItems.length,
+        lastUpdated: new Date()
+      }
+    });
+
+    const savedGroup = await newGroup.save();
+    console.log('✅ Unit Manager production group created successfully:', savedGroup._id);
+
+    // Populate and return
+    await savedGroup.populate('items', 'name code category');
+    await savedGroup.populate('createdBy', 'username fullName');
+
+    res.status(201).json({
+      success: true,
+      message: 'Production group created successfully',
+      data: savedGroup  // Changed from 'group' to 'data' for consistency
+    });
+
+  } catch (error) {
+    console.error('Error creating unit manager production group:', error);
+
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Production group with this name already exists'
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create production group',
+      error: error.message
+    });
+  }
+};
+
+// Update production group for unit manager
+export const updateUnitManagerProductionGroup = async (req, res) => {
+  try {
+    console.log('📝 Unit Manager Update Production Group:', {
+      groupId: req.params.id,
+      role: req.user.role,
+      companyId: req.user.companyId,
+      body: req.body
+    });
+
+    // Only allow Unit Manager role
+    if (req.user.role !== 'Unit Manager') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied - Unit Manager role required'
+      });
+    }
+
+    const { name, description, items = [], qtyPerBatch, qtyAchievedPerBatch } = req.body;
+
+    // Validation
+    if (!name || name.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Group name is required'
+      });
+    }
+
+    // Find existing group
+    const existingGroup = await ProductionGroup.findOne({
+      _id: req.params.id,
+      company: req.user.companyId,
+      isActive: true
+    });
+
+    if (!existingGroup) {
+      return res.status(404).json({
+        success: false,
+        message: 'Production group not found'
+      });
+    }
+
+    // Check name uniqueness (excluding current group)
+    if (name.trim() !== existingGroup.name) {
+      const duplicateGroup = await ProductionGroup.findOne({
+        name: { $regex: new RegExp(`^${name.trim()}$`, 'i') },
+        company: req.user.companyId,
+        isActive: true,
+        _id: { $ne: req.params.id }
+      });
+
+      if (duplicateGroup) {
+        return res.status(400).json({
+          success: false,
+          message: `Production group "${name.trim()}" already exists in your company`
+        });
+      }
+    }
+
+    // Validate items and recalculate qtyPerBatch
+    let validatedItems = [];
+    let calculatedQtyPerBatch = existingGroup.qtyPerBatch;
+
+    if (items.length > 0) {
+      const inventoryItems = await Item.find({
+        _id: { $in: items },
+        store: req.user.companyId
+      }).select('_id name');
+
+      validatedItems = inventoryItems.map(item => item._id);
+
+      // Recalculate qtyPerBatch from ProductDailySummary
+      const productSummaries = await ProductDailySummary.find({
+        productId: { $in: validatedItems },
+        companyId: req.user.companyId
+      }).select('productId qtyPerBatch');
+
+      if (productSummaries.length > 0) {
+        const summaryQtyPerBatch = productSummaries.map(summary => summary.qtyPerBatch || 0);
+        calculatedQtyPerBatch = Math.max(...summaryQtyPerBatch, 0);
+        console.log('🎯 Unit Manager recalculated qtyPerBatch:', calculatedQtyPerBatch);
+      }
+    }
+
+    // Update group
+    existingGroup.name = name.trim();
+    existingGroup.description = description?.trim() || '';
+    existingGroup.items = validatedItems;
+    existingGroup.qtyPerBatch = calculatedQtyPerBatch;
+
+    if (qtyAchievedPerBatch !== undefined) {
+      existingGroup.qtyAchievedPerBatch = parseFloat(qtyAchievedPerBatch) || 0;
+    }
+
+    existingGroup.metadata = {
+      totalItems: validatedItems.length,
+      lastUpdated: new Date()
+    };
+
+    const savedGroup = await existingGroup.save();
+    console.log('✅ Unit Manager production group updated successfully');
+
+    // Populate and return
+    await savedGroup.populate('items', 'name code category');
+    await savedGroup.populate('createdBy', 'username fullName');
+
+    res.json({
+      success: true,
+      message: 'Production group updated successfully',
+      data: savedGroup  // Changed from 'group' to 'data' for consistency
+    });
+
+  } catch (error) {
+    console.error('Unit Manager update production group error:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Request details:', {
+      groupId: req.params.id,
+      userId: req.user.userId,
+      companyId: req.user.companyId,
+      body: req.body
+    });
+
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Production group with this name already exists'
+      });
+    }
+
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: Object.values(error.errors).map(err => err.message)
+      });
+    }
+
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid group ID provided'
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update production group',
+      error: error.message
+    });
+  }
+};
+
+// Delete production group for unit manager
+export const deleteUnitManagerProductionGroup = async (req, res) => {
+  try {
+    console.log('🗑️ Unit Manager Delete Production Group:', {
+      groupId: req.params.id,
+      role: req.user.role,
+      companyId: req.user.companyId
+    });
+
+    // Only allow Unit Manager role
+    if (req.user.role !== 'Unit Manager') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied - Unit Manager role required'
+      });
+    }
+
+    const group = await ProductionGroup.findOne({
+      _id: req.params.id,
+      company: req.user.companyId,
+      isActive: true
+    });
+
+    if (!group) {
+      return res.status(404).json({
+        success: false,
+        message: 'Production group not found'
+      });
+    }
+
+    // Soft delete
+    group.isActive = false;
+    await group.save();
+
+    console.log('✅ Unit Manager production group deleted successfully');
+
+    res.json({
+      success: true,
+      message: 'Production group deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Unit Manager delete production group error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete production group',
+      error: error.message
+    });
+  }
+};
+
+// Get available items for unit manager production groups
+export const getUnitManagerAvailableItems = async (req, res) => {
+  try {
+    console.log('🔍 Unit Manager Get Available Items:', {
+      role: req.user.role,
+      companyId: req.user.companyId,
+      query: req.query
+    });
+
+    // Only allow Unit Manager role
+    if (req.user.role !== 'Unit Manager') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied - Unit Manager role required'
+      });
+    }
+
+    const { search = '', excludeGroupId } = req.query;
+
+    // Get all items for this company
+    let itemFilter = {
+      store: req.user.companyId
+    };
+
+    // Add search filter if provided
+    if (search.trim()) {
+      itemFilter.$or = [
+        { name: { $regex: search.trim(), $options: 'i' } },
+        { code: { $regex: search.trim(), $options: 'i' } },
+        { category: { $regex: search.trim(), $options: 'i' } }
+      ];
+    }
+
+    // Get all items
+    const allItems = await Item.find(itemFilter)
+      .select('name code category subCategory qty unit price image')
+      .lean();
+
+    // Get items already assigned to production groups (excluding current group if provided)
+    let groupFilter = {
+      company: req.user.companyId,
+      isActive: true
+    };
+
+    if (excludeGroupId) {
+      groupFilter._id = { $ne: excludeGroupId };
+    }
+
+    const assignedGroups = await ProductionGroup.find(groupFilter)
+      .select('items')
+      .lean();
+
+    const assignedItemIds = assignedGroups.flatMap(group => 
+      group.items.map(item => item.toString())
+    );
+
+    // Filter out assigned items
+    const availableItems = allItems.filter(item => 
+      !assignedItemIds.includes(item._id.toString())
+    );
+
+    console.log(`✅ Found ${availableItems.length} available items (${assignedItemIds.length} already assigned)`);
+
+    res.json({
+      success: true,
+      message: 'Available items fetched successfully',
+      data: {
+        items: availableItems,
+        totalItems: availableItems.length,
+        assignedItemsCount: assignedItemIds.length
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching unit manager available items:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch available items',
       error: error.message
     });
   }

@@ -76,8 +76,8 @@ export default function ProductionShift() {
             unloadingTime: group.unloadingTime || '',
             // Keep existing production loss value, don't default to 0 if empty
             productionLoss: group.productionLoss !== undefined && group.productionLoss !== null ? group.productionLoss : '',
-            qtyBatch: group.totalBatchQuantity || 0, // Use sum of qtyPerBatch values
-            qtyAchieved: (group.totalBatchQuantity || 0) - (group.productionLoss || 0)
+            qtyBatch: group.qtyPerBatch || 0, // Use qtyPerBatch from ProductionGroup model
+            qtyAchieved: Math.max(0, (group.qtyPerBatch || 0) - (group.productionLoss || 0)) // Auto-calculated: Qty/Batch - Production Loss
           };
         });
         
@@ -219,8 +219,8 @@ export default function ProductionShift() {
       mouldingTime: batch.mouldingTime || '00:00',
       unloadingTime: batch.unloadingTime || '00:00',
       productionLoss: batch.productionLoss || 0,
-      totalQty: group.totalBatchQuantity || 0, // Use batch quantity
-      qtyAchieved: (group.totalBatchQuantity || 0) - (batch.productionLoss || 0),
+      totalQty: group.qtyPerBatch || 0, // Use qtyPerBatch from ProductionGroup model
+      qtyAchieved: Math.max(0, (group.qtyPerBatch || 0) - (batch.productionLoss || 0)), // Auto-calculated: Qty/Batch - Production Loss
       totalItems: group.totalItems,
       description: group.description || 'No description',
       createdBy: group.createdBy,
@@ -341,35 +341,20 @@ export default function ProductionShift() {
           />
         </TableCell>
         
-        {/* Qty/Batch for group - Show first non-zero qtyPerBatch value */}
+        {/* Qty/Batch for group - Use qtyPerBatch from ProductionGroup model */}
         <TableCell className="text-center">
-          <div className="font-medium">
-            {(() => {
-              if (!group.items || group.items.length === 0) return 0;
-              // Find first non-zero qtyPerBatch value
-              const nonZeroQty = group.items.find(item => item.qtyPerBatch && item.qtyPerBatch > 0);
-              return nonZeroQty ? nonZeroQty.qtyPerBatch : 0;
-            })()}
+          <div className="font-medium text-blue-600 text-lg">
+            {group.qtyPerBatch || 0}
           </div>
         </TableCell>
         
-        {/* Qty Achieved/Batch (auto-calculated) - Use first non-zero qtyPerBatch in calculation */}
+        {/* Qty Achieved/Batch (auto-calculated) - Qty/Batch minus Production Loss */}
         <TableCell className="text-center">
-          <span className="text-green-600 font-medium">
-            {(() => {
-              if (!group.items || group.items.length === 0) return 0;
-              const nonZeroQty = group.items.find(item => item.qtyPerBatch && item.qtyPerBatch > 0);
-              const qtyPerBatch = nonZeroQty ? nonZeroQty.qtyPerBatch : 0;
-              return qtyPerBatch - (batch.productionLoss || 0);
-            })()}
+          <span className="text-green-600 font-medium text-lg">
+            {Math.max(0, (group.qtyPerBatch || 0) - (batch.productionLoss || 0))}
           </span>
-          <div className="text-xs text-green-500">
-            {(() => {
-              if (!group.items || group.items.length === 0) return '0 - 0';
-              const nonZeroQty = group.items.find(item => item.qtyPerBatch && item.qtyPerBatch > 0);
-              const qtyPerBatch = nonZeroQty ? nonZeroQty.qtyPerBatch : 0;
-              return `${qtyPerBatch} - ${batch.productionLoss || 0}`;
-            })()}
+          <div className="text-xs text-gray-500">
+            {group.qtyPerBatch || 0} - {batch.productionLoss || 0}
           </div>
         </TableCell>
         

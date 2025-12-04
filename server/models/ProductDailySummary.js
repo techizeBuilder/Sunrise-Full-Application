@@ -72,6 +72,13 @@ const productDailySummarySchema = new mongoose.Schema({
   balanceFinalBatches: {
     type: Number,
     default: 0
+  },
+  
+  // Status field for approval workflow
+  status: {
+    type: String,
+    enum: ['pending', 'approved'],
+    default: 'pending'
   }
 }, {
   timestamps: true

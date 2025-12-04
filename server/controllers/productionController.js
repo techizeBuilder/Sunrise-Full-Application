@@ -80,9 +80,10 @@ export const getProductionDashboard = async (req, res) => {
         // Get all item IDs from this production group
         const itemIds = group.items.map(item => item._id);
         
-        // Query ProductDailySummary for all items in this group
-        let summaryQuery = {
-          productId: { $in: itemIds }
+        // Query ProductDailySummary for all items in this group - ONLY APPROVED ONES
+        const summaryQuery = {
+          productId: { $in: itemIds },
+          status: 'approved'  // Only get approved ProductDailySummary records
         };
         
         // Add company filter if user has company
@@ -182,71 +183,21 @@ export const getProductionShiftData = async (req, res) => {
     
     // Transform data for production shift display
     const shiftData = await Promise.all(productionGroups.map(async (group) => {
-      // Calculate total batch quantity by summing qtyPerBatch from ProductDailySummary
-      let totalBatchQuantity = 0;
+      // Use batch quantities directly from the ProductionGroup model
+      const groupQtyPerBatch = group.qtyPerBatch || 0;
+      const groupQtyAchievedPerBatch = group.qtyAchievedPerBatch || 0;
+      
       const itemsWithBatchQty = [];
       
       if (group.items && group.items.length > 0) {
         for (const item of group.items) {
-          let itemQtyPerBatch = 0;
-          try {
-            // Find the ProductDailySummary for this item - try multiple query approaches
-            console.log(`🔍 Searching qtyPerBatch for item: ${item.name}`);
-            
-            // Try different query strategies
-            let summary = await ProductDailySummary.findOne({
-              productName: item.name,
-              companyId: req.user.companyId
-            }).lean();
-            
-            // If not found by exact name, try case-insensitive search
-            if (!summary) {
-              console.log(`   Trying case-insensitive search for: ${item.name}`);
-              summary = await ProductDailySummary.findOne({
-                productName: { $regex: new RegExp(`^${item.name}$`, 'i') },
-                companyId: req.user.companyId
-              }).lean();
-            }
-            
-            // If still not found, try searching by productId
-            if (!summary && item._id) {
-              console.log(`   Trying productId search for: ${item._id}`);
-              summary = await ProductDailySummary.findOne({
-                productId: item._id,
-                companyId: req.user.companyId
-              }).lean();
-            }
-            
-            // If still not found, try without company filter (in case data exists without company)
-            if (!summary) {
-              console.log(`   Trying search without company filter for: ${item.name}`);
-              summary = await ProductDailySummary.findOne({
-                productName: item.name
-              }).lean();
-            }
-            
-            if (summary && summary.qtyPerBatch) {
-              itemQtyPerBatch = summary.qtyPerBatch;
-              totalBatchQuantity += summary.qtyPerBatch;
-              console.log(`✅ Found qtyPerBatch for ${item.name}: ${summary.qtyPerBatch}`);
-            } else if (summary) {
-              console.log(`⚠️  Found summary for ${item.name} but qtyPerBatch is: ${summary.qtyPerBatch}`);
-            } else {
-              console.log(`❌ No ProductDailySummary found for ${item.name}`);
-              
-              // Check what ProductDailySummary records exist
-              const allSummaries = await ProductDailySummary.find({ 
-                companyId: req.user.companyId 
-              }).select('productName productId qtyPerBatch').lean();
-              console.log(`   Available ProductDailySummary records:`, 
-                allSummaries.map(s => ({ name: s.productName, id: s.productId, qtyPerBatch: s.qtyPerBatch }))
-              );
-            }
-          } catch (error) {
-            console.log(`❌ Error getting qtyPerBatch for ${item.name}:`, error.message);
-          }
-          
-          // Add item with qtyPerBatch
+          // Get ProductDailySummary data for this specific item
+          const itemSummary = await ProductDailySummary.findOne({
+            productId: item._id,
+            companyId: req.user.companyId
+          }).lean();
+
+          // Add item data with ProductDailySummary fields
           itemsWithBatchQty.push({
             _id: item._id,
             name: item.name,
@@ -256,7 +207,8 @@ export const getProductionShiftData = async (req, res) => {
             unit: item.unit || '',
             price: item.price || 0,
             image: item.image,
-            qtyPerBatch: itemQtyPerBatch
+            productionFinalBatches: itemSummary?.productionFinalBatches || 0,
+            qtyPerBatch: itemSummary?.qtyPerBatch || 0
           });
         }
       }
@@ -267,7 +219,8 @@ export const getProductionShiftData = async (req, res) => {
       console.log(`Group ${group.name}:`, {
         totalItems,
         totalCurrentQuantity,
-        totalBatchQuantity,
+        qtyPerBatch: groupQtyPerBatch,
+        qtyAchievedPerBatch: groupQtyAchievedPerBatch,
         mouldingTime: group.mouldingTime,
         unloadingTime: group.unloadingTime, 
         productionLoss: group.productionLoss
@@ -279,7 +232,10 @@ export const getProductionShiftData = async (req, res) => {
         description: group.description || '',
         totalItems: totalItems,
         totalQuantity: totalCurrentQuantity, // Keep for backward compatibility
-        totalBatchQuantity: totalBatchQuantity, // NEW: Sum of all qtyPerBatch values
+        // Batch quantity fields from ProductionGroup model
+        qtyPerBatch: groupQtyPerBatch,
+        qtyAchievedPerBatch: groupQtyAchievedPerBatch,
+        unitHeadOrManager: group.unitHeadOrManager || null,
         // Format time fields properly for frontend
         mouldingTime: group?.mouldingTime ? 
           group.mouldingTime.toISOString().slice(0, 16) : null,
@@ -438,11 +394,63 @@ export const updateProductionShiftTiming = async (req, res) => {
           break;
         case 'productionLoss':
           updateData.productionLoss = parseFloat(value) || 0;
+          
+          // Auto-calculate qtyAchievedPerBatch when production loss changes
+          // First get the current production group to access qtyPerBatch
+          const currentGroup = await ProductionGroup.findOne(query);
+          if (currentGroup) {
+            const qtyPerBatch = currentGroup.qtyPerBatch || 0;
+            const productionLoss = updateData.productionLoss;
+            // Calculate: qtyAchievedPerBatch = qtyPerBatch - productionLoss (minimum 0)
+            updateData.qtyAchievedPerBatch = Math.max(0, qtyPerBatch - productionLoss);
+            
+            console.log('🧮 Auto-calculating qtyAchievedPerBatch:', {
+              qtyPerBatch: qtyPerBatch,
+              productionLoss: productionLoss,
+              calculatedAchieved: updateData.qtyAchievedPerBatch
+            });
+          }
+          break;
+        case 'qtyPerBatch':
+          // Handle quantity per batch updates
+          updateData.qtyPerBatch = parseFloat(value) || 0;
+          if (updateData.qtyPerBatch < 0) {
+            return res.status(400).json({
+              success: false,
+              message: 'Quantity per batch cannot be negative'
+            });
+          }
+          
+          // Auto-calculate qtyAchievedPerBatch when qtyPerBatch changes
+          // First get the current production group to access productionLoss
+          const currentGroupForQty = await ProductionGroup.findOne(query);
+          if (currentGroupForQty) {
+            const productionLoss = currentGroupForQty.productionLoss || 0;
+            const qtyPerBatch = updateData.qtyPerBatch;
+            // Calculate: qtyAchievedPerBatch = qtyPerBatch - productionLoss (minimum 0)
+            updateData.qtyAchievedPerBatch = Math.max(0, qtyPerBatch - productionLoss);
+            
+            console.log('🧮 Auto-calculating qtyAchievedPerBatch for qtyPerBatch change:', {
+              qtyPerBatch: qtyPerBatch,
+              productionLoss: productionLoss,
+              calculatedAchieved: updateData.qtyAchievedPerBatch
+            });
+          }
+          break;
+        case 'qtyAchievedPerBatch':
+          // Handle achieved quantity per batch updates
+          updateData.qtyAchievedPerBatch = parseFloat(value) || 0;
+          if (updateData.qtyAchievedPerBatch < 0) {
+            return res.status(400).json({
+              success: false,
+              message: 'Achieved quantity per batch cannot be negative'
+            });
+          }
           break;
         default:
           return res.status(400).json({
             success: false,
-            message: `Invalid field: ${field}`
+            message: `Invalid field: ${field}. Allowed fields: mouldingTime, unloadingTime, productionLoss, qtyPerBatch, qtyAchievedPerBatch`
           });
       }
 
@@ -543,6 +551,120 @@ export const debugProductSummaryData = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Debug failed',
+      error: error.message
+    });
+  }
+};
+
+// Get ungrouped items (items not assigned to any production group)
+export const getUngroupedItems = async (req, res) => {
+  try {
+    console.log('🔍 Production Ungrouped Items Request:', {
+      role: req.user.role,
+      username: req.user.username,
+      companyId: req.user.companyId,
+      query: req.query
+    });
+
+    // Validate user and company
+    if (!req.user || !req.user.companyId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required with valid company'
+      });
+    }
+
+    const { search = '' } = req.query;
+    console.log('📝 Search params:', { search });
+
+    // Get total items in company
+    const totalCompanyItems = await Item.countDocuments({ store: req.user.companyId });
+    console.log('🔢 Total items in company:', totalCompanyItems);
+
+    // Get items already assigned to production groups
+    const assignedGroups = await ProductionGroup.find({
+      company: req.user.companyId,
+      isActive: true
+    }).select('items');
+    
+    const assignedItemIds = assignedGroups.flatMap(group => 
+      group.items.map(item => item.toString())
+    );
+    console.log('🚫 Total assigned items count:', assignedItemIds.length);
+
+    // Build filter for ungrouped items
+    const filter = {
+      store: req.user.companyId,
+      _id: { $nin: assignedItemIds }
+    };
+
+    // Add search filter
+    if (search && search.trim()) {
+      filter.$or = [
+        { name: { $regex: search.trim(), $options: 'i' } },
+        { code: { $regex: search.trim(), $options: 'i' } },
+        { category: { $regex: search.trim(), $options: 'i' } }
+      ];
+    }
+
+    console.log('🔍 Filter object:', JSON.stringify(filter, null, 2));
+
+    // Get ungrouped items
+    const items = await Item.find(filter)
+      .select('name code category subCategory qty unit price image description store')
+      .sort({ name: 1 })
+      .lean();
+
+    console.log('📦 Retrieved ungrouped items:', items.length);
+
+    // Format items with proper image URLs and ProductDailySummary data
+    const formattedItems = await Promise.all(items.map(async (item) => {
+      const imageUrl = item.image ? (item.image.startsWith('/uploads/data:') ? item.image.replace('/uploads/', '') : item.image) : null;
+      
+      // Get ProductDailySummary data for this specific item
+      const itemSummary = await ProductDailySummary.findOne({
+        productId: item._id,
+        companyId: req.user.companyId
+      }).lean();
+
+      return {
+        _id: item._id,
+        name: item.name || 'Unnamed Item',
+        code: item.code || 'No Code',
+        category: item.category || 'No Category',
+        subCategory: item.subCategory || '',
+        qty: item.qty || 0,
+        unit: item.unit || '',
+        price: item.price || 0,
+        description: item.description || '',
+        image: imageUrl,
+        productionFinalBatches: itemSummary?.productionFinalBatches || 0,
+        qtyPerBatch: itemSummary?.qtyPerBatch || 0
+      };
+    }));
+
+    console.log('📤 Returning ungrouped items:', {
+      total: formattedItems.length,
+      withImages: formattedItems.filter(item => item.image).length,
+      assignedItemsCount: assignedItemIds.length,
+      totalCompanyItems: totalCompanyItems
+    });
+
+    res.json({
+      success: true,
+      data: {
+        items: formattedItems,
+        totalItems: formattedItems.length,
+        assignedItemsCount: assignedItemIds.length,
+        companyItemsCount: totalCompanyItems,
+        ungroupedItemsCount: formattedItems.length
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching ungrouped items:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch ungrouped items',
       error: error.message
     });
   }

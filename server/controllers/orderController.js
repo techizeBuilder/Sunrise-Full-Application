@@ -372,34 +372,61 @@ const updateOrder = async (req, res) => {
 
     // Update products if provided
     if (products && products.length > 0) {
+      console.log('🔄 Updating products:', products);
       let totalAmount = 0;
       const orderProducts = [];
 
       for (const productItem of products) {
+        console.log('🔍 Processing product:', productItem);
         const product = await Item.findById(productItem.productId);
+        console.log('📦 Found product:', product ? { id: product._id, name: product.name, salePrice: product.salePrice } : 'Not found');
+        
         if (product) {
-          const itemTotal = product.salePrice * productItem.quantity;
+          const itemTotal = (product.salePrice || 0) * productItem.quantity;
           totalAmount += itemTotal;
           
           orderProducts.push({
             product: productItem.productId,
             quantity: productItem.quantity,
-            price: product.salePrice,
+            price: product.salePrice || 0,
             total: itemTotal
           });
+          
+          console.log('✅ Added product to order:', {
+            productId: productItem.productId,
+            quantity: productItem.quantity,
+            price: product.salePrice || 0,
+            total: itemTotal
+          });
+        } else {
+          console.log('⚠️ Product not found:', productItem.productId);
         }
       }
 
+      console.log('💰 Total amount calculated:', totalAmount);
+      console.log('📋 Order products array:', orderProducts);
+      
       order.products = orderProducts;
       order.totalAmount = totalAmount;
+      
+      console.log('🔄 Updated order products count:', order.products.length);
     }
 
+    console.log('💾 Saving updated order...');
     await order.save();
+    console.log('✅ Order saved successfully');
 
     // Populate the updated order
+    console.log('🔍 Fetching updated order with populated data...');
     const updatedOrder = await Order.findById(id)
       .populate('customer', 'name email mobile address city state')
       .populate('products.product', 'name salePrice purchaseCost mrp brand category subCategory image');
+
+    console.log('📊 Final order data:', {
+      id: updatedOrder._id,
+      productsCount: updatedOrder.products?.length || 0,
+      totalAmount: updatedOrder.totalAmount
+    });
 
     res.json({
       success: true,

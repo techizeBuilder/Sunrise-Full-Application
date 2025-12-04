@@ -5,7 +5,8 @@ import {
   getProductionGroupShiftDetails,
   updateProductionShiftTiming,
   getProductionDashboard,
-  debugProductSummaryData
+  debugProductSummaryData,
+  getUngroupedItems
 } from '../controllers/productionController.js';
 
 const router = express.Router();
@@ -16,6 +17,22 @@ router.use(authenticateToken);
 // Production Dashboard Routes
 // GET /api/production/dashboard - Get production dashboard stats and recent data
 router.get('/dashboard', getProductionDashboard);
+
+// Test route to verify production routes are working
+router.get('/test', (req, res) => {
+  console.log('✅ Production test route working');
+  res.json({ 
+    success: true, 
+    message: 'Production routes are working!',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// GET /api/production/ungrouped-items - Get items not assigned to any production group
+router.get('/ungrouped-items', (req, res, next) => {
+  console.log('🔍 Ungrouped items route hit:', req.method, req.path);
+  getUngroupedItems(req, res, next);
+});
 
 // Production Shift Management Routes
 // GET /api/production/production-shift - Get all production groups for shift management

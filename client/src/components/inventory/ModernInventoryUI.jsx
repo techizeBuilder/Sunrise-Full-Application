@@ -196,6 +196,7 @@ export default function ModernInventoryUI() {
   const [selectedItems, setSelectedItems] = useState(new Set());
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedType, setSelectedType] = useState('all');
   const [selectedStore, setSelectedStore] = useState('all');
   const [selectedLocation, setSelectedLocation] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
@@ -444,6 +445,7 @@ export default function ModernInventoryUI() {
       item.storeLocation?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesCategory = !selectedCategory || selectedCategory === 'all' || item.category === selectedCategory;
+    const matchesType = !selectedType || selectedType === 'all' || item.type === selectedType;
     const matchesStore = !selectedStore || selectedStore === 'all' || item.store === selectedStore;
     
     // Match location by company ID or store field
@@ -452,7 +454,7 @@ export default function ModernInventoryUI() {
       item.store === selectedLocation ||
       item.location === selectedLocation;
     
-    return matchesSearch && matchesCategory && matchesStore && matchesLocation;
+    return matchesSearch && matchesCategory && matchesType && matchesStore && matchesLocation;
   }).sort((a, b) => {
     switch (sortBy) {
       case 'name':
@@ -594,6 +596,44 @@ export default function ModernInventoryUI() {
                         </div>
                       </SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+                <Select value={selectedType} onValueChange={setSelectedType}>
+                  <SelectTrigger className="w-full sm:w-[180px] border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400">
+                    <Package className="h-4 w-4 mr-2 text-gray-400" />
+                    <SelectValue placeholder="All Types" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">
+                      <div className="flex items-center gap-2">
+                        <Package className="h-4 w-4" />
+                        All Types
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="Product">
+                      <div className="flex items-center gap-2">
+                        <Package className="h-4 w-4" />
+                        Products
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="Material">
+                      <div className="flex items-center gap-2">
+                        <Package2 className="h-4 w-4" />
+                        Materials
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="Spares">
+                      <div className="flex items-center gap-2">
+                        <Package className="h-4 w-4" />
+                        Spares
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="Assemblies">
+                      <div className="flex items-center gap-2">
+                        <Package2 className="h-4 w-4" />
+                        Assemblies
+                      </div>
+                    </SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={selectedLocation} onValueChange={setSelectedLocation}>
