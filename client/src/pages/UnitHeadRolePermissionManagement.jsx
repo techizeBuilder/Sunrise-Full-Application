@@ -69,7 +69,8 @@ const UNIT_HEAD_MODULES = [
     label: 'Unit Manager',
     features: [
       { key: 'salesApproval', label: 'Sales Approval' },
-      { key: 'salesOrderList', label: 'Sales Order List' }
+      { key: 'salesOrderList', label: 'Sales Order List' },
+      { key: 'productionGroup', label: 'Production Group' }
     ]
   },
   {

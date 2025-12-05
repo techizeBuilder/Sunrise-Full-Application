@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { CheckCircle, XCircle, ArrowRight, Package, User, Settings, Clock, TrendingUp, AlertTriangle, BarChart, Filter, Search, X } from 'lucide-react';
+import { CheckCircle, XCircle, ArrowRight, Package, User, Settings, Clock, TrendingUp, AlertTriangle, BarChart, Filter, Search, X, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { config } from '@/config/environment';
 
@@ -204,8 +204,9 @@ const SalesApproval = () => {
           description: result.message || `Approved ${productName} successfully`
         });
         
-        // Refresh data in background
-        loadSummaryStatusData();
+        // Refresh data to show updated values
+        await refreshProductionData();
+        await loadSummaryStatusData();
       } else {
         const errorData = await response.json();
         console.log('❌ API Error:', errorData);
@@ -302,7 +303,10 @@ const SalesApproval = () => {
         
         setSelectedProducts(new Set());
         setIsAllSelected(false);
-        loadSummaryStatusData(); // Refresh data
+        
+        // Refresh data to show updated values
+        await refreshProductionData();
+        await loadSummaryStatusData();
       } else {
         const errorData = await response.json();
         console.log('❌ Bulk approval error:', errorData);
@@ -399,6 +403,37 @@ const SalesApproval = () => {
       if (response.ok) {
         const result = await response.json();
         console.log(`✅ SAVED ${productName}.${field}=${value}:`, result.summary);
+        
+        // Update local state with ALL values from backend response
+        if (result.summary) {
+          setProductionData(prev => ({
+            ...prev,
+            [productName]: {
+              ...prev[productName],
+              physicalStock: result.summary.physicalStock || 0,
+              batchAdjusted: result.summary.batchAdjusted || 0,
+              qtyPerBatch: result.summary.qtyPerBatch || 0,
+              toBeProducedDay: result.summary.toBeProducedDay || 0,
+              productionFinalBatches: result.summary.productionFinalBatches || 0,
+              produceBatches: result.summary.produceBatches || 0,
+              expiryShortage: result.summary.expiryShortage || 0,
+              toBeProducedBatches: result.summary.toBeProducedBatches || 0,
+              totalIndent: result.summary.totalIndent || 0
+            }
+          }));
+        }
+
+        // Update status data if available
+        if (result.summary?.status) {
+          setSummaryStatusData(prev => ({
+            ...prev,
+            [productName]: {
+              ...prev[productName],
+              status: result.summary.status,
+              summaryId: result.summary._id || prev[productName]?.summaryId
+            }
+          }));
+        }
       }
     } catch (error) {
       console.error('Error saving with value:', error);
@@ -471,15 +506,24 @@ const SalesApproval = () => {
         console.log('Production data saved with calculations:', result);
         console.log('Status from API response:', result.summary?.status);
 
-        // Update local state with calculated values
-        setProductionData(prev => ({
-          ...prev,
-          [productName]: {
-            ...prev[productName],
-            productionFinalBatches: productionFinalBatches,
-            produceBatches: produceBatches
-          }
-        }));
+        // Update local state with ALL values from backend response (including calculations)
+        if (result.summary) {
+          setProductionData(prev => ({
+            ...prev,
+            [productName]: {
+              ...prev[productName],
+              physicalStock: result.summary.physicalStock || 0,
+              batchAdjusted: result.summary.batchAdjusted || 0,
+              qtyPerBatch: result.summary.qtyPerBatch || 0,
+              toBeProducedDay: result.summary.toBeProducedDay || 0,
+              productionFinalBatches: result.summary.productionFinalBatches || 0,
+              produceBatches: result.summary.produceBatches || 0,
+              expiryShortage: result.summary.expiryShortage || 0,
+              toBeProducedBatches: result.summary.toBeProducedBatches || 0,
+              totalIndent: result.summary.totalIndent || 0
+            }
+          }));
+        }
 
         // IMPORTANT: Update status data when production data changes
         if (result.summary?.status) {
@@ -487,14 +531,23 @@ const SalesApproval = () => {
             ...prev,
             [productName]: {
               ...prev[productName],
-              status: result.summary.status // Update status from API response
+              status: result.summary.status,
+              summaryId: result.summary._id || prev[productName]?.summaryId
             }
           }));
           console.log(`✅ Status updated to '${result.summary.status}' for ${productName}`);
         }
 
-        // Also refresh all status data in the background
-        loadSummaryStatusData();
+        // Clear any pending input values since we got fresh data from backend
+        setInputValues(prev => {
+          const newInputValues = { ...prev };
+          ['physicalStock', 'batchAdjusted', 'qtyPerBatch'].forEach(field => {
+            delete newInputValues[`${productName}_${field}`];
+          });
+          return newInputValues;
+        });
+
+        console.log(`🔄 Updated production data for ${productName}:`, result.summary);
 
         toast({
           title: 'Success',
@@ -694,6 +747,63 @@ const SalesApproval = () => {
   const getProductionGroupName = (productName) => {
     const group = getProductionGroup(productName);
     return group?.groupName || 'Unknown Group';
+  };
+
+  // Refresh production data from backend
+  const refreshProductionData = async () => {
+    console.log('🔄 Refreshing production data from backend...');
+    try {
+      const response = await fetch(`${config.baseURL}/api/sales/product-summary`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          let allProducts = [];
+          
+          // Process production groups
+          if (result.productionGroups && result.productionGroups.length > 0) {
+            result.productionGroups.forEach(group => {
+              group.products.forEach(product => {
+                allProducts.push(product);
+              });
+            });
+          }
+          
+          // Process ungrouped products
+          if (result.ungroupedProducts && result.ungroupedProducts.length > 0) {
+            result.ungroupedProducts.forEach(product => {
+              allProducts.push(product);
+            });
+          }
+          
+          // Update production data with fresh backend values
+          const newProductionData = {};
+          allProducts.forEach(product => {
+            newProductionData[product.productName] = {
+              packing: product.summary?.packing || 0,
+              physicalStock: product.summary?.physicalStock || 0,
+              batchAdjusted: product.summary?.batchAdjusted || 0,
+              qtyPerBatch: product.qtyPerBatch || 1,
+              toBeProducedDay: product.summary?.toBeProducedDay || 0,
+              productionFinalBatches: product.summary?.productionFinalBatches || 0,
+              produceBatches: product.summary?.produceBatches || 0,
+              totalIndent: product.summary?.totalIndent || 0,
+              toBeProducedBatches: product.summary?.toBeProducedBatches || 0,
+              expiryShortage: product.summary?.expiryShortage || 0
+            };
+          });
+          
+          setProductionData(newProductionData);
+          console.log('✅ Production data refreshed with latest backend values:', newProductionData);
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing production data:', error);
+    }
   };
 
   // Load production summary data
@@ -1043,12 +1153,23 @@ const SalesApproval = () => {
   }, []); // Load data on mount
 
   // Force refresh function for debugging
-  const forceRefresh = () => {
+  const forceRefresh = async () => {
     console.log('🔄 Force refreshing all data...');
     setLoading(true);
-    setSummaryStatusData({});
-    setProductionData({});
-    fetchData();
+    try {
+      // Clear all local state first
+      setSummaryStatusData({});
+      setProductionData({});
+      setInputValues({});
+      
+      // Fetch fresh data from backend
+      await fetchData();
+      await refreshProductionData();
+    } catch (error) {
+      console.error('Error during force refresh:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleBulkStatusUpdate = async () => {
@@ -1207,8 +1328,24 @@ const SalesApproval = () => {
     <div className="p-2 lg:p-6 bg-gray-50 min-h-screen">
       {/* Header */}
       <div className="mb-3 lg:mb-6">
-        <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-2">Indent Summary Dashboard</h1>
-        <p className="text-sm lg:text-base text-gray-600">Manage product orders by sales person</p>
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-2">Indent Summary Dashboard</h1>
+            <p className="text-sm lg:text-base text-gray-600">Manage product orders by sales person</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button 
+              onClick={forceRefresh}
+              variant="outline"
+              size="sm"
+              disabled={loading}
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              Refresh Data
+            </Button>
+          </div>
+        </div>
       </div>
 
 
@@ -1655,7 +1792,7 @@ const SalesApproval = () => {
                         <div className="flex items-center justify-center gap-1">
                           <Button
                             onClick={() => handleIndividualApprove(product)}
-                            disabled={approvingProducts.has(product) || totalQuantity === 0 || getSummaryStatus(product) === 'approved'}
+                            disabled={approvingProducts.has(product) || getSummaryStatus(product) === 'approved'}
                             size="sm"
                             className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 h-7 text-xs disabled:opacity-50"
                             title={`Approve summary for ${product}`}

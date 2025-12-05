@@ -1809,10 +1809,68 @@ export const createUnitManagerProductionGroup = async (req, res) => {
         companyId: req.user.companyId
       }).select('productId qtyPerBatch');
 
+      console.log('📊 ProductDailySummary data found:', productSummaries.map(summary => ({
+        productId: summary.productId,
+        qtyPerBatch: summary.qtyPerBatch || 0
+      })));
+
+      // ✅ QUANTITY/BATCH VALIDATION LOGIC
       if (productSummaries.length > 0) {
-        const summaryQtyPerBatch = productSummaries.map(summary => summary.qtyPerBatch || 0);
-        calculatedQtyPerBatch = Math.max(...summaryQtyPerBatch, 0);
-        console.log('🎯 Calculated qtyPerBatch from ProductDailySummary (max value):', calculatedQtyPerBatch);
+        // Get all qtyPerBatch values
+        const qtyPerBatchValues = productSummaries.map(summary => summary.qtyPerBatch || 0);
+        const uniqueQtyValues = [...new Set(qtyPerBatchValues)];
+        
+        console.log('🔍 All qtyPerBatch values:', qtyPerBatchValues);
+        console.log('🔍 Unique qtyPerBatch values:', uniqueQtyValues);
+        
+        // Check if all items have the same qtyPerBatch
+        if (uniqueQtyValues.length > 1) {
+          // Items have different quantities - return error with details
+          const itemDetails = productSummaries.map(summary => {
+            const item = inventoryItems.find(item => item._id.toString() === summary.productId.toString());
+            return {
+              name: item?.name || 'Unknown',
+              qtyPerBatch: summary.qtyPerBatch || 0
+            };
+          });
+          
+          const quantityList = itemDetails.map(item => `${item.name}: ${item.qtyPerBatch}`).join(', ');
+          
+          return res.status(400).json({
+            success: false,
+            message: `Items have different batch quantities and cannot be grouped together. Found quantities: ${quantityList}. All items in a production group must have the same batch quantity.`
+          });
+        }
+        
+        // All items have the same qtyPerBatch - use it
+        calculatedQtyPerBatch = Math.max(...qtyPerBatchValues, 0);
+        console.log('✅ All items have matching qtyPerBatch:', calculatedQtyPerBatch);
+      } else {
+        // Fallback to inventory qty if no ProductDailySummary found
+        const itemQuantities = inventoryItems.map(item => item.qty || 0);
+        const uniqueInventoryQty = [...new Set(itemQuantities)];
+        
+        console.log('📦 Inventory quantities:', itemQuantities);
+        console.log('📦 Unique inventory quantities:', uniqueInventoryQty);
+        
+        // Check if all items have the same inventory quantity
+        if (uniqueInventoryQty.length > 1) {
+          const itemDetails = inventoryItems.map(item => ({
+            name: item.name,
+            qty: item.qty || 0
+          }));
+          
+          const quantityList = itemDetails.map(item => `${item.name}: ${item.qty}`).join(', ');
+          
+          return res.status(400).json({
+            success: false,
+            message: `Items have different inventory quantities and cannot be grouped together. Found quantities: ${quantityList}. All items in a production group must have the same quantity.`
+          });
+        }
+        
+        calculatedQtyPerBatch = Math.max(...itemQuantities, 0);
+        console.log('⚠️ No ProductDailySummary found, using inventory quantities as fallback');
+        console.log('✅ All items have matching inventory qty:', calculatedQtyPerBatch);
       }
     }
 
@@ -1922,7 +1980,7 @@ export const updateUnitManagerProductionGroup = async (req, res) => {
       }
     }
 
-    // Validate items and recalculate qtyPerBatch
+    // Validate items and recalculate qtyPerBatch with quantity validation
     let validatedItems = [];
     let calculatedQtyPerBatch = existingGroup.qtyPerBatch;
 
@@ -1930,20 +1988,73 @@ export const updateUnitManagerProductionGroup = async (req, res) => {
       const inventoryItems = await Item.find({
         _id: { $in: items },
         store: req.user.companyId
-      }).select('_id name');
+      }).select('_id name qty');
 
       validatedItems = inventoryItems.map(item => item._id);
 
-      // Recalculate qtyPerBatch from ProductDailySummary
-      const productSummaries = await ProductDailySummary.find({
+      // Recalculate qtyPerBatch from ProductDailySummary with validation
+      const updateProductSummaries = await ProductDailySummary.find({
         productId: { $in: validatedItems },
         companyId: req.user.companyId
       }).select('productId qtyPerBatch');
 
-      if (productSummaries.length > 0) {
-        const summaryQtyPerBatch = productSummaries.map(summary => summary.qtyPerBatch || 0);
-        calculatedQtyPerBatch = Math.max(...summaryQtyPerBatch, 0);
-        console.log('🎯 Unit Manager recalculated qtyPerBatch:', calculatedQtyPerBatch);
+      // ✅ QUANTITY/BATCH VALIDATION LOGIC FOR UNIT MANAGER UPDATE
+      if (updateProductSummaries.length > 0) {
+        // Get all qtyPerBatch values
+        const qtyPerBatchValues = updateProductSummaries.map(summary => summary.qtyPerBatch || 0);
+        const uniqueQtyValues = [...new Set(qtyPerBatchValues)];
+        
+        console.log('🔍 Unit Manager Update - All qtyPerBatch values:', qtyPerBatchValues);
+        console.log('🔍 Unit Manager Update - Unique qtyPerBatch values:', uniqueQtyValues);
+        
+        // Check if all items have the same qtyPerBatch
+        if (uniqueQtyValues.length > 1) {
+          // Items have different quantities - return error with details
+          const itemDetails = updateProductSummaries.map(summary => {
+            const item = inventoryItems.find(item => item._id.toString() === summary.productId.toString());
+            return {
+              name: item?.name || 'Unknown',
+              qtyPerBatch: summary.qtyPerBatch || 0
+            };
+          });
+          
+          const quantityList = itemDetails.map(item => `${item.name}: ${item.qtyPerBatch}`).join(', ');
+          
+          return res.status(400).json({
+            success: false,
+            message: `Items have different batch quantities and cannot be grouped together. Found quantities: ${quantityList}. All items in a production group must have the same batch quantity.`
+          });
+        }
+        
+        // All items have the same qtyPerBatch - use it
+        calculatedQtyPerBatch = Math.max(...qtyPerBatchValues, 0);
+        console.log('✅ Unit Manager Update - All items have matching qtyPerBatch:', calculatedQtyPerBatch);
+      } else {
+        // Fallback to inventory qty if no ProductDailySummary found
+        const itemQuantities = inventoryItems.map(item => item.qty || 0);
+        const uniqueInventoryQty = [...new Set(itemQuantities)];
+        
+        console.log('📦 Unit Manager Update - Inventory quantities:', itemQuantities);
+        console.log('📦 Unit Manager Update - Unique inventory quantities:', uniqueInventoryQty);
+        
+        // Check if all items have the same inventory quantity
+        if (uniqueInventoryQty.length > 1) {
+          const itemDetails = inventoryItems.map(item => ({
+            name: item.name,
+            qty: item.qty || 0
+          }));
+          
+          const quantityList = itemDetails.map(item => `${item.name}: ${item.qty}`).join(', ');
+          
+          return res.status(400).json({
+            success: false,
+            message: `Items have different inventory quantities and cannot be grouped together. Found quantities: ${quantityList}. All items in a production group must have the same quantity.`
+          });
+        }
+        
+        calculatedQtyPerBatch = Math.max(...itemQuantities, 0);
+        console.log('⚠️ Unit Manager Update - No ProductDailySummary found, using inventory quantities as fallback');
+        console.log('✅ Unit Manager Update - All items have matching inventory qty:', calculatedQtyPerBatch);
       }
     }
 

@@ -39,7 +39,9 @@ import {
   UserPlus,
   Settings,
   Lock,
-  EyeOff
+  EyeOff,
+  Search,
+  X
 } from 'lucide-react';
 import { showSuccessToast, showSmartToast } from '@/lib/toast-utils';
 
@@ -86,7 +88,8 @@ const MODULES = [
     label: 'Unit Manager',
     features: [
       { key: 'salesApproval', label: 'Sales Approval' },
-      { key: 'salesOrderList', label: 'Sales Order List' }
+      { key: 'salesOrderList', label: 'Sales Order List' },
+      { key: 'productionGroup', label: 'Production Group' }
     ]
   },
   {
@@ -219,6 +222,15 @@ export default function RolePermissionManagement() {
   });
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  
+  // Pagination and filtering state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  
   const [formData, setFormData] = useState({
     username: '',
     email: '',
@@ -236,9 +248,19 @@ export default function RolePermissionManagement() {
 
   const queryClient = useQueryClient();
 
-  // Fetch users
+  // Fetch users with pagination and filtering
   const { data: usersResponse, isLoading } = useQuery({
-    queryKey: ['/api/users'],
+    queryKey: ['/api/users', currentPage, pageSize, debouncedSearchTerm, roleFilter, statusFilter],
+    queryFn: () => {
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: pageSize.toString(),
+        ...(debouncedSearchTerm && { search: debouncedSearchTerm }),
+        ...(roleFilter && roleFilter !== 'all' && { role: roleFilter }),
+        ...(statusFilter && statusFilter !== 'all' && { status: statusFilter })
+      });
+      return apiRequest('GET', `/api/users?${params.toString()}`);
+    },
     enabled: true,
     retry: 1
   });
@@ -267,7 +289,22 @@ export default function RolePermissionManagement() {
   }, [unitHeadCompanyResponse]);
 
   const users = usersResponse?.users || [];
+  const totalUsers = usersResponse?.pagination?.total || 0;
+  const totalPages = usersResponse?.pagination?.pages || 1;
   const companies = companiesResponse?.companies || [];
+
+  // Debounce search term
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearchTerm, roleFilter, statusFilter]);
 
   // Debug companies data
   console.log('Companies data from API:', companies);
@@ -758,7 +795,7 @@ export default function RolePermissionManagement() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Role & Permission Management</h1>
           <p className="text-sm sm:text-base text-muted-foreground">
-            View user roles and permission structures. Use User Management to create and edit users.
+            Manage user roles and permissions. Total users: {totalUsers}
           </p>
         </div>
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
@@ -1008,6 +1045,129 @@ export default function RolePermissionManagement() {
         </Dialog>
       </div>
 
+      {/* Search and Filters */}
+      <Card>
+        <CardContent className="p-4 sm:p-6">
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <Label htmlFor="search" className="text-sm font-medium">Search Users</Label>
+                <div className="relative">
+                  <Input
+                    id="search"
+                    placeholder="Search by username, email, or name..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="mt-1 pr-10"
+                  />
+                  <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="roleFilter" className="text-sm font-medium">Filter by Role</Label>
+                <Select value={roleFilter} onValueChange={setRoleFilter}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="All roles" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All roles</SelectItem>
+                    {ROLES.map((role) => (
+                      <SelectItem key={role.value} value={role.value}>
+                        {role.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="statusFilter" className="text-sm font-medium">Filter by Status</Label>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="All statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All statuses</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="pageSize" className="text-sm font-medium">Items per page</Label>
+                <Select value={pageSize.toString()} onValueChange={(value) => setPageSize(Number(value))}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">5 per page</SelectItem>
+                    <SelectItem value="10">10 per page</SelectItem>
+                    <SelectItem value="20">20 per page</SelectItem>
+                    <SelectItem value="50">50 per page</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {(searchTerm || (roleFilter && roleFilter !== 'all') || (statusFilter && statusFilter !== 'all')) && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm text-muted-foreground">Active filters:</span>
+                {searchTerm && (
+                  <Badge variant="secondary" className="gap-1">
+                    Search: {searchTerm}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto p-0 text-muted-foreground hover:text-foreground"
+                      onClick={() => setSearchTerm('')}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </Badge>
+                )}
+                {roleFilter && roleFilter !== 'all' && (
+                  <Badge variant="secondary" className="gap-1">
+                    Role: {roleFilter}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto p-0 text-muted-foreground hover:text-foreground"
+                      onClick={() => setRoleFilter('all')}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </Badge>
+                )}
+                {statusFilter && statusFilter !== 'all' && (
+                  <Badge variant="secondary" className="gap-1">
+                    Status: {statusFilter}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto p-0 text-muted-foreground hover:text-foreground"
+                      onClick={() => setStatusFilter('all')}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </Badge>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setDebouncedSearchTerm('');
+                    setRoleFilter('all');
+                    setStatusFilter('all');
+                  }}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  Clear all
+                </Button>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Users Overview */}
       <Card>
         <CardHeader>
@@ -1020,8 +1180,34 @@ export default function RolePermissionManagement() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {/* Desktop Table */}
-          <div className="hidden sm:block overflow-x-auto">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
+                <p className="text-muted-foreground">Loading users...</p>
+              </div>
+            </div>
+          ) : users.length === 0 ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="text-center">
+                <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No users found</h3>
+                <p className="text-muted-foreground mb-4">
+                  {searchTerm || (roleFilter && roleFilter !== 'all') || (statusFilter && statusFilter !== 'all')
+                    ? "Try adjusting your search or filter criteria"
+                    : "Get started by creating your first user"
+                  }
+                </p>
+                <Button onClick={() => { resetForm(); setIsCreateDialogOpen(true); }}>
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Create User
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Desktop Table */}
+              <div className="hidden sm:block overflow-x-auto">
             <table className="w-full min-w-[800px]">
               <thead>
                 <tr className="border-b">
@@ -1215,8 +1401,63 @@ export default function RolePermissionManagement() {
               </div>
             ))}
           </div>
+            </>
+          )}
         </CardContent>
       </Card>
+
+      {/* Pagination */}
+      {!isLoading && users.length > 0 && totalPages > 1 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="text-sm text-muted-foreground">
+            Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalUsers)} of {totalUsers} users
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+            >
+              Previous
+            </Button>
+            <div className="flex items-center gap-1">
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                
+                return (
+                  <Button
+                    key={pageNum}
+                    variant={currentPage === pageNum ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCurrentPage(pageNum)}
+                    className="w-8 h-8 p-0"
+                  >
+                    {pageNum}
+                  </Button>
+                );
+              })}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Edit User Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>

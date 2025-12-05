@@ -11,13 +11,13 @@ export const getUsers = async (req, res) => {
     
     const { 
       page = 1, 
-      limit = 100, // Increased default limit to show more users
+      limit = 10, // Changed default limit to 10 for better pagination
       role, 
       unit, 
       search,
       sortBy = 'createdAt',
       sortOrder = 'desc',
-      status = 'all'
+      status
     } = req.query;
     
     const skip = (page - 1) * limit;
@@ -40,7 +40,7 @@ export const getUsers = async (req, res) => {
     }
 
     // Filter by status
-    if (status !== 'all') {
+    if (status && status !== 'all') {
       query.isActive = status === 'active';
     }
 

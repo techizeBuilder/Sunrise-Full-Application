@@ -400,8 +400,7 @@ const UnitHeadProductionGroup = () => {
 
   const handleItemSearch = (e) => {
     e.preventDefault();
-    setAvailableItemsPage(1);
-    fetchAvailableItems(1, itemSearchTerm);
+    fetchAvailableItems(itemSearchTerm);
   };
 
   useEffect(() => {
@@ -410,14 +409,14 @@ const UnitHeadProductionGroup = () => {
   }, []);
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
             Production Groups
           </h1>
-          <p className="text-gray-600 dark:text-gray-400">
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
             Manage production groups and assign inventory items
           </p>
         </div>
@@ -427,7 +426,7 @@ const UnitHeadProductionGroup = () => {
             fetchAvailableItems('');
             setShowCreateModal(true);
           }}
-          className="flex items-center gap-2"
+          className="flex items-center gap-2 w-full sm:w-auto"
         >
           <Plus className="w-4 h-4" />
           Create Group
@@ -436,17 +435,17 @@ const UnitHeadProductionGroup = () => {
 
       {/* Search and Filters */}
       <Card>
-        <CardContent className="pt-6">
-          <form onSubmit={handleSearch} className="flex gap-4 items-center">
+        <CardContent className="pt-4 sm:pt-6">
+          <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center">
             <div className="flex-1">
               <Input
                 placeholder="Search groups..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="max-w-sm"
+                className="w-full sm:max-w-sm"
               />
             </div>
-            <Button type="submit" variant="outline">
+            <Button type="submit" variant="outline" className="w-full sm:w-auto">
               <Search className="w-4 h-4 mr-2" />
               Search
             </Button>
@@ -457,7 +456,7 @@ const UnitHeadProductionGroup = () => {
       {/* Groups Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Production Groups ({groups.length})</CardTitle>
+          <CardTitle className="text-lg sm:text-xl">Production Groups ({groups.length})</CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -467,67 +466,81 @@ const UnitHeadProductionGroup = () => {
               No production groups found
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Group Name</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Items Count</TableHead>
-                  <TableHead>Created By</TableHead>
-                  <TableHead>Created Date</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {groups.map((group) => (
-                  <TableRow key={group._id}>
-                    <TableCell className="font-medium">{group.name}</TableCell>
-                    <TableCell className="max-w-xs truncate">
-                      {group.description || '-'}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">
-                        {group.metadata?.totalItems || 0} items
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{group.createdBy?.username || '-'}</TableCell>
-                    <TableCell>
-                      {new Date(group.createdAt).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleViewGroup(group)}
-                        >
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => openEditModal(group)}
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleDeleteGroup(group._id)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="min-w-[140px]">Group Name</TableHead>
+                    <TableHead className="min-w-[160px] hidden sm:table-cell">Description</TableHead>
+                    <TableHead className="min-w-[100px]">Items</TableHead>
+                    <TableHead className="min-w-[120px] hidden md:table-cell">Created By</TableHead>
+                    <TableHead className="min-w-[120px] hidden lg:table-cell">Date</TableHead>
+                    <TableHead className="min-w-[120px]">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {groups.map((group) => (
+                    <TableRow key={group._id}>
+                      <TableCell className="font-medium">
+                        <div>
+                          <div className="font-semibold">{group.name}</div>
+                          <div className="text-xs text-gray-500 sm:hidden">
+                            {group.description || 'No description'}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="max-w-xs truncate hidden sm:table-cell">
+                        {group.description || '-'}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">
+                          {group.metadata?.totalItems || 0}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        {group.createdBy?.username || '-'}
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell">
+                        {new Date(group.createdAt).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleViewGroup(group)}
+                            className="p-1 h-8 w-8"
+                          >
+                            <Eye className="w-3 h-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openEditModal(group)}
+                            className="p-1 h-8 w-8"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDeleteGroup(group._id)}
+                            className="p-1 h-8 w-8"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between pt-4">
+            <div className="flex flex-col sm:flex-row items-center justify-between pt-4 gap-4">
               <div className="text-sm text-gray-600">
                 Page {currentPage} of {totalPages}
               </div>
@@ -556,88 +569,106 @@ const UnitHeadProductionGroup = () => {
 
       {/* Create Group Modal */}
       <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
-        <DialogContent className="max-w-4xl max-h-[80vh]">
+        <DialogContent className="w-[95vw] max-w-4xl max-h-[85vh] sm:max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Create Production Group</DialogTitle>
+            <DialogTitle className="text-lg sm:text-xl">Create Production Group</DialogTitle>
           </DialogHeader>
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             <div className="grid gap-4">
               <div>
-                <Label htmlFor="name">Group Name *</Label>
+                <Label htmlFor="name" className="text-sm font-medium">Group Name *</Label>
                 <Input
                   id="name"
                   value={formData.name}
                   onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                   placeholder="Enter group name"
+                  className="mt-1"
                 />
               </div>
               <div>
-                <Label htmlFor="description">Description</Label>
+                <Label htmlFor="description" className="text-sm font-medium">Description</Label>
                 <Textarea
                   id="description"
                   value={formData.description}
                   onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                   placeholder="Enter group description"
+                  className="mt-1 min-h-[80px]"
                 />
               </div>
             </div>
 
             <div>
-              <Label>Assign Items</Label>
-              <div className="mt-2">
-                <form onSubmit={handleItemSearch} className="flex gap-2 mb-4">
+              <Label className="text-sm font-medium">Assign Items</Label>
+              <div className="mt-2 space-y-3">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <Input
                     placeholder="Search items..."
                     value={itemSearchTerm}
                     onChange={(e) => setItemSearchTerm(e.target.value)}
+                    className="flex-1"
                   />
-                  <Button type="submit" size="sm">Search</Button>
-                </form>
-                <ScrollArea className="h-64 border rounded-md p-4">
-                  {console.log('🎨 Create Modal - Available items:', availableItems.length)}
-                  {availableItems.length === 0 ? (
-                    <p className="text-center text-gray-500 py-4">No items found. Try searching or check if items exist.</p>
-                  ) : (
-                    availableItems.map((item) => {
-                      console.log('🔍 Rendering item:', item);
-                      return (
-                        <div key={item._id} className="flex items-center space-x-2 mb-2">
-                          <Checkbox
-                            checked={formData.selectedItems.includes(item._id)}
-                            onCheckedChange={(checked) => handleItemSelection(item._id, checked)}
-                          />
-                          <div className="flex items-center space-x-2 flex-1">
-                            {item.image ? (
-                              <img
-                                src={item.image}
-                                alt={item.name}
-                                className="w-8 h-8 rounded object-cover"
+                  <Button 
+                    type="button" 
+                    size="sm" 
+                    onClick={() => fetchAvailableItems(itemSearchTerm)}
+                    className="w-full sm:w-auto"
+                  >
+                    Search
+                  </Button>
+                </div>
+                <div className="border rounded-md">
+                  <ScrollArea className="h-48 sm:h-64 p-3 sm:p-4">
+                    {console.log('🎨 Create Modal - Available items:', availableItems.length)}
+                    {availableItems.length === 0 ? (
+                      <div className="text-center text-gray-500 py-8">
+                        <Package className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                        <p className="text-sm">No items found.</p>
+                        <p className="text-xs text-gray-400 mt-1">Try searching or check if items exist.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {availableItems.map((item) => {
+                          console.log('🔍 Rendering item:', item);
+                          return (
+                            <div key={item._id} className="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded-md">
+                              <Checkbox
+                                checked={formData.selectedItems.includes(item._id)}
+                                onCheckedChange={(checked) => handleItemSelection(item._id, checked)}
                               />
-                            ) : (
-                              <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center">
-                                <Package className="w-4 h-4 text-gray-500" />
-                              </div>
-                            )}
-                            <div>
-                              <div className="font-medium">{item.name}</div>
-                              <div className="text-sm text-gray-500">
-                                {item.code} | {item.category}
+                              <div className="flex items-center space-x-3 flex-1 min-w-0">
+                                {item.image ? (
+                                  <img
+                                    src={item.image}
+                                    alt={item.name}
+                                    className="w-8 h-8 sm:w-10 sm:h-10 rounded object-cover flex-shrink-0"
+                                  />
+                                ) : (
+                                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                    <Package className="w-4 h-4 text-gray-500" />
+                                  </div>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-medium text-sm sm:text-base truncate">{item.name}</div>
+                                  <div className="text-xs sm:text-sm text-gray-500 truncate">
+                                    {item.code} | {item.category}
+                                  </div>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </ScrollArea>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </ScrollArea>
+                </div>
               </div>
             </div>
 
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowCreateModal(false)}>
+            <div className="flex flex-col sm:flex-row justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowCreateModal(false)} className="w-full sm:w-auto">
                 Cancel
               </Button>
-              <Button onClick={handleCreateGroup}>
+              <Button onClick={handleCreateGroup} className="w-full sm:w-auto">
                 Create Group
               </Button>
             </div>
@@ -647,120 +678,150 @@ const UnitHeadProductionGroup = () => {
 
       {/* Edit Group Modal */}
       <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
-        <DialogContent className="max-w-4xl max-h-[80vh]">
+        <DialogContent className="w-[95vw] max-w-4xl max-h-[85vh] sm:max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Edit Production Group</DialogTitle>
+            <DialogTitle className="text-lg sm:text-xl">Edit Production Group</DialogTitle>
           </DialogHeader>
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             <div className="grid gap-4">
               <div>
-                <Label htmlFor="edit-name">Group Name *</Label>
+                <Label htmlFor="edit-name" className="text-sm font-medium">Group Name *</Label>
                 <Input
                   id="edit-name"
                   value={formData.name}
                   onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                   placeholder="Enter group name"
+                  className="mt-1"
                 />
               </div>
               <div>
-                <Label htmlFor="edit-description">Description</Label>
+                <Label htmlFor="edit-description" className="text-sm font-medium">Description</Label>
                 <Textarea
                   id="edit-description"
                   value={formData.description}
                   onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                   placeholder="Enter group description"
+                  className="mt-1 min-h-[80px]"
                 />
               </div>
             </div>
 
             <div>
-              <Label>Assign Items</Label>
-              <div className="mt-2">
-                <form onSubmit={handleItemSearch} className="flex gap-2 mb-4">
+              <Label className="text-sm font-medium">Assign Items</Label>
+              <div className="mt-2 space-y-3">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <Input
                     placeholder="Search items..."
                     value={itemSearchTerm}
                     onChange={(e) => setItemSearchTerm(e.target.value)}
+                    className="flex-1"
                   />
-                  <Button type="submit" size="sm">Search</Button>
-                </form>
-                <ScrollArea className="h-64 border rounded-md p-4">
-                  {/* Show currently assigned items first */}
-                  {selectedGroup?.items?.length > 0 && (
-                    <div>
-                      <div className="text-sm font-medium text-blue-600 mb-2">Currently Assigned Items:</div>
-                      {selectedGroup.items.map((item) => (
-                        <div key={`current-${item._id}`} className="flex items-center space-x-2 mb-2 bg-blue-50 p-2 rounded">
-                          <Checkbox
-                            checked={formData.selectedItems.includes(item._id)}
-                            onCheckedChange={(checked) => handleItemSelection(item._id, checked)}
-                          />
-                          <div className="flex items-center space-x-2 flex-1">
-                            {item.image ? (
-                              <img
-                                src={item.image}
-                                alt={item.name}
-                                className="w-8 h-8 rounded object-cover"
+                  <Button 
+                    type="button" 
+                    size="sm" 
+                    onClick={() => fetchAvailableItems(itemSearchTerm, selectedGroup?._id)}
+                    className="w-full sm:w-auto"
+                  >
+                    Search
+                  </Button>
+                </div>
+                <div className="border rounded-md">
+                  <ScrollArea className="h-48 sm:h-64 p-3 sm:p-4">
+                    {/* Show currently assigned items first */}
+                    {selectedGroup?.items?.length > 0 && (
+                      <div className="mb-4">
+                        <div className="text-sm font-medium text-blue-600 mb-3 flex items-center gap-2">
+                          <Package className="w-4 h-4" />
+                          Currently Assigned Items:
+                        </div>
+                        <div className="space-y-2">
+                          {selectedGroup.items.map((item) => (
+                            <div key={`current-${item._id}`} className="flex items-center space-x-3 p-2 bg-blue-50 rounded-md">
+                              <Checkbox
+                                checked={formData.selectedItems.includes(item._id)}
+                                onCheckedChange={(checked) => handleItemSelection(item._id, checked)}
                               />
-                            ) : (
-                              <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center">
-                                <Package className="w-4 h-4 text-gray-500" />
-                              </div>
-                            )}
-                            <div>
-                              <div className="font-medium">{item.name}</div>
-                              <div className="text-sm text-gray-500">
-                                {item.code} | {item.category}
+                              <div className="flex items-center space-x-3 flex-1 min-w-0">
+                                {item.image ? (
+                                  <img
+                                    src={item.image}
+                                    alt={item.name}
+                                    className="w-8 h-8 sm:w-10 sm:h-10 rounded object-cover flex-shrink-0"
+                                  />
+                                ) : (
+                                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                    <Package className="w-4 h-4 text-gray-500" />
+                                  </div>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-medium text-sm sm:text-base truncate">{item.name}</div>
+                                  <div className="text-xs sm:text-sm text-gray-500 truncate">
+                                    {item.code} | {item.category}
+                                  </div>
+                                </div>
                               </div>
                             </div>
-                          </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  )}
-                  
-                  {/* Show available items */}
-                  {availableItems.length > 0 && (
-                    <div>
-                      <div className="text-sm font-medium text-green-600 mb-2 mt-4">Available Items:</div>
-                      {availableItems.map((item) => (
-                        <div key={item._id} className="flex items-center space-x-2 mb-2">
-                          <Checkbox
-                            checked={formData.selectedItems.includes(item._id)}
-                            onCheckedChange={(checked) => handleItemSelection(item._id, checked)}
-                          />
-                          <div className="flex items-center space-x-2 flex-1">
-                            {item.image ? (
-                              <img
-                                src={item.image}
-                                alt={item.name}
-                                className="w-8 h-8 rounded object-cover"
+                      </div>
+                    )}
+                    
+                    {/* Show available items */}
+                    {availableItems.length > 0 && (
+                      <div>
+                        <div className="text-sm font-medium text-green-600 mb-3 flex items-center gap-2">
+                          <Plus className="w-4 h-4" />
+                          Available Items:
+                        </div>
+                        <div className="space-y-2">
+                          {availableItems.map((item) => (
+                            <div key={item._id} className="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded-md">
+                              <Checkbox
+                                checked={formData.selectedItems.includes(item._id)}
+                                onCheckedChange={(checked) => handleItemSelection(item._id, checked)}
                               />
-                            ) : (
-                              <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center">
-                                <Package className="w-4 h-4 text-gray-500" />
-                              </div>
-                            )}
-                            <div>
-                              <div className="font-medium">{item.name}</div>
-                              <div className="text-sm text-gray-500">
-                                {item.code} | {item.category}
+                              <div className="flex items-center space-x-3 flex-1 min-w-0">
+                                {item.image ? (
+                                  <img
+                                    src={item.image}
+                                    alt={item.name}
+                                    className="w-8 h-8 sm:w-10 sm:h-10 rounded object-cover flex-shrink-0"
+                                  />
+                                ) : (
+                                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                    <Package className="w-4 h-4 text-gray-500" />
+                                  </div>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-medium text-sm sm:text-base truncate">{item.name}</div>
+                                  <div className="text-xs sm:text-sm text-gray-500 truncate">
+                                    {item.code} | {item.category}
+                                  </div>
+                                </div>
                               </div>
                             </div>
-                          </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </ScrollArea>
+                      </div>
+                    )}
+                    
+                    {selectedGroup?.items?.length === 0 && availableItems.length === 0 && (
+                      <div className="text-center text-gray-500 py-8">
+                        <Package className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                        <p className="text-sm">No items available</p>
+                        <p className="text-xs text-gray-400 mt-1">Try searching for items</p>
+                      </div>
+                    )}
+                  </ScrollArea>
+                </div>
               </div>
             </div>
 
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowEditModal(false)}>
+            <div className="flex flex-col sm:flex-row justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowEditModal(false)} className="w-full sm:w-auto">
                 Cancel
               </Button>
-              <Button onClick={handleUpdateGroup}>
+              <Button onClick={handleUpdateGroup} className="w-full sm:w-auto">
                 Update Group
               </Button>
             </div>
@@ -770,71 +831,80 @@ const UnitHeadProductionGroup = () => {
 
       {/* View Group Modal */}
       <Dialog open={showViewModal} onOpenChange={setShowViewModal}>
-        <DialogContent className="max-w-4xl max-h-[80vh]">
+        <DialogContent className="w-[95vw] max-w-4xl max-h-[85vh] sm:max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Production Group Details</DialogTitle>
+            <DialogTitle className="text-lg sm:text-xl">Production Group Details</DialogTitle>
           </DialogHeader>
           {selectedGroup && (
-            <div className="space-y-6">
+            <div className="space-y-4 sm:space-y-6">
               <div className="grid gap-4">
                 <div>
-                  <Label>Group Name</Label>
-                  <p className="text-lg font-medium">{selectedGroup.name}</p>
+                  <Label className="text-sm font-medium">Group Name</Label>
+                  <p className="text-base sm:text-lg font-medium mt-1">{selectedGroup.name}</p>
                 </div>
                 {selectedGroup.description && (
                   <div>
-                    <Label>Description</Label>
-                    <p className="text-gray-600">{selectedGroup.description}</p>
+                    <Label className="text-sm font-medium">Description</Label>
+                    <p className="text-sm sm:text-base text-gray-600 mt-1">{selectedGroup.description}</p>
                   </div>
                 )}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <Label>Created By</Label>
-                    <p>{selectedGroup.createdBy?.username || '-'}</p>
+                    <Label className="text-sm font-medium">Created By</Label>
+                    <p className="text-sm sm:text-base mt-1">{selectedGroup.createdBy?.username || '-'}</p>
                   </div>
                   <div>
-                    <Label>Created Date</Label>
-                    <p>{new Date(selectedGroup.createdAt).toLocaleDateString()}</p>
+                    <Label className="text-sm font-medium">Created Date</Label>
+                    <p className="text-sm sm:text-base mt-1">{new Date(selectedGroup.createdAt).toLocaleDateString()}</p>
                   </div>
                 </div>
               </div>
 
               <div>
-                <Label>Assigned Items ({selectedGroup.items?.length || 0})</Label>
-                <ScrollArea className="h-64 border rounded-md p-4 mt-2">
-                  {selectedGroup.items?.length > 0 ? (
-                    selectedGroup.items.map((item) => (
-                      <div key={item._id} className="flex items-center space-x-3 mb-3 p-2 border rounded">
-                        {item.image ? (
-                          <img
-                            src={item.image}
-                            alt={item.name}
-                            className="w-12 h-12 rounded object-cover"
-                          />
-                        ) : (
-                          <div className="w-12 h-12 rounded bg-gray-100 flex items-center justify-center">
-                            <Package className="w-6 h-6 text-gray-500" />
+                <Label className="text-sm font-medium">
+                  Assigned Items ({selectedGroup.items?.length || 0})
+                </Label>
+                <div className="border rounded-md mt-2">
+                  <ScrollArea className="h-48 sm:h-64 p-3 sm:p-4">
+                    {selectedGroup.items?.length > 0 ? (
+                      <div className="space-y-3">
+                        {selectedGroup.items.map((item) => (
+                          <div key={item._id} className="flex items-center space-x-3 p-3 border rounded-md bg-gray-50">
+                            {item.image ? (
+                              <img
+                                src={item.image}
+                                alt={item.name}
+                                className="w-10 h-10 sm:w-12 sm:h-12 rounded object-cover flex-shrink-0"
+                              />
+                            ) : (
+                              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded bg-gray-200 flex items-center justify-center flex-shrink-0">
+                                <Package className="w-5 h-5 sm:w-6 sm:h-6 text-gray-500" />
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-sm sm:text-base truncate">{item.name}</div>
+                              <div className="text-xs sm:text-sm text-gray-500">
+                                Code: {item.code} | Category: {item.category}
+                              </div>
+                              <div className="text-xs sm:text-sm text-gray-500">
+                                Quantity: {item.qty} {item.unit}
+                              </div>
+                            </div>
                           </div>
-                        )}
-                        <div className="flex-1">
-                          <div className="font-medium">{item.name}</div>
-                          <div className="text-sm text-gray-500">
-                            Code: {item.code} | Category: {item.category}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            Quantity: {item.qty} {item.unit}
-                          </div>
-                        </div>
+                        ))}
                       </div>
-                    ))
-                  ) : (
-                    <p className="text-gray-500 text-center">No items assigned</p>
-                  )}
-                </ScrollArea>
+                    ) : (
+                      <div className="text-center text-gray-500 py-8">
+                        <Package className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                        <p className="text-sm">No items assigned</p>
+                      </div>
+                    )}
+                  </ScrollArea>
+                </div>
               </div>
 
               <div className="flex justify-end">
-                <Button variant="outline" onClick={() => setShowViewModal(false)}>
+                <Button variant="outline" onClick={() => setShowViewModal(false)} className="w-full sm:w-auto">
                   Close
                 </Button>
               </div>
