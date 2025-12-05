@@ -31,10 +31,14 @@ export default function ProductionShift() {
   const [batchData, setBatchData] = useState({});
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [selectedBatch, setSelectedBatch] = useState(null);
+  const [ungroupedItems, setUngroupedItems] = useState([]);
+  const [ungroupedLoading, setUngroupedLoading] = useState(false);
+  const [ungroupedBatchData, setUngroupedBatchData] = useState({});
 
   useEffect(() => {
     console.log('🎯 ProductionShift component mounted, calling fetchProductionShiftData');
     fetchProductionShiftData();
+    fetchUngroupedItems();
   }, []);
 
   // Fetch production groups with shift data
@@ -105,6 +109,95 @@ export default function ProductionShift() {
     }
   };
 
+  // Fetch ungrouped items
+  const fetchUngroupedItems = async () => {
+    console.log('🚀 Starting fetchUngroupedItems...');
+    setUngroupedLoading(true);
+    try {
+      console.log('📡 Making API call to /api/production/ungrouped-items');
+      const response = await fetch('/api/production/ungrouped-items', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      console.log('📡 Response status:', response.status);
+      const data = await response.json();
+      console.log('📊 Ungrouped items response data:', data);
+      
+      if (data.success) {
+        console.log('✅ Ungrouped items API call successful:', data.data.items.length, 'items');
+        setUngroupedItems(data.data.items);
+        
+        // Fetch production data for these items
+        await fetchUngroupedItemsProductionData();
+      } else {
+        console.error('❌ Ungrouped items API call failed:', data.message);
+        toast({
+          title: "Error",
+          description: data.message || "Failed to fetch ungrouped items",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('💥 Error fetching ungrouped items:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch ungrouped items",
+        variant: "destructive"
+      });
+    } finally {
+      console.log('🏁 fetchUngroupedItems completed');
+      setUngroupedLoading(false);
+    }
+  };
+
+  // Fetch ungrouped items production data
+  const fetchUngroupedItemsProductionData = async () => {
+    try {
+      console.log('🏷️ Fetching ungrouped items production data...');
+      const response = await fetch('/api/production/ungrouped-items/production', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      const data = await response.json();
+      console.log('📋 Ungrouped items production data:', data);
+      
+      if (data.success) {
+        setUngroupedBatchData(data.data.productionRecords || {});
+        console.log('✅ Production data loaded for', Object.keys(data.data.productionRecords || {}).length, 'items');
+      } else {
+        console.error('❌ Failed to fetch production data:', data.message);
+        // Initialize empty batch data if API fails
+        const emptyBatchData = {};
+        ungroupedItems.forEach(item => {
+          const itemKey = `ungrouped_${item._id}`;
+          emptyBatchData[itemKey] = {
+            mouldingTime: '',
+            unloadingTime: '',
+            productionLoss: ''
+          };
+        });
+        setUngroupedBatchData(emptyBatchData);
+      }
+    } catch (error) {
+      console.error('💥 Error fetching production data:', error);
+      // Initialize empty batch data on error
+      const emptyBatchData = {};
+      ungroupedItems.forEach(item => {
+        const itemKey = `ungrouped_${item._id}`;
+        emptyBatchData[itemKey] = {
+          mouldingTime: '',
+          unloadingTime: '',
+          productionLoss: ''
+        };
+      });
+      setUngroupedBatchData(emptyBatchData);
+    }
+  };
+
   // Handle batch data changes with auto-save
   const handleBatchDataChange = async (batchKey, field, value) => {
     // Update local state immediately
@@ -118,6 +211,82 @@ export default function ProductionShift() {
 
     // Auto-save to API
     await handleAutoSave(batchKey, field, value);
+  };
+
+  // Handle ungrouped batch data changes (save to API)
+  const handleUngroupedBatchDataChange = async (itemKey, field, value) => {
+    // Update local state immediately for better UX
+    setUngroupedBatchData(prev => ({
+      ...prev,
+      [itemKey]: {
+        ...prev[itemKey],
+        [field]: value
+      }
+    }));
+
+    try {
+      // Extract item ID from key
+      const itemId = itemKey.replace('ungrouped_', '');
+      
+      console.log(`🔄 Saving ungrouped item ${field}:`, { itemId, field, value });
+      
+      const response = await fetch('/api/production/ungrouped-items/production', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          itemId,
+          field,
+          value
+        })
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        console.log(`✅ Successfully saved ${field}:`, result.data);
+        toast({
+          title: "Saved",
+          description: result.message,
+          duration: 2000
+        });
+        
+        // Update local state with server response
+        setUngroupedBatchData(prev => ({
+          ...prev,
+          [itemKey]: {
+            ...prev[itemKey],
+            [field]: result.data[field],
+            qtyAchieved: result.data.qtyAchieved,
+            status: result.data.status
+          }
+        }));
+      } else {
+        console.error(`❌ Failed to save ${field}:`, result.message);
+        toast({
+          title: "Save failed",
+          description: result.message || `Failed to update ${field}`,
+          variant: "destructive",
+          duration: 3000
+        });
+        
+        // Revert local state on error
+        await fetchUngroupedItemsProductionData();
+      }
+    } catch (error) {
+      console.error(`❌ Error saving ${field}:`, error);
+      toast({
+        title: "Save error",
+        description: `Failed to save ${field}: ${error.message}`,
+        variant: "destructive",
+        duration: 3000
+      });
+      
+      // Revert local state on error
+      await fetchUngroupedItemsProductionData();
+    }
   };
 
   // Auto-save function - calls API when field changes
@@ -490,11 +659,197 @@ export default function ProductionShift() {
         </CardContent>
       </Card>
 
+      {/* Ungrouped Items Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Package className="w-5 h-5" />
+            Ungrouped Items ({ungroupedItems.length} Items)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {ungroupedLoading ? (
+            <div className="text-center py-8">Loading ungrouped items...</div>
+          ) : ungroupedItems.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              No ungrouped items found
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-center">Batch No.</TableHead>
+                    <TableHead>Product Name</TableHead>
+                    <TableHead>Moulding Time</TableHead>
+                    <TableHead>Unloading Time</TableHead>
+                    <TableHead>Production Loss</TableHead>
+                    <TableHead>Qty/Batch</TableHead>
+                    <TableHead className="text-green-700">Qty Achieved/Batch (auto)</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {ungroupedItems.map((item, index) => {
+                    const itemKey = `ungrouped_${item._id}`;
+                    const batch = ungroupedBatchData[itemKey] || {};
+                    
+                    return (
+                      <TableRow key={item._id}>
+                        {/* Item No. */}
+                        <TableCell className="text-center font-medium">
+                          {index + 1}
+                        </TableCell>
+                        
+                        {/* Product Name */}
+                        <TableCell>
+                          <div className="flex items-center space-x-3">
+                            {item.image ? (
+                              <img
+                                src={item.image}
+                                alt={item.name}
+                                className="w-8 h-8 rounded object-cover"
+                              />
+                            ) : (
+                              <div className="w-8 h-8 rounded bg-gray-200 flex items-center justify-center">
+                                <Package className="w-4 h-4 text-gray-500" />
+                              </div>
+                            )}
+                            <div>
+                              <div className="font-medium text-sm">{item.name}</div>
+                              <div className="text-xs text-gray-500">{item.code}</div>
+                            </div>
+                          </div>
+                        </TableCell>
+                        
+                        {/* Moulding Time - Punch In/Out System */}
+                        <TableCell>
+                          {!batch.mouldingTime ? (
+                            <Button
+                              onClick={() => {
+                                const now = new Date().toISOString();
+                                handleUngroupedBatchDataChange(itemKey, 'mouldingTime', now);
+                              }}
+                              className="w-full bg-green-600 hover:bg-green-700 text-white h-8 text-xs"
+                            >
+                              Start Moulding
+                            </Button>
+                          ) : (
+                            <div className="text-center">
+                              <div className="p-2 bg-green-50 rounded-lg border">
+                                <div className="text-xs font-medium text-green-700">Started</div>
+                                <div className="text-xs text-gray-600">
+                                  {new Date(batch.mouldingTime).toLocaleDateString()} at{' '}
+                                  {new Date(batch.mouldingTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </TableCell>
+                        
+                        {/* Unloading Time - Punch In/Out System */}
+                        <TableCell>
+                          {!batch.unloadingTime ? (
+                            <Button
+                              onClick={() => {
+                                const now = new Date().toISOString();
+                                handleUngroupedBatchDataChange(itemKey, 'unloadingTime', now);
+                              }}
+                              disabled={!batch.mouldingTime}
+                              className="w-full bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-300 disabled:text-gray-500 h-8 text-xs"
+                              title={!batch.mouldingTime ? "Please start moulding first" : "Click to end and record current time"}
+                            >
+                              End Moulding
+                            </Button>
+                          ) : (
+                            <div className="text-center">
+                              <div className="p-2 bg-blue-50 rounded-lg border">
+                                <div className="text-xs font-medium text-blue-700">Ended</div>
+                                <div className="text-xs text-gray-600">
+                                  {new Date(batch.unloadingTime).toLocaleDateString()} at{' '}
+                                  {new Date(batch.unloadingTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </TableCell>
+                        
+                        {/* Production Loss */}
+                        <TableCell>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="0"
+                            value={batch.productionLoss || ''}
+                            disabled={!batch.mouldingTime || !batch.unloadingTime}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              handleUngroupedBatchDataChange(itemKey, 'productionLoss', value);
+                            }}
+                            className={`w-20 text-sm ${!batch.mouldingTime || !batch.unloadingTime ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                            title={!batch.mouldingTime || !batch.unloadingTime ? "Please enter both Moulding Time and Unloading Time first" : "Enter production loss"}
+                          />
+                        </TableCell>
+                        
+                        {/* Qty/Batch */}
+                        <TableCell className="text-center">
+                          <div className="font-medium text-blue-600">
+                            {item.qtyPerBatch || 0}
+                          </div>
+                        </TableCell>
+                        
+                        {/* Qty Achieved/Batch (auto-calculated) */}
+                        <TableCell className="text-center">
+                          <span className="text-green-600 font-medium">
+                            {Math.max(0, (item.qtyPerBatch || 0) - (parseFloat(batch.productionLoss) || 0))}
+                          </span>
+                          <div className="text-xs text-gray-500">
+                            {item.qtyPerBatch || 0} - {batch.productionLoss || 0}
+                          </div>
+                        </TableCell>
+                        
+                        {/* Actions */}
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedBatch({
+                                  batchNo: index + 1,
+                                  item: item,
+                                  batch: batch,
+                                  isUngrouped: true
+                                });
+                                setViewModalOpen(true);
+                              }}
+                              title="View Item Details"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* View Batch Details Modal */}
       <Dialog open={viewModalOpen} onOpenChange={setViewModalOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Batch Details - Batch #{selectedBatch?.batchNo}</DialogTitle>
+            <DialogTitle>
+              {selectedBatch?.isUngrouped ? 
+                `Item Details - Item #${selectedBatch?.batchNo}` : 
+                `Batch Details - Batch #${selectedBatch?.batchNo}`
+              }
+            </DialogTitle>
           </DialogHeader>
           
           {selectedBatch && (
@@ -502,7 +857,9 @@ export default function ProductionShift() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium text-gray-500">Product Group</label>
-                  <p className="text-lg font-semibold">{selectedBatch.productGroup}</p>
+                  <p className="text-lg font-semibold">
+                    {selectedBatch.isUngrouped ? selectedBatch.item.name : selectedBatch.productGroup}
+                  </p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-500">Batch Number</label>
@@ -514,12 +871,19 @@ export default function ProductionShift() {
                 <div>
                   <label className="text-sm font-medium text-gray-500">Moulding Start Time</label>
                   <p className="text-lg">
-                    {selectedBatch.mouldingTime ? 
-                      new Date(selectedBatch.mouldingTime).toLocaleString() : 
-                      'Not started'
+                    {selectedBatch.isUngrouped ? 
+                      (selectedBatch.batch?.mouldingTime ? 
+                        new Date(selectedBatch.batch.mouldingTime).toLocaleString() : 
+                        'Not started'
+                      ) : 
+                      (selectedBatch.mouldingTime ? 
+                        new Date(selectedBatch.mouldingTime).toLocaleString() : 
+                        'Not started'
+                      )
                     }
                   </p>
-                  {selectedBatch.mouldingTime && (
+                  {((selectedBatch.isUngrouped && selectedBatch.batch?.mouldingTime) || 
+                    (!selectedBatch.isUngrouped && selectedBatch.mouldingTime)) && (
                     <Badge variant="outline" className="mt-1 bg-green-50 text-green-700">
                       Started
                     </Badge>
@@ -528,12 +892,19 @@ export default function ProductionShift() {
                 <div>
                   <label className="text-sm font-medium text-gray-500">Moulding End Time</label>
                   <p className="text-lg">
-                    {selectedBatch.unloadingTime ? 
-                      new Date(selectedBatch.unloadingTime).toLocaleString() : 
-                      'Not ended'
+                    {selectedBatch.isUngrouped ? 
+                      (selectedBatch.batch?.unloadingTime ? 
+                        new Date(selectedBatch.batch.unloadingTime).toLocaleString() : 
+                        'Not ended'
+                      ) : 
+                      (selectedBatch.unloadingTime ? 
+                        new Date(selectedBatch.unloadingTime).toLocaleString() : 
+                        'Not ended'
+                      )
                     }
                   </p>
-                  {selectedBatch.unloadingTime && (
+                  {((selectedBatch.isUngrouped && selectedBatch.batch?.unloadingTime) || 
+                    (!selectedBatch.isUngrouped && selectedBatch.unloadingTime)) && (
                     <Badge variant="outline" className="mt-1 bg-blue-50 text-blue-700">
                       Completed
                     </Badge>
@@ -544,50 +915,119 @@ export default function ProductionShift() {
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="text-sm font-medium text-gray-500">Production Loss</label>
-                  <p className="text-lg font-semibold text-red-600">{selectedBatch.productionLoss}</p>
+                  <p className="text-lg font-semibold text-red-600">
+                    {selectedBatch.isUngrouped ? 
+                      (selectedBatch.batch?.productionLoss || 0) : 
+                      (selectedBatch.productionLoss || 0)
+                    }
+                  </p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Qty/Batch (First Non-Zero)</label>
+                  <label className="text-sm font-medium text-gray-500">
+                    {selectedBatch.isUngrouped ? 'Qty/Batch' : 'Qty/Batch (First Non-Zero)'}
+                  </label>
                   <p className="text-lg font-semibold">
-                    {(() => {
-                      if (!selectedBatch.group?.items || selectedBatch.group.items.length === 0) return 0;
-                      const nonZeroQty = selectedBatch.group.items.find(item => item.qtyPerBatch && item.qtyPerBatch > 0);
-                      return nonZeroQty ? nonZeroQty.qtyPerBatch : 0;
-                    })()}
+                    {selectedBatch.isUngrouped ? 
+                      (selectedBatch.item?.qtyPerBatch || 0) : 
+                      (() => {
+                        if (!selectedBatch.group?.items || selectedBatch.group.items.length === 0) return 0;
+                        const nonZeroQty = selectedBatch.group.items.find(item => item.qtyPerBatch && item.qtyPerBatch > 0);
+                        return nonZeroQty ? nonZeroQty.qtyPerBatch : 0;
+                      })()
+                    }
                   </p>
-                  <p className="text-xs text-gray-500">First non-zero qtyPerBatch value</p>
+                  <p className="text-xs text-gray-500">
+                    {selectedBatch.isUngrouped ? 'Item qty per batch' : 'First non-zero qtyPerBatch value'}
+                  </p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-500">Qty Achieved</label>
                   <p className="text-lg font-semibold text-green-600">
-                    {(() => {
-                      if (!selectedBatch.group?.items || selectedBatch.group.items.length === 0) return 0;
-                      const nonZeroQty = selectedBatch.group.items.find(item => item.qtyPerBatch && item.qtyPerBatch > 0);
-                      const qtyPerBatch = nonZeroQty ? nonZeroQty.qtyPerBatch : 0;
-                      return qtyPerBatch - (selectedBatch.productionLoss || 0);
-                    })()}
+                    {selectedBatch.isUngrouped ? 
+                      Math.max(0, (selectedBatch.item?.qtyPerBatch || 0) - (selectedBatch.batch?.productionLoss || 0)) : 
+                      (() => {
+                        if (!selectedBatch.group?.items || selectedBatch.group.items.length === 0) return 0;
+                        const nonZeroQty = selectedBatch.group.items.find(item => item.qtyPerBatch && item.qtyPerBatch > 0);
+                        const qtyPerBatch = nonZeroQty ? nonZeroQty.qtyPerBatch : 0;
+                        return Math.max(0, qtyPerBatch - (selectedBatch.productionLoss || 0));
+                      })()
+                    }
                   </p>
-                  <p className="text-xs text-gray-500">Non-zero qty/batch - Production loss</p>
+                  <p className="text-xs text-gray-500">
+                    {selectedBatch.isUngrouped ? 'Qty/batch - Production loss' : 'Non-zero qty/batch - Production loss'}
+                  </p>
                 </div>
               </div>
 
               {/* Group Information */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Total Items</label>
-                  <p className="text-lg font-semibold">{selectedBatch.totalItems}</p>
+                  <label className="text-sm font-medium text-gray-500">
+                    {selectedBatch.isUngrouped ? 'Current Stock' : 'Total Items'}
+                  </label>
+                  <p className="text-lg font-semibold">
+                    {selectedBatch.isUngrouped ? 
+                      `${selectedBatch.item?.qty || 0} ${selectedBatch.item?.unit || ''}` : 
+                      selectedBatch.totalItems
+                    }
+                  </p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Created By</label>
-                  <p className="text-lg">{selectedBatch.createdBy}</p>
+                  <label className="text-sm font-medium text-gray-500">
+                    {selectedBatch.isUngrouped ? 'Category' : 'Created By'}
+                  </label>
+                  <p className="text-lg">
+                    {selectedBatch.isUngrouped ? 
+                      selectedBatch.item?.category : 
+                      selectedBatch.createdBy
+                    }
+                  </p>
                 </div>
               </div>
 
-              {/* All Items in Group */}
+              {/* All Items in Group or Single Item Details */}
               <div>
-                <label className="text-sm font-medium text-gray-500">All Items in this Production Group</label>
+                <label className="text-sm font-medium text-gray-500">
+                  {selectedBatch?.isUngrouped ? 'Item Details' : 'All Items in this Production Group'}
+                </label>
                 <div className="mt-2 space-y-3 max-h-60 overflow-y-auto">
-                  {selectedBatch.group?.items?.map((item, index) => (
+                  {selectedBatch?.isUngrouped ? (
+                    /* Single ungrouped item details */
+                    <div className="p-4 border rounded-lg bg-gray-50">
+                      <div className="flex items-center space-x-3">
+                        {selectedBatch.item.image ? (
+                          <img
+                            src={selectedBatch.item.image}
+                            alt={selectedBatch.item.name}
+                            className="w-12 h-12 rounded object-cover"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded bg-gray-200 flex items-center justify-center">
+                            <Package className="w-6 h-6 text-gray-500" />
+                          </div>
+                        )}
+                        <div className="flex-1">
+                          <div className="font-medium">{selectedBatch.item.name}</div>
+                          <div className="text-sm text-gray-600">
+                            <strong>Code:</strong> {selectedBatch.item.code} | 
+                            <strong> Category:</strong> {selectedBatch.item.category}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            <strong>Stock:</strong> {selectedBatch.item.qty} {selectedBatch.item.unit} | 
+                            <strong> Qty/Batch:</strong> <span className="text-blue-600 font-medium">{selectedBatch.item.qtyPerBatch || 0}</span> |
+                            <strong> Batch Adjusted:</strong> <span className="text-green-600 font-medium">{selectedBatch.item.batchAdjusted || 0}</span>
+                          </div>
+                          {selectedBatch.item.description && (
+                            <div className="text-sm text-gray-600 mt-1">
+                              <strong>Description:</strong> {selectedBatch.item.description}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Multiple items in production group */
+                    selectedBatch.group?.items?.map((item, index) => (
                     <div key={item._id} className="p-4 border rounded-lg bg-gray-50">
                       <div className="flex items-center space-x-3">
                         {item.image ? (
@@ -614,7 +1054,7 @@ export default function ProductionShift() {
                         </div>
                       </div>
                     </div>
-                  ))}
+                  )))}
                 </div>
               </div>
 

@@ -65,6 +65,10 @@ const productDailySummarySchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  produceBatches: {
+    type: Number,
+    default: 0
+  },
   expiryShortage: {
     type: Number,
     default: 0

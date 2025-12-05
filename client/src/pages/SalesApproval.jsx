@@ -50,6 +50,45 @@ const SalesApproval = () => {
   const [inputValues, setInputValues] = useState({}); // Store temporary input values
   const [saveTimers, setSaveTimers] = useState({}); // Store timers for each field
   
+  // Date filter handler
+  const handleDateChange = async (newDate) => {
+    console.log('📅 Date changed to:', newDate);
+    setSelectedDate(newDate);
+    setLoading(true);
+    
+    try {
+      // Reload data for the new date
+      await fetchData(newDate);
+    } catch (error) {
+      console.error('❌ Error loading data for new date:', error);
+      // Don't show toast for empty data - let the UI show "No data found" instead
+      // Only show toast for actual errors (network, auth, etc)
+      if (error.message && !error.message.includes('No data') && !error.message.includes('404')) {
+        toast({
+          title: "Error",
+          description: "Failed to load data for selected date",
+          variant: "destructive"
+        });
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Clear date filter and set to current date
+  const clearDateFilter = async () => {
+    const currentDate = new Date().toISOString().split('T')[0];
+    console.log('🗑️ Clearing date filter, setting to current date:', currentDate);
+    await handleDateChange(currentDate);
+  };
+
+  // Set to today's date
+  const setToday = async () => {
+    const currentDate = new Date().toISOString().split('T')[0];
+    console.log('📅 Setting to today:', currentDate);
+    await handleDateChange(currentDate);
+  };
+
   const { toast } = useToast();
   
   // Debug logs for component re-rendering
@@ -665,10 +704,21 @@ const SalesApproval = () => {
   };
 
   // Load production summary status data
-  const loadSummaryStatusData = async () => {
+  const loadSummaryStatusData = async (filterDate = null) => {
     console.log('🔄 Loading summary status data...');
+    const targetDate = filterDate || selectedDate;
+    console.log('📅 Loading data for date:', targetDate);
+    
     try {
-      const response = await fetch(`${config.baseURL}/api/sales/product-summary`, {
+      // Build URL with date parameter
+      const url = new URL(`${config.baseURL}/api/sales/product-summary`);
+      if (targetDate) {
+        url.searchParams.append('date', targetDate);
+      }
+      
+      console.log('🔗 API URL with date filter:', url.toString());
+      
+      const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -927,17 +977,26 @@ const SalesApproval = () => {
     return 'Unknown';
   };
 
-  const fetchData = async () => {
+  const fetchData = async (filterDate = null) => {
     try {
       setLoading(true);
+      
+      const targetDate = filterDate || selectedDate;
+      console.log('📅 Fetching data for date:', targetDate);
 
-      const productSummaryResponse = await fetch(`${config.baseURL}/api/sales/product-summary`, {
+      // Build URL with date parameter
+      const url = new URL(`${config.baseURL}/api/sales/product-summary`);
+      if (targetDate) {
+        url.searchParams.append('date', targetDate);
+      }
+      
+      const productSummaryResponse = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
       
-      console.log('🔗 API URL:', `${config.baseURL}/api/sales/product-summary`);
+      console.log('🔗 API URL with date filter:', url.toString());
       console.log('📡 Product Summary Response Status:', productSummaryResponse.status);
 
       // Fetch individual orders for status counting
@@ -964,6 +1023,8 @@ const SalesApproval = () => {
         // Set individual orders for status counting
         if (individualOrdersData.success && individualOrdersData.orders) {
           setIndividualOrders(individualOrdersData.orders);
+        } else {
+          setIndividualOrders([]); // Set empty array for no orders
         }
 
         if (productSummaryData.success) {
@@ -987,6 +1048,22 @@ const SalesApproval = () => {
           }
           
           console.log('🔄 Total products from API:', allProducts.length);
+          
+          // Handle empty data gracefully - this is not an error condition
+          if (allProducts.length === 0) {
+            console.log('📭 No data found for selected date - showing empty state');
+            setOrders([]);
+            setProducts([]);
+            setSalesPersons([]);
+            setGridData({});
+            setIndividualOrders([]);
+            
+            // Load production summary data even if no sales data
+            await loadProductionSummary();
+            await loadSummaryStatusData();
+            return; // Exit early - this is successful empty state
+          }
+          
           console.log('🔄 Products details:', allProducts);
           
           // Transform product summary data to match the expected unit-manager format
@@ -1129,7 +1206,23 @@ const SalesApproval = () => {
           console.log('=== END GRID STRUCTURE ===');
         }
       } else {
-        throw new Error('Failed to fetch data');
+        console.error('❌ API Response not OK:', {
+          productSummaryStatus: productSummaryResponse.status,
+          individualOrdersStatus: individualOrdersResponse.status
+        });
+        
+        // Check if it's a 404 (no data) vs other errors
+        if (productSummaryResponse.status === 404) {
+          console.log('📭 No data found for this date - showing empty state');
+          setOrders([]);
+          setProducts([]);
+          setSalesPersons([]);
+          setGridData({});
+          setIndividualOrders([]);
+          return; // Exit without error - this is valid empty state
+        } else {
+          throw new Error(`API Error: ${productSummaryResponse.status}`);
+        }
       }
 
       // Load production summary data
@@ -1152,7 +1245,7 @@ const SalesApproval = () => {
 
   useEffect(() => {
     console.log('🔄 SalesApproval component mounted, fetching data...');
-    fetchData();
+    fetchData(selectedDate);
   }, []); // Load data on mount
 
   // Force refresh function for debugging
@@ -1166,7 +1259,7 @@ const SalesApproval = () => {
       setInputValues({});
       
       // Fetch fresh data from backend
-      await fetchData();
+      await fetchData(selectedDate);
       await refreshProductionData();
     } catch (error) {
       console.error('Error during force refresh:', error);
@@ -1336,22 +1429,10 @@ const SalesApproval = () => {
             <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-2">Indent Summary Dashboard</h1>
             <p className="text-sm lg:text-base text-gray-600">Manage product orders by sales person</p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button 
-              onClick={forceRefresh}
-              variant="outline"
-              size="sm"
-              disabled={loading}
-              className="flex items-center gap-2"
-            >
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-              Refresh Data
-            </Button>
-          </div>
+          
+        
         </div>
       </div>
-
-
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-4 mb-4 lg:mb-6">
@@ -1474,9 +1555,9 @@ const SalesApproval = () => {
                 {/* Filter Controls */}
                 <div className={`flex flex-col lg:flex-row items-start lg:items-center gap-3 lg:gap-4 w-full lg:w-auto ${showFilters || 'hidden lg:flex'}`}>
                   {/* Search */}
+                
+       
                   <div className="flex items-center gap-2">
-                    <Search className="h-4 w-4 text-gray-600" />
-                    <span className="text-sm font-medium text-gray-600">Search:</span>
                     <div className="relative">
                       <Input
                         type="text"
@@ -1497,6 +1578,20 @@ const SalesApproval = () => {
                         </Button>
                       )}
                     </div>
+                     {/* Date Filter */}
+            <div className="flex items-center gap-2">
+              <div className="flex flex-col gap-1">
+                <Input
+                  id="date-filter"
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => handleDateChange(e.target.value)}
+                  className="w-40"
+                />
+              </div>
+            
+             
+            </div>
                   </div>
 
                   {/* Clear Button and Results */}
@@ -1504,7 +1599,7 @@ const SalesApproval = () => {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={clearFilters}
+                      onClick={clearDateFilter}
                       className="flex items-center gap-1"
                     >
                       <X className="h-3 w-3" />
@@ -1823,23 +1918,29 @@ const SalesApproval = () => {
             {/* Empty State */}
             {filteredProducts.length === 0 ? (
               <div className="text-center py-12">
-                <div className="text-gray-500 text-lg mb-2">
-                  {searchTerm ? 'No products found matching your search' : 'No data available'}
-                </div>
-                <div className="text-gray-400 text-sm">
-                  {searchTerm ? (
-                    <>
-                      Try adjusting your search term: "{searchTerm}" or{' '}
-                      <button
-                        onClick={clearFilters}
-                        className="text-blue-500 hover:text-blue-700 underline"
-                      >
-                        clear filters
-                      </button>
-                    </>
-                  ) : (
-                    products.length === 0 ? 'No products found' : 'No sales persons found'
-                  )}
+                <div className="flex flex-col items-center gap-4">
+                  <div className="text-6xl text-gray-300">📅</div>
+                  <div className="text-gray-500 text-lg mb-2">
+                    {searchTerm ? 'No products found matching your search' : 
+                     loading ? 'Loading data...' : 
+                     `No data available for ${new Date(selectedDate).toLocaleDateString()}`}
+                  </div>
+                  <div className="text-gray-400 text-sm">
+                    {searchTerm ? (
+                      <>
+                        Try adjusting your search term: "{searchTerm}" or{' '}
+                        <button
+                          onClick={clearFilters}
+                          className="text-blue-500 hover:text-blue-700 underline"
+                        >
+                          clear filters
+                        </button>
+                      </>
+                    ) : (
+                      loading ? 'Please wait while we fetch the data...' :
+                      'Try selecting a different date or check if data exists for this date'
+                    )}
+                  </div>
                 </div>
               </div>
             ) : null}

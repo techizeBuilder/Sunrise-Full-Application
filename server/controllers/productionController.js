@@ -2,6 +2,7 @@ import ProductionGroup from '../models/ProductionGroup.js';
 import ProductDailySummary from '../models/ProductDailySummary.js';
 import { Item } from '../models/Inventory.js';
 import User from '../models/User.js';
+import UngroupedItemProduction from '../models/UngroupedItemProduction.js';
 
 // Get production dashboard statistics and recent data
 export const getProductionDashboard = async (req, res) => {
@@ -105,9 +106,9 @@ export const getProductionDashboard = async (req, res) => {
         
         const productSummaries = await ProductDailySummary.find(summaryQuery);
         
-        // Calculate total productionFinalBatches for all items in this group
+        // Calculate total batchAdjusted for all items in this group
         const totalBatches = productSummaries.reduce((total, summary) => {
-          return total + (summary.productionFinalBatches || 0);
+          return total + (summary.batchAdjusted || 0);
         }, 0);
         
         dashBoardData.push({
@@ -633,10 +634,11 @@ export const getUngroupedItems = async (req, res) => {
     const formattedItems = await Promise.all(items.map(async (item) => {
       const imageUrl = item.image ? (item.image.startsWith('/uploads/data:') ? item.image.replace('/uploads/', '') : item.image) : null;
       
-      // Get ProductDailySummary data for this specific item
+      // Get ProductDailySummary data for this specific item - ONLY APPROVED ONES
       const itemSummary = await ProductDailySummary.findOne({
         productId: item._id,
-        companyId: req.user.companyId
+        companyId: req.user.companyId,
+        status: 'approved'  // Only get approved ProductDailySummary records
       }).lean();
 
       return {
@@ -650,7 +652,7 @@ export const getUngroupedItems = async (req, res) => {
         price: item.price || 0,
         description: item.description || '',
         image: imageUrl,
-        productionFinalBatches: itemSummary?.productionFinalBatches || 0,
+        batchAdjusted: itemSummary?.batchAdjusted || 0,
         qtyPerBatch: itemSummary?.qtyPerBatch || 0
       };
     }));
@@ -677,6 +679,168 @@ export const getUngroupedItems = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch ungrouped items',
+      error: error.message
+    });
+  }
+};
+
+// Get ungrouped item production data for today
+export const getUngroupedItemProduction = async (req, res) => {
+  try {
+    console.log('🔍 Ungrouped Item Production Request:', {
+      role: req.user.role,
+      username: req.user.username,
+      companyId: req.user.companyId,
+      query: req.query
+    });
+
+    // Validate user and company
+    if (!req.user || !req.user.companyId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required with valid company'
+      });
+    }
+
+    const today = new Date().setHours(0, 0, 0, 0);
+    console.log('📅 Fetching production data for date:', new Date(today));
+
+    // Get all ungrouped item production records for today
+    const productionRecords = await UngroupedItemProduction.find({
+      companyId: req.user.companyId,
+      productionDate: today
+    }).populate('itemId', 'name code category image qtyPerBatch').lean();
+
+    console.log('📊 Found production records:', productionRecords.length);
+
+    // Format the response
+    const formattedRecords = {};
+    productionRecords.forEach(record => {
+      if (record.itemId) {
+        const itemKey = `ungrouped_${record.itemId._id}`;
+        formattedRecords[itemKey] = {
+          _id: record._id,
+          mouldingTime: record.mouldingTime ? record.mouldingTime.toISOString() : '',
+          unloadingTime: record.unloadingTime ? record.unloadingTime.toISOString() : '',
+          productionLoss: record.productionLoss || '',
+          qtyPerBatch: record.qtyPerBatch || record.itemId.qtyPerBatch || 0,
+          qtyAchieved: record.qtyAchieved || 0,
+          status: record.status,
+          itemId: record.itemId._id,
+          productionDate: record.productionDate
+        };
+      }
+    });
+
+    console.log('📤 Returning production data for items:', Object.keys(formattedRecords).length);
+
+    res.json({
+      success: true,
+      data: {
+        productionRecords: formattedRecords,
+        totalRecords: Object.keys(formattedRecords).length,
+        productionDate: today
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching ungrouped item production data:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch ungrouped item production data',
+      error: error.message
+    });
+  }
+};
+
+// Update ungrouped item production data
+export const updateUngroupedItemProduction = async (req, res) => {
+  try {
+    console.log('🔄 Update Ungrouped Item Production Request:', {
+      role: req.user.role,
+      username: req.user.username,
+      companyId: req.user.companyId,
+      body: req.body
+    });
+
+    // Validate user and company
+    if (!req.user || !req.user.companyId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required with valid company'
+      });
+    }
+
+    const { itemId, field, value } = req.body;
+
+    // Validate required fields
+    if (!itemId || !field) {
+      return res.status(400).json({
+        success: false,
+        message: 'Item ID and field are required'
+      });
+    }
+
+    console.log('📝 Update details:', { itemId, field, value });
+
+    // Get or create production record for today
+    const productionRecord = await UngroupedItemProduction.getOrCreateTodayRecord(
+      req.user.companyId,
+      itemId,
+      req.user.username
+    );
+
+    console.log('📄 Found/Created production record:', productionRecord._id);
+
+    // Update the specific field
+    let processedValue = value;
+    
+    // Handle datetime fields
+    if (field === 'mouldingTime' || field === 'unloadingTime') {
+      if (value && value.trim() !== '') {
+        processedValue = new Date(value);
+        console.log(`🕰️ Processed datetime ${field}:`, processedValue);
+      } else {
+        processedValue = null;
+        console.log(`🕰️ Setting ${field} to null`);
+      }
+    }
+    
+    // Handle numeric fields
+    if (field === 'productionLoss' || field === 'qtyPerBatch') {
+      processedValue = parseFloat(value) || 0;
+      console.log(`🔢 Processed numeric ${field}:`, processedValue);
+    }
+
+    // Update the field
+    productionRecord[field] = processedValue;
+    productionRecord.updatedBy = req.user.username;
+
+    // Save the record (this will trigger the pre-save middleware to calculate qtyAchieved)
+    await productionRecord.save();
+
+    console.log('✅ Successfully updated production record:', {
+      field,
+      value: processedValue,
+      qtyAchieved: productionRecord.qtyAchieved,
+      status: productionRecord.status
+    });
+
+    res.json({
+      success: true,
+      message: `${field} updated successfully`,
+      data: {
+        _id: productionRecord._id,
+        [field]: processedValue,
+        qtyAchieved: productionRecord.qtyAchieved,
+        status: productionRecord.status,
+        updatedAt: productionRecord.updatedAt
+      }
+    });
+  } catch (error) {
+    console.error('Error updating ungrouped item production:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update ungrouped item production',
       error: error.message
     });
   }

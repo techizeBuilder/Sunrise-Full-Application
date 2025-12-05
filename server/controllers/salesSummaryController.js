@@ -82,6 +82,54 @@ export const getSalesSummary = async (req, res) => {
       });
     } else {
       console.log('❌ No summaries found with filter:', filter);
+      
+      // If no summaries found for the specific date, but date was provided,
+      // get all products and show them with empty sales data
+      if (summaryDate !== null) {
+        console.log('📅 No data for specific date, fetching all products to show with empty sales data...');
+        
+        // Get all unique products that have summaries in the system for this company
+        const fallbackFilter = {};
+        if (filterCompanyId) {
+          fallbackFilter.companyId = new mongoose.Types.ObjectId(filterCompanyId);
+        }
+        
+        const allProducts = await ProductDailySummary.find(fallbackFilter)
+          .populate('productId', 'name')
+          .populate('companyId', 'name')
+          .sort({ productName: 1 });
+        
+        console.log(`📦 Found ${allProducts.length} total products in system`);
+        
+        // Create fake summaries for the requested date with empty sales data
+        const fakeSummaries = [];
+        const seenProducts = new Set();
+        
+        allProducts.forEach(product => {
+          if (product.productId && product.productId._id && !seenProducts.has(product.productId._id.toString())) {
+            seenProducts.add(product.productId._id.toString());
+            fakeSummaries.push({
+              _id: `fake-${product.productId._id}`,
+              productId: product.productId,
+              productName: product.productName,
+              companyId: product.companyId,
+              date: summaryDate, // Use the requested date
+              qtyPerBatch: product.qtyPerBatch || 0,
+              totalQuantity: 0, // No sales data for this date
+              status: 'pending'
+            });
+          }
+        });
+        
+        console.log(`📋 Created ${fakeSummaries.length} fake summaries for products with no data on ${summaryDate.toISOString().split('T')[0]}`);
+        
+        // Use fake summaries if we found products
+        if (fakeSummaries.length > 0) {
+          summaries.length = 0; // Clear original array
+          summaries.push(...fakeSummaries); // Add fake summaries
+        }
+      }
+      
       // Let's check if there are ANY records at all
       const totalRecords = await ProductDailySummary.countDocuments();
       console.log('🔍 Total ProductDailySummary records in database:', totalRecords);
@@ -114,12 +162,14 @@ export const getSalesSummary = async (req, res) => {
     
     const products = await Promise.all(validSummaries.map(async (summary) => {
       try {
-        // Get sales breakdown using the summary's actual date
+        // Get sales breakdown using the requested date filter (not summary's date)
         const salesBreakdown = await getSalesBreakdown(
           summary.productId._id,
-          summary.date, // Always use the summary's own date
+          date, // Use the date from request query, not summary.date
           summary.companyId._id || summary.companyId
         );
+
+        console.log(`📊 Sales breakdown for ${summary.productName} on ${date}:`, salesBreakdown.length, 'sales persons');
 
         return {
           productId: summary.productId._id,

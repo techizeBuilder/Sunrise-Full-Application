@@ -84,17 +84,35 @@ export const updateProductSummary = async (productId, date, companyId) => {
  */
 export const getSalesBreakdown = async (productId, date, companyId) => {
   try {
-    // Remove date filtering to match ProductDailySummary logic
-    console.log(`🔍 Getting sales breakdown for productId: ${productId}, companyId: ${companyId} (no date filter)`);
+    console.log(`🔍 Getting sales breakdown for productId: ${productId}, date: ${date}, companyId: ${companyId}`);
+
+    // Build match filter for orders
+    const matchFilter = {
+      companyId: new mongoose.Types.ObjectId(companyId),
+      'products.product': new mongoose.Types.ObjectId(productId),
+      status: 'approved' // Only count approved orders for production summary
+    };
+
+    // Apply date filter if provided
+    if (date) {
+      const filterDate = new Date(date);
+      filterDate.setUTCHours(0, 0, 0, 0);
+      const nextDay = new Date(filterDate.getTime() + 24 * 60 * 60 * 1000);
+      
+      matchFilter.orderDate = {
+        $gte: filterDate,
+        $lt: nextDay
+      };
+      console.log(`📅 Applying date filter: ${filterDate.toISOString()} to ${nextDay.toISOString()}`);
+    } else {
+      console.log(`📅 No date filter applied - getting all orders`);
+    }
+
+    console.log('🔍 Match filter for orders:', matchFilter);
 
     const breakdown = await Order.aggregate([
       {
-        $match: {
-          companyId: new mongoose.Types.ObjectId(companyId),
-          // Remove date filter - match ProductDailySummary logic
-          'products.product': new mongoose.Types.ObjectId(productId),
-          status: 'approved' // Only count approved orders for production summary
-        }
+        $match: matchFilter
       },
       {
         $lookup: {
@@ -142,6 +160,11 @@ export const getSalesBreakdown = async (productId, date, companyId) => {
         }
       }
     ]);
+
+    console.log(`📊 Sales breakdown result: ${breakdown.length} sales persons found`);
+    if (breakdown.length === 0) {
+      console.log(`📭 No orders found for productId: ${productId} on date: ${date || 'all dates'}`);
+    }
 
     return breakdown;
   } catch (error) {

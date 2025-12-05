@@ -6,7 +6,9 @@ import {
   updateProductionShiftTiming,
   getProductionDashboard,
   debugProductSummaryData,
-  getUngroupedItems
+  getUngroupedItems,
+  getUngroupedItemProduction,
+  updateUngroupedItemProduction
 } from '../controllers/productionController.js';
 
 const router = express.Router();
@@ -32,6 +34,18 @@ router.get('/test', (req, res) => {
 router.get('/ungrouped-items', (req, res, next) => {
   console.log('🔍 Ungrouped items route hit:', req.method, req.path);
   getUngroupedItems(req, res, next);
+});
+
+// GET /api/production/ungrouped-items/production - Get production data for ungrouped items
+router.get('/ungrouped-items/production', (req, res, next) => {
+  console.log('🏭 Ungrouped items production data route hit:', req.method, req.path);
+  getUngroupedItemProduction(req, res, next);
+});
+
+// PUT /api/production/ungrouped-items/production - Update production data for ungrouped items
+router.put('/ungrouped-items/production', (req, res, next) => {
+  console.log('🔄 Ungrouped items production update route hit:', req.method, req.path);
+  updateUngroupedItemProduction(req, res, next);
 });
 
 // Production Shift Management Routes

@@ -323,8 +323,8 @@ export default function ProductionDashboard() {
                             </TableCell>
                       
                             <TableCell className="text-center">
-                              <Badge variant={item.productionFinalBatches > 0 ? "default" : "secondary"}>
-                                {item.productionFinalBatches || 0}
+                              <Badge variant={item.batchAdjusted > 0 ? "default" : "secondary"}>
+                                {item.batchAdjusted || 0}
                               </Badge>
                             </TableCell>
                        
