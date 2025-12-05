@@ -2286,10 +2286,21 @@ export const updateUnitHeadProductionGroup = async (req, res) => {
 
     // Validate items if provided and add quantity/batch validation
     let validatedItems = [];
-    let calculatedQtyPerBatch = qtyPerBatch; // Default to provided value
+    let calculatedQtyPerBatch = providedQtyPerBatch; // Default to provided value
     
     if (items.length > 0) {
       console.log('🔍 Validating items:', items);
+      
+      // Validate that all items are valid MongoDB ObjectIds
+      const mongoose = await import('mongoose');
+      const invalidItems = items.filter(item => !mongoose.default.Types.ObjectId.isValid(item));
+      if (invalidItems.length > 0) {
+        console.log('❌ Invalid ObjectIds found:', invalidItems);
+        return res.status(400).json({
+          success: false,
+          message: `Invalid item IDs provided: ${invalidItems.join(', ')}`
+        });
+      }
       
       // Check if items exist and belong to the same company - USE 'store' FIELD
       const inventoryItems = await Item.find({
@@ -2300,7 +2311,9 @@ export const updateUnitHeadProductionGroup = async (req, res) => {
       console.log('📦 Found inventory items:', {
         requested: items.length,
         found: inventoryItems.length,
-        items: inventoryItems.map(item => ({ id: item._id, name: item.name }))
+        companyId: req.user.companyId,
+        requestedItems: items,
+        foundItems: inventoryItems.map(item => ({ id: item._id.toString(), name: item.name }))
       });
 
       validatedItems = inventoryItems.map(item => item._id);
@@ -2419,7 +2432,7 @@ export const updateUnitHeadProductionGroup = async (req, res) => {
       if (recalcProductSummaries.length > 0) {
         // Calculate qtyPerBatch as the MAXIMUM qtyPerBatch from ProductDailySummary
         const summaryQtyPerBatch = recalcProductSummaries.map(summary => summary.qtyPerBatch || 0);
-        const calculatedQtyPerBatch = Math.max(...summaryQtyPerBatch, 0);
+        calculatedQtyPerBatch = Math.max(...summaryQtyPerBatch, 0); // Update existing variable
         console.log('🎯 Recalculated qtyPerBatch from ProductDailySummary (max value):', calculatedQtyPerBatch);
         console.log('📈 All qtyPerBatch values from ProductDailySummary:', summaryQtyPerBatch);
         
