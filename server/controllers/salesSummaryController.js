@@ -339,7 +339,7 @@ export const updateSalesSummary = async (req, res) => {
         productName: product.name,
         totalIndent: 0,
         status: 'pending', // Always set to pending for new summaries
-        // Set default values for fields NOT being updated
+        // Use values from frontend payload, with fallbacks for fields NOT being updated
         qtyPerBatch: updateFields.qtyPerBatch || 0,
         packing: updateFields.packing || 0,
         physicalStock: updateFields.physicalStock || 0,
@@ -350,6 +350,11 @@ export const updateSalesSummary = async (req, res) => {
       });
       
       console.log('📅 New summary will have date:', summary.date.toISOString());
+      console.log('📊 New summary with frontend values:', {
+        produceBatches: summary.produceBatches,
+        productionFinalBatches: summary.productionFinalBatches,
+        toBeProducedDay: summary.toBeProducedDay
+      });
     } else {
       // Update existing summary - PRESERVE the original date
       console.log('🔄 Updating existing summary, preserving original date:', summary.date.toISOString());
@@ -363,13 +368,31 @@ export const updateSalesSummary = async (req, res) => {
       console.log('📅 After update, summary date remains:', summary.date.toISOString());
     }
 
-    summary.calculateFormulas();
+    // Only calculate formulas for fields NOT provided in updates
+    // If frontend provides calculated values, preserve them
+    if (!updateFields.hasOwnProperty('productionFinalBatches')) {
+      summary.productionFinalBatches = Math.round((summary.batchAdjusted * summary.qtyPerBatch) * 100) / 100;
+    }
+    
+    if (!updateFields.hasOwnProperty('produceBatches') && summary.qtyPerBatch > 0) {
+      summary.produceBatches = Math.round((summary.toBeProducedDay / summary.qtyPerBatch) * 100) / 100;
+      summary.toBeProducedBatches = summary.produceBatches;
+    }
+    
+    if (!updateFields.hasOwnProperty('expiryShortage')) {
+      summary.expiryShortage = Math.round((summary.productionFinalBatches - summary.toBeProducedDay) * 100) / 100;
+    }
     
     console.log('💾 About to save summary with date:', summary.date.toISOString());
     console.log('📊 Summary fields before save:', {
       date: summary.date.toISOString(),
       productName: summary.productName,
-      ...updateFields
+      ...updateFields,
+      finalValues: {
+        produceBatches: summary.produceBatches,
+        productionFinalBatches: summary.productionFinalBatches,
+        toBeProducedDay: summary.toBeProducedDay
+      }
     });
     
     await summary.save();

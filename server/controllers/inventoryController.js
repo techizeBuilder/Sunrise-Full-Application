@@ -1388,6 +1388,9 @@ export const importItemsFromExcel = [upload.single('file'), async (req, res) => 
       errors: []
     };
 
+    // Initialize errors array for collection
+    const errors = [];
+
     // Process each row
     for (let i = 0; i < jsonData.length; i++) {
       const row = jsonData[i];
@@ -1532,23 +1535,35 @@ export const importItemsFromExcel = [upload.single('file'), async (req, res) => 
 
         const trimmedName = itemData.name.trim();
 
-        // 🚫 REMOVED DUPLICATE CHECKING - Import without limitations
-        console.log(`📦 Importing item "${trimmedName}" without duplicate restrictions`);
-        
-        // Determine company ID for storage
+        // Determine company ID for storage first
         let companyIdForCheck = req.user.companyId;
         if (itemData.store) {
           companyIdForCheck = itemData.store;
         }
-        
-        console.log(`📋 Item will be stored in company: ${companyIdForCheck}`);
-        
-        // ⚠️ Note: Same item names are now allowed even within the same company
 
-        // Ensure type has a valid value
-        const validTypes = ['Product', 'Service', 'Raw Material', 'Finished Good'];
+        // Check for duplicate item name in same location
+        console.log(`📦 Checking for duplicate item "${trimmedName}" in location: ${companyIdForCheck}`);
+        
+        // Check if item with same name already exists in same location
+        const existingItem = await Item.findOne({ 
+          name: { $regex: new RegExp(`^${trimmedName}$`, 'i') }, // Case insensitive exact match
+          store: companyIdForCheck 
+        });
+        
+        if (existingItem) {
+          errors.push(`Row ${rowNumber}: Item "${trimmedName}" already exists in this location`);
+          continue; // Skip this row but continue with others
+        }
+        
+        console.log(`📋 Item "${trimmedName}" is unique in company: ${companyIdForCheck}`);
+        
+        // ✅ Item name is unique in this location, proceed with import
+
+        // Validate type field - collect error but continue processing
+        const validTypes = ['Product', 'Material', 'Spares', 'Assemblies'];
         if (!validTypes.includes(itemData.type)) {
-          itemData.type = 'Product';
+          errors.push(`Row ${rowNumber}: Invalid type "${itemData.type}". Must be one of: ${validTypes.join(', ')}`);
+          continue; // Skip this row but continue with others
         }
 
         // Ensure importance has a valid value
@@ -1689,7 +1704,7 @@ export const importItemsFromExcel = [upload.single('file'), async (req, res) => 
                 companyId: companyIdForCheck,
                 date: new Date().toISOString().split('T')[0], // Today's date
                 totalQuantity: newItem.qty || 0,
-                physicalStock: newItem.qty || 0,
+                physicalStock: 0,
                 qtyPerBatch: parseFloat(newItem.batch) || 0,
                 batchAdjusted: 0,
                 productionQuantity: 0,
@@ -1704,7 +1719,7 @@ export const importItemsFromExcel = [upload.single('file'), async (req, res) => 
               
               // Update existing entry with new stock information
               existingSummary.totalQuantity = (existingSummary.totalQuantity || 0) + (newItem.qty || 0);
-              existingSummary.physicalStock = (existingSummary.physicalStock || 0) + (newItem.qty || 0);
+              existingSummary.physicalStock = 0;
               if (!existingSummary.qtyPerBatch && newItem.batch) {
                 existingSummary.qtyPerBatch = parseFloat(newItem.batch) || 0;
               }
@@ -1732,6 +1747,9 @@ export const importItemsFromExcel = [upload.single('file'), async (req, res) => 
         results.failed++;
       }
     }
+
+    // Add collected errors to results
+    results.errors = [...results.errors, ...errors];
 
     // Final verification
     const finalCount = await Item.countDocuments();

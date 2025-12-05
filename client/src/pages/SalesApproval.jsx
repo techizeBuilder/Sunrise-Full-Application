@@ -104,7 +104,23 @@ const SalesApproval = () => {
     
     console.log(`💾 Saving ${productName}.${field} on blur`);
     
-    // Save the current data immediately on blur
+    // Get the current input value and parse it
+    const currentInputValue = inputValues[inputKey];
+    if (currentInputValue !== undefined) {
+      const numValue = currentInputValue === '' ? 0 : parseFloat(currentInputValue);
+      const finalValue = isNaN(numValue) ? 0 : numValue;
+      
+      // Update production data with final parsed value
+      setProductionData(prev => ({
+        ...prev,
+        [productName]: {
+          ...prev[productName],
+          [field]: finalValue
+        }
+      }));
+    }
+    
+    // Save the current data to backend
     saveProductionData(productName);
     
     // Clear the temporary input value so it shows the saved value
@@ -115,39 +131,19 @@ const SalesApproval = () => {
     });
   };
 
-  // Update production data field with debouncing  
+  // Update production data field - only update input display, no calculations during typing
   const updateProductionField = (productName, field, value) => {
     console.log(`📝 Input: ${productName}.${field} = ${value}`);
     
-    // Store the raw input value immediately for display (no parsing)
+    // Store the raw input value immediately for display (no parsing, no calculations)
     const inputKey = `${productName}_${field}`;
     setInputValues(prev => ({
       ...prev,
-      [inputKey]: value // Keep the raw string value
+      [inputKey]: value // Keep the raw string value for smooth typing
     }));
     
-    // Parse for internal state only
-    const numValue = value === '' ? 0 : parseFloat(value);
-    const finalValue = isNaN(numValue) ? 0 : numValue;
-    
-    // IMMEDIATE UPDATE - Update local state for calculations
-    setProductionData(prev => {
-      const updated = {
-        ...prev,
-        [productName]: {
-          ...prev[productName],
-          [field]: finalValue
-        }
-      };
-      
-      // FORCE IMMEDIATE SAVE with current value
-      setTimeout(() => {
-        console.log(`🔥 IMMEDIATE SAVE for ${productName}.${field} = ${finalValue}`);
-        saveProductionDataWithValue(productName, field, finalValue);
-      }, 100); // Very short delay to ensure state update
-      
-      return updated;
-    });
+    // No timers, no calculations during typing - only update display
+    // All calculations and saves happen on blur
   };
 
   // Individual approve function
@@ -585,12 +581,19 @@ const SalesApproval = () => {
     return Math.round((productionWithFinalBatches - data.toBeProducedDay) * 100) / 100;
   };
 
-  // Calculate Produce / Batches = Production_with_final_batches - Packing
+  // Calculate Produce / Batches = Frontend "To be Prod./Day" / qtyPerBatch  
   const getProduceBatches = (productName) => {
+    const productData = orders.find(p => p.productName === productName);
+    const totalQuantity = productData ? productData.totalQuantity : 0;
     const data = getProductionData(productName);
-    // Calculate: produceBatches = toBeProducedDay / qtyPerBatch
+    const physicalStock = data.physicalStock || 0;
     const qtyPerBatch = data.qtyPerBatch || 1;
-    const toBeProducedDay = data.toBeProducedDay || 0;
+    
+    // Use SAME calculation as "To be Prod./Day" column - frontend calculated value
+    const toBeProducedDay = Math.max(0, totalQuantity - physicalStock);
+    
+    // Produce / Batches = frontend toBeProducedDay / qtyPerBatch
+    if (qtyPerBatch === 0) return 0;
     return Math.round((toBeProducedDay / qtyPerBatch) * 100) / 100;
   };
 
@@ -1429,33 +1432,31 @@ const SalesApproval = () => {
 
               {/* Right Side - Filter Controls and Actions */}
               <div className="flex flex-col lg:flex-row items-start lg:items-center gap-3 lg:gap-4">
-                {/* Bulk Actions - Show when products are selected */}
-                {selectedProducts.size > 0 && (
-                  <div className="flex items-center gap-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                    <CheckCircle className="h-4 w-4 text-blue-600" />
-                    <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                      {selectedProducts.size} selected
-                    </span>
-                    <Button
-                      onClick={handleBulkApprove}
-                      disabled={bulkApproving}
-                      size="sm"
-                      className="bg-green-600 hover:bg-green-700 text-white"
-                    >
-                      {bulkApproving ? (
-                        <>
-                          <Clock className="h-3 w-3 mr-1 animate-spin" />
-                          Approving...
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle className="h-3 w-3 mr-1" />
-                          Bulk Approve
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                )}
+                {/* Bulk Actions - Always show */}
+                <div className="flex items-center gap-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <CheckCircle className="h-4 w-4 text-blue-600" />
+                  <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                    {selectedProducts.size} selected
+                  </span>
+                  <Button
+                    onClick={handleBulkApprove}
+                    disabled={bulkApproving || selectedProducts.size === 0}
+                    size="sm"
+                    className="bg-green-600 hover:bg-green-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {bulkApproving ? (
+                      <>
+                        <Clock className="h-3 w-3 mr-1 animate-spin" />
+                        Approving...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        Bulk Approve
+                      </>
+                    )}
+                  </Button>
+                </div>
                 
                 {/* Mobile Filter Toggle */}
                 <div className="lg:hidden w-full">
@@ -1631,7 +1632,7 @@ const SalesApproval = () => {
                 </tr>
               </thead>
 
-              <tbody key={`table-${Date.now()}`}>
+              <tbody>
                 {filteredProducts.map((product, index) => {
                   // Get product data from our new API structure
                   const productData = orders.find(p => p.productName === product);
@@ -1643,7 +1644,7 @@ const SalesApproval = () => {
                     productData.salesPersons.flatMap(sp => sp.orders || []) : [];
 
                   return (
-                    <tr key={`${product}-${index}-${Object.keys(summaryStatusData).length}`} className="border-b hover:bg-gray-50/50 transition-colors">
+                    <tr key={`${product}-${index}`} className="border-b hover:bg-gray-50/50 transition-colors">
                       {/* 1. Selection Checkbox Column */}
                       <td className="bg-white p-1 lg:p-2 text-center border-r">
                         <input
@@ -1703,7 +1704,7 @@ const SalesApproval = () => {
                             value={getInputValue(product, 'physicalStock')}
                             onChange={(e) => updateProductionField(product, 'physicalStock', e.target.value)}
                             onBlur={() => handleInputBlur(product, 'physicalStock')}
-                            className="w-24 h-8 text-center text-lg font-bold text-purple-600 border-none bg-transparent focus:ring-1 focus:ring-purple-300"
+                            className="w-24 h-8 text-center text-lg font-bold text-purple-600 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-purple-300 focus:border-purple-400"
                             placeholder="0"
                           />
                         </div>
@@ -1717,7 +1718,7 @@ const SalesApproval = () => {
                             value={getInputValue(product, 'batchAdjusted')}
                             onChange={(e) => updateProductionField(product, 'batchAdjusted', e.target.value)}
                             onBlur={() => handleInputBlur(product, 'batchAdjusted')}
-                            className="w-24 h-8 text-center text-sm font-bold text-cyan-600 border-none bg-transparent focus:ring-1 focus:ring-cyan-300"
+                            className="w-24 h-8 text-center text-sm font-bold text-cyan-600 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-cyan-300 focus:border-cyan-400"
                             placeholder="0"
                           />
                         </div>

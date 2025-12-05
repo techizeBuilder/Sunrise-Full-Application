@@ -315,6 +315,33 @@ export default function ExcelImportExport({ type = 'items' }) {
             'Purchase Allowed': 'YES',
             'Active': 'YES',
             'Created Date': '',
+            'Updated Date': '',
+            // Add a comment row showing valid options
+          }, {
+            'S.No': 2,
+            'Item Name': '*** VALID TYPE OPTIONS ***',
+            'Description': 'Product | Material | Spares | Assemblies',
+            'Type': 'Material',
+            'Category': 'Raw Materials',
+            'Sub Category': 'Metal Parts',
+            'Customer Category': 'Industrial',
+            'Unit': 'kg',
+            'Purchase Price': 50,
+            'Sale Price': 75,
+            'MRP': 100,
+            'Current Stock': 200,
+            'Min Stock': 50,
+            'Max Stock': 500,
+            'GST %': 12,
+            'HSN Code': '87654321',
+            'Store Location ID': '675bff35e71ef51a68b5d7ab6',
+            'Supplier': 'Material Supplier',
+            'Qty/Batch': 'BATCH002',
+            'Lead Time': 7,
+            'Internal Manufacturing': 'YES',
+            'Purchase Allowed': 'YES',
+            'Active': 'YES',
+            'Created Date': '',
             'Updated Date': ''
           }];
           ClientExcelExporter.exportInventoryItems(templateData);
@@ -478,7 +505,8 @@ export default function ExcelImportExport({ type = 'items' }) {
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>
                       Upload an Excel file (.xlsx or .xls) containing {config.title.toLowerCase()} data. 
-                      📝 Item Code is auto-generated, Store Location ID must be a valid company ID. Download the template to see the required format.
+                      📝 <strong>Important:</strong> Type field must be one of: Product, Material, Spares, Assemblies (case sensitive). 
+                      Store Location ID must be a valid company ID. Download the template to see the required format.
                     </AlertDescription>
                   </Alert>
 

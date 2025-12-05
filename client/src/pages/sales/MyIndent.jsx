@@ -133,24 +133,24 @@ const MyOrders = () => {
     statusUpdateMutation.mutate({ id: orderId, status: newStatus });
   };
 
-  // Product selection handlers
-  const handleProductSelect = (product) => {
+  // Product selection handlers - use useCallback to prevent re-renders
+  const handleProductSelect = React.useCallback((product) => {
     setFormData(prev => ({
       ...prev,
       selectedProducts: [...prev.selectedProducts, product]
     }));
     // Clear product error when product is added
     setFormErrors(prev => ({ ...prev, selectedProducts: '' }));
-  };
+  }, []);
 
-  const handleProductRemove = (productId) => {
+  const handleProductRemove = React.useCallback((productId) => {
     setFormData(prev => ({
       ...prev,
       selectedProducts: prev.selectedProducts.filter(p => p._id !== productId)
     }));
-  };
+  }, []);
 
-  const handleQuantityChange = (productId, quantity) => {
+  const handleQuantityChange = React.useCallback((productId, quantity) => {
     setFormData(prev => ({
       ...prev,
       selectedProducts: prev.selectedProducts.map(product => 
@@ -163,7 +163,7 @@ const MyOrders = () => {
     if (quantity > 0) {
       setFormErrors(prev => ({ ...prev, selectedProducts: '' }));
     }
-  };
+  }, []);
 
 
 
@@ -448,8 +448,29 @@ const MyOrders = () => {
     }
   };
 
-  // Simple create form component using ProductSelector
+  // Simple create form component using ProductSelector - properly memoized
   const CreateOrderForm = React.memo(() => {
+    // Memoize customer change handler
+    const handleCustomerChange = React.useCallback((currentValue) => {
+      const selectedCustomer = customersList.find(c => c.name.toLowerCase() === currentValue.toLowerCase());
+      if (selectedCustomer) {
+        setFormData(prev => ({ 
+          ...prev, 
+          customerName: selectedCustomer.name
+        }));
+        // Clear error when customer is selected
+        setFormErrors(prev => ({ ...prev, customerName: '' }));
+      }
+      setCustomerSearchOpen(false);
+    }, [customersList]);
+
+    // Memoize date change handler
+    const handleDateChange = React.useCallback((e) => {
+      setFormData(prev => ({ ...prev, orderDate: e.target.value }));
+      // Clear error when date is selected
+      setFormErrors(prev => ({ ...prev, orderDate: '' }));
+    }, []);
+
     return (
       <div className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -478,18 +499,7 @@ const MyOrders = () => {
                       <CommandItem
                         key={customer._id}
                         value={customer.name}
-                        onSelect={(currentValue) => {
-                          const selectedCustomer = customersList.find(c => c.name.toLowerCase() === currentValue.toLowerCase());
-                          if (selectedCustomer) {
-                            setFormData({ 
-                              ...formData, 
-                              customerName: selectedCustomer.name
-                            });
-                            // Clear error when customer is selected
-                            setFormErrors({ ...formErrors, customerName: '' });
-                          }
-                          setCustomerSearchOpen(false);
-                        }}
+                        onSelect={handleCustomerChange}
                       >
                         <Check
                           className={`mr-2 h-4 w-4 ${
@@ -513,11 +523,7 @@ const MyOrders = () => {
               id="orderDate"
               type="date"
               value={formData.orderDate}
-              onChange={(e) => {
-                setFormData({ ...formData, orderDate: e.target.value });
-                // Clear error when date is selected
-                setFormErrors({ ...formErrors, orderDate: '' });
-              }}
+              onChange={handleDateChange}
               className={formErrors.orderDate ? 'border-red-500' : ''}
             />
             {formErrors.orderDate && (
@@ -526,9 +532,10 @@ const MyOrders = () => {
           </div>
         </div>
 
-        {/* Product Selection */}
+        {/* Product Selection - Isolated to prevent blinking */}
         <div>
           <ProductSelector
+            key="product-selector" 
             selectedProducts={formData.selectedProducts}
             onProductSelect={handleProductSelect}
             onProductRemove={handleProductRemove}
@@ -569,9 +576,8 @@ const MyOrders = () => {
     );
   });
 
-
-
-  // Update order mutation
+  // Set display name for debugging
+  CreateOrderForm.displayName = 'CreateOrderForm';
   const updateOrderMutation = useMutation({
     mutationFn: ({ orderId, orderData }) => {
       console.log('Updating order:', orderId, 'with data:', orderData);

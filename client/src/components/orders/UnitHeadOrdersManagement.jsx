@@ -539,9 +539,9 @@ const UnitHeadOrdersManagement = () => {
                   </SelectTrigger>
                   <SelectContent>
                     {isLoadingSalesPersons ? (
-                      <SelectItem value="" disabled>Loading...</SelectItem>
+                      <SelectItem value="__loading__" disabled>Loading...</SelectItem>
                     ) : salesPersonsList.length === 0 ? (
-                      <SelectItem value="" disabled>No sales persons found</SelectItem>
+                      <SelectItem value="__no_sales_persons__" disabled>No sales persons found</SelectItem>
                     ) : (
                       salesPersonsList.map((salesperson) => (
                         <SelectItem key={salesperson._id} value={salesperson._id}>
@@ -801,9 +801,9 @@ const UnitHeadOrdersManagement = () => {
                     </SelectTrigger>
                     <SelectContent>
                       {isLoadingSalesPersons ? (
-                        <SelectItem value="" disabled>Loading...</SelectItem>
+                        <SelectItem value="__loading_edit__" disabled>Loading...</SelectItem>
                       ) : salesPersonsList.length === 0 ? (
-                        <SelectItem value="" disabled>No sales persons found</SelectItem>
+                        <SelectItem value="__no_sales_persons_edit__" disabled>No sales persons found</SelectItem>
                       ) : (
                         salesPersonsList.map((salesperson) => (
                           <SelectItem key={salesperson._id} value={salesperson._id}>

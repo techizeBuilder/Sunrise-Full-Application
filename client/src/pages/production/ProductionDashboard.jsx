@@ -246,7 +246,7 @@ export default function ProductionDashboard() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Package className="h-5 w-5 text-orange-600" />
-                Ungrouped Items - Not Assigned to Production Groups
+                Ungrouped Items - Production with Final Batches
                 <Badge variant="outline" className="ml-2 bg-orange-50 text-orange-700 border-orange-200">
                   {ungroupedStats.ungroupedItemsCount} items
                 </Badge>
@@ -285,7 +285,7 @@ export default function ProductionDashboard() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Item Name</TableHead>
-                        <TableHead className="text-center">Production Final Batches</TableHead>
+                        <TableHead className="text-center">No. Of Batches for Production</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
