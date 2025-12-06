@@ -1562,17 +1562,37 @@ export const importItemsFromExcel = [upload.single('file'), async (req, res) => 
         
         // ✅ Item name is unique in this location, proceed with import
 
-        // Validate type field - collect error but continue processing
+        // Validate and normalize type field - case insensitive and trim spaces
         const validTypes = ['Product', 'Material', 'Spares', 'Assemblies'];
-        if (!validTypes.includes(itemData.type)) {
-          errors.push(`Row ${rowNumber}: Invalid type "${itemData.type}". Must be one of: ${validTypes.join(', ')}`);
+        const normalizedType = itemData.type.trim();
+        
+        // Find matching type (case-insensitive)
+        const matchingType = validTypes.find(validType => 
+          validType.toLowerCase() === normalizedType.toLowerCase()
+        );
+        
+        if (!matchingType) {
+          errors.push(`Row ${rowNumber}: Invalid type "${itemData.type}". Must be one of: ${validTypes.join(', ')} (case-insensitive)`);
           continue; // Skip this row but continue with others
         }
+        
+        // Set the properly formatted type
+        itemData.type = matchingType;
+        console.log(`✅ Type normalized: "${normalizedType}" → "${matchingType}"`);
 
-        // Ensure importance has a valid value
+        // Ensure importance has a valid value - also normalize case and spaces
         const validImportance = ['Low', 'Normal', 'High', 'Critical'];
-        if (!validImportance.includes(itemData.importance)) {
+        const normalizedImportance = itemData.importance.trim();
+        const matchingImportance = validImportance.find(validImp => 
+          validImp.toLowerCase() === normalizedImportance.toLowerCase()
+        );
+        
+        if (!matchingImportance) {
           itemData.importance = 'Normal';
+          console.log(`⚠️ Invalid importance "${itemData.importance}" normalized to "Normal"`);
+        } else {
+          itemData.importance = matchingImportance;
+          console.log(`✅ Importance normalized: "${normalizedImportance}" → "${matchingImportance}"`);
         }
 
         // Auto-generate code since Item Code is not required in import
@@ -1611,44 +1631,82 @@ export const importItemsFromExcel = [upload.single('file'), async (req, res) => 
         itemData.code = uniqueCode;
         console.log(`Auto-generated globally unique code for ${trimmedName}: ${itemData.code} (Company: ${companyIdForCheck})`);
 
-        // 🆕 AUTO-CREATE CATEGORY if it doesn't exist
+        // 🔍 VALIDATE CATEGORY - Don't auto-create, show proper errors with available options
         if (itemData.category && itemData.category.trim()) {
+          const trimmedCategory = itemData.category.trim();
+          console.log(`🔍 Validating category: "${trimmedCategory}"`);
+          
           const categoryExists = await Category.findOne({ 
-            name: { $regex: new RegExp(`^${itemData.category.trim()}$`, 'i') } 
+            name: { $regex: new RegExp(`^${trimmedCategory.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } 
           });
           
           if (!categoryExists) {
-            console.log(`🆕 Creating new category: "${itemData.category.trim()}"`);
-            try {
-              const newCategory = await Category.create({
-                name: itemData.category.trim(),
-                description: `Auto-created during import for ${trimmedName}`,
-                subcategories: itemData.subCategory ? [itemData.subCategory.trim()] : []
-              });
-              console.log(`✅ Category created successfully: ${newCategory.name}`);
-            } catch (categoryError) {
-              console.log(`⚠️ Category creation failed (may already exist): ${categoryError.message}`);
-            }
-          } else {
-            console.log(`✅ Category "${itemData.category.trim()}" already exists`);
+            console.log(`❌ Category "${trimmedCategory}" not found`);
             
-            // Add subcategory if it doesn't exist
+            // Get available categories for better error message
+            const availableCategories = await Category.find({}).select('name').limit(10);
+            const categoryNames = availableCategories.map(cat => cat.name).join(', ');
+            const categoryList = availableCategories.length > 0 ? categoryNames : 'No categories available';
+            
+            errors.push(`Row ${rowNumber}: Category "${trimmedCategory}" does not exist. Available categories: ${categoryList}${availableCategories.length === 10 ? '...' : ''}`);
+            continue; // Skip this row but continue with others
+          } else {
+            console.log(`✅ Category "${trimmedCategory}" exists as "${categoryExists.name}"`);
+            
+            // Update itemData with the exact category name from database for consistency
+            itemData.category = categoryExists.name;
+            
+            // Validate subcategory if provided
             if (itemData.subCategory && itemData.subCategory.trim()) {
+              const trimmedSubCategory = itemData.subCategory.trim();
               const subCategoryExists = categoryExists.subcategories.some(
-                sub => sub.toLowerCase() === itemData.subCategory.trim().toLowerCase()
+                sub => sub.toLowerCase() === trimmedSubCategory.toLowerCase()
               );
               
               if (!subCategoryExists) {
-                console.log(`🆕 Adding subcategory "${itemData.subCategory.trim()}" to existing category`);
-                try {
-                  categoryExists.subcategories.push(itemData.subCategory.trim());
-                  await categoryExists.save();
-                  console.log(`✅ Subcategory added successfully`);
-                } catch (subCategoryError) {
-                  console.log(`⚠️ Subcategory addition failed: ${subCategoryError.message}`);
-                }
+                console.log(`❌ Subcategory "${trimmedSubCategory}" not found in category "${categoryExists.name}"`);
+                const availableSubcategories = categoryExists.subcategories.length > 0 
+                  ? categoryExists.subcategories.join(', ') 
+                  : 'none';
+                errors.push(`Row ${rowNumber}: Subcategory "${trimmedSubCategory}" does not exist in category "${categoryExists.name}". Available subcategories: ${availableSubcategories}`);
+                continue; // Skip this row but continue with others
+              } else {
+                console.log(`✅ Subcategory "${trimmedSubCategory}" exists in category "${categoryExists.name}"`);
+                
+                // Find and set the exact subcategory name from database for consistency
+                const exactSubCategory = categoryExists.subcategories.find(
+                  sub => sub.toLowerCase() === trimmedSubCategory.toLowerCase()
+                );
+                itemData.subCategory = exactSubCategory;
               }
             }
+          }
+        }
+
+        // 🔍 VALIDATE CUSTOMER CATEGORY - Don't auto-create, show proper errors with available options
+        if (itemData.customerCategory && itemData.customerCategory.trim()) {
+          const trimmedCustomerCategory = itemData.customerCategory.trim();
+          console.log(`🔍 Validating customer category: "${trimmedCustomerCategory}"`);
+          
+          const customerCategoryExists = await CustomerCategory.findOne({ 
+            name: { $regex: new RegExp(`^${trimmedCustomerCategory.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } 
+          });
+          
+          if (!customerCategoryExists) {
+            console.log(`❌ Customer category "${trimmedCustomerCategory}" not found`);
+            
+            // Get available customer categories for better error message
+            const availableCustomerCategories = await CustomerCategory.find({}).select('name').limit(10);
+            const customerCategoryNames = availableCustomerCategories.map(cat => cat.name).join(', ');
+            const customerCategoryList = availableCustomerCategories.length > 0 ? customerCategoryNames : 'No customer categories available';
+            
+            errors.push(`Row ${rowNumber}: Customer category "${trimmedCustomerCategory}" does not exist. Available customer categories: ${customerCategoryList}${availableCustomerCategories.length === 10 ? '...' : ''}`);
+            continue; // Skip this row but continue with others
+          } else {
+            console.log(`✅ Customer category "${trimmedCustomerCategory}" exists as "${customerCategoryExists.name}"`);
+            
+            // Update itemData with the exact customer category name from database for consistency
+            itemData.customerCategory = customerCategoryExists.name;
           }
         }
 

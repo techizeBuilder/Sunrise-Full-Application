@@ -179,13 +179,6 @@ const ProductSelector = React.memo(({
   const handleQuantityUpdate = (productId, value) => {
     console.log('🔍 handleQuantityUpdate called with:', { productId, value });
     
-    // Don't clear local quantities yet - keep the value visible
-    // setLocalQuantities(prev => {
-    //   const newState = { ...prev };
-    //   delete newState[productId];
-    //   return newState;
-    // });
-    
     // Use the entered value as-is, don't change it
     const numQuantity = value === '' || value === null || value === undefined ? 0 : parseInt(value);
     
@@ -200,7 +193,7 @@ const ProductSelector = React.memo(({
     if (numQuantity <= 0) {
       // Remove product if quantity is 0 or less
       onProductRemove(productId);
-      // Only clear local quantity if removing product
+      // Clear local quantity when removing product
       setLocalQuantities(prev => {
         const newState = { ...prev };
         delete newState[productId];
@@ -210,6 +203,7 @@ const ProductSelector = React.memo(({
       // Check if product already selected
       const existingProduct = selectedProducts.find(p => p._id === productId);
       if (existingProduct) {
+        console.log('📤 Calling onQuantityChange with:', { productId, quantity: numQuantity });
         onQuantityChange(productId, numQuantity);
       } else {
         // Add new product with quantity - find from all grouped products
@@ -220,6 +214,7 @@ const ProductSelector = React.memo(({
         });
           
         if (foundProduct) {
+          console.log('📤 Calling onProductSelect with quantity:', numQuantity);
           onProductSelect({
             ...foundProduct,
             quantity: numQuantity
@@ -227,7 +222,7 @@ const ProductSelector = React.memo(({
         }
       }
       
-      // Keep the local quantity to show the entered value
+      // Update local quantity to show the entered value
       setLocalQuantities(prev => ({
         ...prev,
         [productId]: value
@@ -470,16 +465,6 @@ const ProductSelector = React.memo(({
                               min="0"
                               placeholder="0"
                               value={displayQuantity}
-                              onChange={(e) => {
-                                e.stopPropagation();
-                                handleLocalQuantityChange(product._id, e.target.value);
-                              }}
-                              onFocus={(e) => {
-                                e.stopPropagation();
-                                e.target.placeholder = '';
-                                // Select all text on focus for easy editing
-                                setTimeout(() => e.target.select(), 0);
-                              }}
                               onBlur={(e) => {
                                 e.stopPropagation();
                                 console.log('🎯 Input blur for', product._id, 'with value:', e.target.value);
@@ -489,7 +474,35 @@ const ProductSelector = React.memo(({
                                 // Submit quantity on blur - this is when we update the parent
                                 handleQuantityUpdate(product._id, e.target.value);
                               }}
-                              onClick={(e) => {
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                const value = e.target.value;
+                                handleLocalQuantityChange(product._id, value);
+                                // IMMEDIATELY update parent - add product if not selected, update quantity if selected
+                                if (value && value !== '' && !isNaN(parseInt(value))) {
+                                  const numValue = parseInt(value);
+                                  if (numValue > 0) {
+                                    const existingProduct = selectedProducts.find(p => p._id === product._id);
+                                    if (existingProduct) {
+                                      console.log('📤 IMMEDIATE onChange calling onQuantityChange:', { productId: product._id, quantity: numValue });
+                                      onQuantityChange(product._id, numValue);
+                                    } else {
+                                      console.log('📤 IMMEDIATE onChange calling onProductSelect:', { productId: product._id, quantity: numValue });
+                                      onProductSelect({
+                                        ...product,
+                                        quantity: numValue
+                                      });
+                                    }
+                                  }
+                                }
+                              }}
+                              onFocus={(e) => {
+                                e.stopPropagation();
+                                e.target.placeholder = '';
+                                // Select all text on focus for easy editing
+                                setTimeout(() => e.target.select(), 0);
+                              }}
+                              onBlur={(e) => {
                                 e.stopPropagation();
                               }}
                               onKeyDown={(e) => {

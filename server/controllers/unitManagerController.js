@@ -180,10 +180,9 @@ export const updateOrderStatus = async (req, res) => {
               console.log(`   Product qtyPerBatch: ${qtyPerBatch}`);
               console.log(`   Product details: batch=${productDetails.batch}, qty=${productDetails.qty}, unit=${productDetails.unit}, price=${productDetails.price}`);
 
-              // Check if ProductDailySummary entry already exists for this product and date
+              // ✅ FIXED: Check if ProductDailySummary entry exists for this product + company (ignore date)
               const existingSummary = await ProductDailySummary.findOne({
                 productId: productId,
-                date: order.orderDate,
                 companyId: order.companyId
               });
 
@@ -191,6 +190,9 @@ export const updateOrderStatus = async (req, res) => {
                 // Update existing entry - set productionFinalBatches to 0 instead of adding quantity
                 const oldBatches = existingSummary.productionFinalBatches;
                 existingSummary.productionFinalBatches = 0; // Always set to 0 as requested
+                
+                // ✅ UPDATE DATE TO CURRENT ORDER DATE
+                existingSummary.date = order.orderDate;
 
                 // Update qtyPerBatch if it was 0 or not set
                 if (!existingSummary.qtyPerBatch || existingSummary.qtyPerBatch === 0) {
@@ -200,6 +202,7 @@ export const updateOrderStatus = async (req, res) => {
 
                 await existingSummary.save();
                 console.log(`   ✅ Updated ProductDailySummary: ${productName}, ${oldBatches} set to 0 (was ${oldBatches})`);
+                console.log(`   📅 Updated date to: ${order.orderDate}`);
               } else {
                 // Create new ProductDailySummary entry with proper qtyPerBatch
                 const newSummary = new ProductDailySummary({

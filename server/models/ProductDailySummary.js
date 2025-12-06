@@ -88,8 +88,9 @@ const productDailySummarySchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Compound index for efficient queries
-productDailySummarySchema.index({ date: 1, companyId: 1, productId: 1 }, { unique: true });
+// ✅ FIXED: ONE entry per product per company (date not part of uniqueness)
+productDailySummarySchema.index({ productId: 1, companyId: 1 }, { unique: true });
+// Non-unique indexes for efficient queries
 productDailySummarySchema.index({ companyId: 1, date: 1 });
 productDailySummarySchema.index({ productId: 1, date: 1 });
 

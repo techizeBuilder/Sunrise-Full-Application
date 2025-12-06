@@ -16,14 +16,12 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import ProductSelector from '@/components/products/ProductSelector';
-import EditOrderForm from '@/components/EditOrderForm';
 import { useToast } from '@/hooks/use-toast';
 import { 
   Search, 
-  Plus, 
   RefreshCw, 
   Eye, 
-  Edit, 
+  Edit,
   Trash2, 
   MoreHorizontal,
   FileText,
@@ -37,7 +35,10 @@ import {
   ChevronsUpDown,
   ChevronDown,
   ChevronRight,
-  RotateCcw
+  RotateCcw,
+  Plus,
+  Save,
+  Loader2
 } from 'lucide-react';
 
 const MyOrders = () => {
@@ -66,20 +67,16 @@ const MyOrders = () => {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [viewOrderDetails, setViewOrderDetails] = useState(null);
   const [expandedCategories, setExpandedCategories] = useState({});
-  const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
-  const [editCustomerOpen, setEditCustomerOpen] = useState(false);
-  const [productSearchOpen, setProductSearchOpen] = useState(false);
-
-
-  // Form data state
   const [formData, setFormData] = useState({
+    customerId: '',
     customerName: '',
+    salesPersonId: '',
     orderDate: new Date().toISOString().split('T')[0],
     remarks: '',
-    selectedProducts: [] // Will store selected products from ProductSelector
+    selectedProducts: []
   });
 
-  const [formErrors, setFormErrors] = useState({});
+
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -133,37 +130,7 @@ const MyOrders = () => {
     statusUpdateMutation.mutate({ id: orderId, status: newStatus });
   };
 
-  // Product selection handlers - use useCallback to prevent re-renders
-  const handleProductSelect = React.useCallback((product) => {
-    setFormData(prev => ({
-      ...prev,
-      selectedProducts: [...prev.selectedProducts, product]
-    }));
-    // Clear product error when product is added
-    setFormErrors(prev => ({ ...prev, selectedProducts: '' }));
-  }, []);
 
-  const handleProductRemove = React.useCallback((productId) => {
-    setFormData(prev => ({
-      ...prev,
-      selectedProducts: prev.selectedProducts.filter(p => p._id !== productId)
-    }));
-  }, []);
-
-  const handleQuantityChange = React.useCallback((productId, quantity) => {
-    setFormData(prev => ({
-      ...prev,
-      selectedProducts: prev.selectedProducts.map(product => 
-        product._id === productId 
-          ? { ...product, quantity, totalPrice: product.price * quantity }
-          : product
-      )
-    }));
-    // Clear product error when quantity is updated
-    if (quantity > 0) {
-      setFormErrors(prev => ({ ...prev, selectedProducts: '' }));
-    }
-  }, []);
 
 
 
@@ -191,7 +158,19 @@ const MyOrders = () => {
 
   const customersList = customersResponse?.customers || [];
 
-
+  // Create order mutation
+  const createOrderMutation = useMutation({
+    mutationFn: (orderData) => orderApi.create(orderData),
+    onSuccess: () => {
+      toast({ title: "Success", description: "Order created successfully" });
+      resetForm();
+      setIsCreateModalOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['/api/sales/orders'] });
+    },
+    onError: (error) => {
+      toast({ title: "Error", description: error.message || "Failed to create order", variant: "destructive" });
+    }
+  });
 
   // Handle search and filter changes to reset pagination
   const handleSearchChange = (value) => {
@@ -212,108 +191,81 @@ const MyOrders = () => {
   const totalPages = pagination.totalPages || 0;
   const totalItems = pagination.totalOrders || 0;
 
+  // Helper functions for create order
   const resetForm = () => {
     setFormData({
+      customerId: '',
       customerName: '',
+      salesPersonId: '',
       orderDate: new Date().toISOString().split('T')[0],
       remarks: '',
       selectedProducts: []
     });
-    setFormErrors({});
-  };
-
-  // Create order mutation
-  const createOrderMutation = useMutation({
-    mutationFn: orderApi.create,
-    onSuccess: (data) => {
-      console.log('Order creation response:', data);
-      if (data.status || data.success) {
-        toast({
-          title: "Success",
-          description: data.message || "Order created successfully",
-        });
-        // Reset form first, then close modal
-        resetForm();
-        setIsCreateModalOpen(false);
-        // Refresh orders list
-        queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
-        queryClient.invalidateQueries({ queryKey: ['/api/sales/orders'] });
-        refetchOrders();
-      } else {
-        toast({
-          title: "Error",
-          description: data.message || "Failed to create order",
-          variant: "destructive"
-        });
-      }
-    },
-    onError: (error) => {
-      console.error('Order creation error:', error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create order",
-        variant: "destructive"
-      });
-    }
-  });
-
-  const validateForm = () => {
-    const errors = {};
-    
-    if (!formData.customerName.trim()) {
-      errors.customerName = "Please select a customer";
-    }
-    
-    if (!formData.orderDate) {
-      errors.orderDate = "Please select an order date";
-    }
-    
-    if (formData.selectedProducts.length === 0) {
-      errors.selectedProducts = "Please select at least one product";
-    } else {
-      // Check if all products have valid quantities
-      const invalidProducts = formData.selectedProducts.filter(p => !p.quantity || p.quantity <= 0);
-      if (invalidProducts.length > 0) {
-        errors.selectedProducts = "All products must have a valid quantity";
-      }
-    }
-    
-    // Find customer ID by name
-    if (formData.customerName.trim()) {
-      const customer = customersList.find(c => c.name.toLowerCase() === formData.customerName.toLowerCase());
-      if (!customer) {
-        errors.customerName = "Please select a valid customer from the list";
-      }
-    }
-    
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
   };
 
   const handleCreate = () => {
-    if (!validateForm()) {
-      toast({
-        title: "Validation Error",
-        description: "Please fix the form errors and try again",
-        variant: "destructive"
+    if (!formData.customerId || formData.selectedProducts.length === 0) {
+      toast({ 
+        title: "Validation Error", 
+        description: "Please select a customer and products", 
+        variant: "destructive" 
       });
       return;
     }
 
-    // Find customer ID by name
-    const customer = customersList.find(c => c.name.toLowerCase() === formData.customerName.toLowerCase());
+    console.log('🚀 Creating order with formData.selectedProducts:', formData.selectedProducts);
 
     const orderData = {
-      customerId: customer._id,
+      customerId: formData.customerId,
       orderDate: formData.orderDate,
-      notes: formData.remarks,
       products: formData.selectedProducts.map(p => ({
         productId: p._id,
-        quantity: p.quantity
-      }))
+        quantity: parseInt(p.quantity),
+        unitPrice: parseFloat(p.price) || parseFloat(p.unitPrice) || 0
+      })),
+      notes: formData.remarks
     };
 
+    console.log('🚀 Final orderData being sent:', orderData);
     createOrderMutation.mutate(orderData);
+  };
+
+  const handleProductSelect = (product) => {
+    const existingIndex = formData.selectedProducts.findIndex(p => p._id === product._id);
+    if (existingIndex >= 0) {
+      const updatedProducts = [...formData.selectedProducts];
+      updatedProducts[existingIndex] = {
+        ...updatedProducts[existingIndex],
+        quantity: parseInt(updatedProducts[existingIndex].quantity) + 1
+      };
+      setFormData({ ...formData, selectedProducts: updatedProducts });
+    } else {
+      setFormData({ 
+        ...formData, 
+        selectedProducts: [...formData.selectedProducts, { 
+          ...product, 
+          quantity: 1,
+          price: product.price || product.sellingPrice || 0,
+          unitPrice: product.price || product.sellingPrice || 0
+        }] 
+      });
+    }
+  };
+
+  const handleQuantityChange = (productId, quantity) => {
+    console.log('🔄 handleQuantityChange called with:', { productId, quantity, type: typeof quantity });
+    const updatedProducts = formData.selectedProducts.map(p =>
+      p._id === productId ? { ...p, quantity: Number(quantity) } : p
+    );
+    console.log('🔄 Updated products:', updatedProducts);
+    setFormData({ ...formData, selectedProducts: updatedProducts });
+  };
+
+  const handleProductRemove = (productId) => {
+    setFormData({
+      ...formData,
+      selectedProducts: formData.selectedProducts.filter(p => p._id !== productId)
+    });
   };
 
   // Add new product row
@@ -351,47 +303,62 @@ const MyOrders = () => {
     setFormData({ ...formData, products: updatedProducts });
   };
 
+  // Update order mutation
+  const updateOrderMutation = useMutation({
+    mutationFn: ({ orderId, orderData }) => orderApi.update(orderId, orderData),
+    onSuccess: () => {
+      toast({ title: "Success", description: "Order updated successfully" });
+      setIsEditModalOpen(false);
+      setSelectedOrder(null);
+      queryClient.invalidateQueries({ queryKey: ['/api/sales/orders'] });
+    },
+    onError: (error) => {
+      toast({ title: "Error", description: error.message || "Failed to update order", variant: "destructive" });
+    }
+  });
+
+  // Handle edit order
   const handleEdit = (order) => {
     setSelectedOrder(order);
     setIsEditModalOpen(true);
   };
 
-  const handleUpdateOld = () => {
-    if (!editFormData.customerName || !editFormData.orderDate) {
+  // Handle update order
+  const handleUpdate = (updatedData) => {
+    if (!selectedOrder?._id) {
+      toast({
+        title: "Error",
+        description: "No order selected for update",
+        variant: "destructive"
+      });
       return;
     }
-    
-    const validProducts = editFormData.products.filter(p => p.productId && p.quantity);
-    if (validProducts.length === 0) {
+
+    // Find customer ID by name
+    const customer = customersList.find(c => c.name.toLowerCase() === updatedData.customerName.toLowerCase());
+    if (!customer) {
+      toast({
+        title: "Validation Error",
+        description: "Please select a valid customer",
+        variant: "destructive"
+      });
       return;
     }
-    
-    const totalQuantity = validProducts.reduce((sum, product) => sum + (parseInt(product.quantity) || 0), 0);
-    const updatedOrder = {
-      ...selectedOrder,
-      customerName: editFormData.customerName,
-      orderDate: editFormData.orderDate,
-      remarks: editFormData.remarks,
-      products: validProducts,
-      totalQuantity: totalQuantity,
-      // Update for display purposes - showing first product
-      selectedProduct: validProducts[0] ? productsList.find(p => p.id === validProducts[0].productId)?.name : '',
-      productQuantity: totalQuantity
+
+    const orderData = {
+      customerId: customer._id,
+      orderDate: updatedData.orderDate,
+      notes: updatedData.remarks || '',
+      products: updatedData.selectedProducts.map(p => ({
+        productId: p._id,
+        quantity: p.quantity
+      }))
     };
-    
-    const updatedOrders = orders.map(order => 
-      order.id === selectedOrder.id ? updatedOrder : order
-    );
-    setOrders(updatedOrders);
-    setIsEditModalOpen(false);
-    setEditFormData({
-      customerName: '',
-      orderDate: '',
-      remarks: '',
-      products: [{ productId: '', quantity: '' }]
+
+    updateOrderMutation.mutate({ 
+      orderId: selectedOrder._id, 
+      orderData 
     });
-    setEditProductDropdownStates([false]);
-    setSelectedOrder(null);
   };
 
   const handleView = async (order) => {
@@ -448,216 +415,19 @@ const MyOrders = () => {
     }
   };
 
-  // Simple create form component using ProductSelector - properly memoized
-  const CreateOrderForm = React.memo(() => {
-    // Memoize customer change handler
-    const handleCustomerChange = React.useCallback((currentValue) => {
-      const selectedCustomer = customersList.find(c => c.name.toLowerCase() === currentValue.toLowerCase());
-      if (selectedCustomer) {
-        setFormData(prev => ({ 
-          ...prev, 
-          customerName: selectedCustomer.name
-        }));
-        // Clear error when customer is selected
-        setFormErrors(prev => ({ ...prev, customerName: '' }));
-      }
-      setCustomerSearchOpen(false);
-    }, [customersList]);
-
-    // Memoize date change handler
-    const handleDateChange = React.useCallback((e) => {
-      setFormData(prev => ({ ...prev, orderDate: e.target.value }));
-      // Clear error when date is selected
-      setFormErrors(prev => ({ ...prev, orderDate: '' }));
-    }, []);
-
-    return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor="customerName">Customer Name *</Label>
-            <Popover open={customerSearchOpen} onOpenChange={setCustomerSearchOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={customerSearchOpen}
-                  className={`w-full justify-between ${formErrors.customerName ? 'border-red-500' : ''}`}
-                >
-                  {formData.customerName || "Select customer..."}
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-full p-0">
-                <Command>
-                  <CommandInput placeholder="Search customer..." />
-                  <CommandEmpty>No customer found.</CommandEmpty>
-                  <CommandGroup>
-                    {customersLoading ? (
-                      <CommandItem disabled>Loading customers...</CommandItem>
-                    ) : customersList.map((customer) => (
-                      <CommandItem
-                        key={customer._id}
-                        value={customer.name}
-                        onSelect={handleCustomerChange}
-                      >
-                        <Check
-                          className={`mr-2 h-4 w-4 ${
-                            formData.customerName?.toLowerCase() === customer.name.toLowerCase() ? "opacity-100" : "opacity-0"
-                          }`}
-                        />
-                        {customer.name}
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </Command>
-              </PopoverContent>
-            </Popover>
-            {formErrors.customerName && (
-              <p className="text-sm text-red-500 mt-1">{formErrors.customerName}</p>
-            )}
-          </div>
-          <div>
-            <Label htmlFor="orderDate">Order Date *</Label>
-            <Input
-              id="orderDate"
-              type="date"
-              value={formData.orderDate}
-              onChange={handleDateChange}
-              className={formErrors.orderDate ? 'border-red-500' : ''}
-            />
-            {formErrors.orderDate && (
-              <p className="text-sm text-red-500 mt-1">{formErrors.orderDate}</p>
-            )}
-          </div>
-        </div>
-
-        {/* Product Selection - Isolated to prevent blinking */}
-        <div>
-          <ProductSelector
-            key="product-selector" 
-            selectedProducts={formData.selectedProducts}
-            onProductSelect={handleProductSelect}
-            onProductRemove={handleProductRemove}
-            onQuantityChange={handleQuantityChange}
-          />
-          {formErrors.selectedProducts && (
-            <p className="text-sm text-red-500 mt-1">{formErrors.selectedProducts}</p>
-          )}
-        </div>
-
-        <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2 pt-4">
-          <Button 
-            variant="outline" 
-            onClick={() => {
-              setIsCreateModalOpen(false);
-              resetForm();
-            }}
-            className="w-full sm:w-auto"
-          >
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleCreate}
-            disabled={createOrderMutation.isPending || !formData.customerName || !formData.orderDate || formData.selectedProducts.length === 0}
-            className="w-full sm:w-auto"
-          >
-            {createOrderMutation.isPending ? (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                Creating...
-              </>
-            ) : (
-              'Create Order'
-            )}
-          </Button>
-        </div>
-      </div>
-    );
-  });
-
-  // Set display name for debugging
-  CreateOrderForm.displayName = 'CreateOrderForm';
-  const updateOrderMutation = useMutation({
-    mutationFn: ({ orderId, orderData }) => {
-      console.log('Updating order:', orderId, 'with data:', orderData);
-      return orderApi.update(orderId, orderData);
-    },
-    onSuccess: (response) => {
-      console.log('Update successful:', response);
-      toast({
-        title: "Success",
-        description: "Order updated successfully",
-        variant: "default"
-      });
-      // Invalidate both order caches to ensure refresh
-      queryClient.invalidateQueries({ queryKey: ['/api/orders'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/sales/orders'] });
-      setIsEditModalOpen(false);
-      setSelectedOrder(null);
-    },
-    onError: (error) => {
-      console.error('Update order error:', error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update order",
-        variant: "destructive"
-      });
-    }
-  });
-
-  // Handle update function
-  const handleUpdate = (updatedData) => {
-    if (!selectedOrder?._id) {
-      toast({
-        title: "Error",
-        description: "No order selected for update",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    // Find customer ID by name
-    const customer = customersList.find(c => c.name.toLowerCase() === updatedData.customerName.toLowerCase());
-    if (!customer) {
-      toast({
-        title: "Validation Error",
-        description: "Please select a valid customer",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    const orderData = {
-      customerId: customer._id,
-      orderDate: updatedData.orderDate,
-      notes: updatedData.remarks || '',
-      products: updatedData.selectedProducts.map(p => ({
-        productId: p._id,
-        quantity: p.quantity
-      }))
-    };
-
-    updateOrderMutation.mutate({ 
-      orderId: selectedOrder._id, 
-      orderData 
-    });
-  };
-
-  // EditOrderFormComponent - Internal component for editing orders
-  const EditOrderFormComponent = ({ initialData, onSubmit, onCancel }) => {
+  // EditOrderForm Component - Internal component for editing orders
+  const EditOrderForm = ({ initialData, onUpdate, onCancel, customersList, customersLoading, updateOrderMutation }) => {
     const [localFormData, setLocalFormData] = useState({
       customerName: '',
       orderDate: '',
-      selectedProducts: []
+      selectedProducts: [],
+      remarks: ''
     });
     const [localCustomerOpen, setLocalCustomerOpen] = useState(false);
 
     // Initialize form data from initialData
     useEffect(() => {
       if (initialData) {
-        // Initialize edit form with order data
-        
         // Format the order date properly
         let formattedDate = '';
         if (initialData.orderDate) {
@@ -671,7 +441,6 @@ const MyOrders = () => {
           return orderProduct.product && orderProduct.product._id;
         }).map(orderProduct => {
           // Convert order product to selector format
-          
           return {
             _id: orderProduct.product._id,
             name: orderProduct.product.name || 'Unknown Product',
@@ -683,24 +452,36 @@ const MyOrders = () => {
           };
         });
 
-        // Products converted successfully
-        
-        // Products loaded successfully - no warning needed
-
         setLocalFormData({
           customerName: initialData.customer?.name || initialData.customerName || '',
           orderDate: formattedDate,
-          selectedProducts: convertedProducts
+          selectedProducts: convertedProducts,
+          remarks: initialData.notes || initialData.remarks || ''
         });
       }
     }, [initialData]);
 
     // Product selection handlers (same as create form)
     const handleEditProductSelect = (product) => {
-      setLocalFormData(prev => ({
-        ...prev,
-        selectedProducts: [...prev.selectedProducts, product]
-      }));
+      const existingIndex = localFormData.selectedProducts.findIndex(p => p._id === product._id);
+      if (existingIndex >= 0) {
+        const updatedProducts = [...localFormData.selectedProducts];
+        updatedProducts[existingIndex] = {
+          ...updatedProducts[existingIndex],
+          quantity: parseInt(updatedProducts[existingIndex].quantity) + 1
+        };
+        setLocalFormData({ ...localFormData, selectedProducts: updatedProducts });
+      } else {
+        setLocalFormData({ 
+          ...localFormData, 
+          selectedProducts: [...localFormData.selectedProducts, { 
+            ...product, 
+            quantity: 1,
+            price: product.price || product.sellingPrice || 0,
+            unitPrice: product.price || product.sellingPrice || 0
+          }] 
+        });
+      }
     };
 
     const handleEditProductRemove = (productId) => {
@@ -711,11 +492,12 @@ const MyOrders = () => {
     };
 
     const handleEditQuantityChange = (productId, quantity) => {
+      const numQuantity = Number(quantity);
       setLocalFormData(prev => ({
         ...prev,
         selectedProducts: prev.selectedProducts.map(product => 
           product._id === productId 
-            ? { ...product, quantity, totalPrice: product.price * quantity }
+            ? { ...product, quantity: numQuantity, totalPrice: product.price * numQuantity }
             : product
         )
       }));
@@ -733,13 +515,13 @@ const MyOrders = () => {
       
       onUpdate({
         ...localFormData,
-        remarks: '' // Add remarks field if needed
+        remarks: localFormData.remarks
       });
     };
 
     return (
       <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <Label htmlFor="editCustomerName">Customer Name *</Label>
             <Popover open={localCustomerOpen} onOpenChange={setLocalCustomerOpen}>
@@ -795,30 +577,50 @@ const MyOrders = () => {
               onChange={(e) => setLocalFormData({ ...localFormData, orderDate: e.target.value })}
             />
           </div>
+          <div></div>
         </div>
 
-        {/* Product Selection using ProductSelector component */}
-        <ProductSelector
-          selectedProducts={localFormData.selectedProducts}
-          onProductSelect={handleEditProductSelect}
-          onProductRemove={handleEditProductRemove}
-          onQuantityChange={handleEditQuantityChange}
-        />
+        <div>
+          <Label>Select Products *</Label>
+          <ProductSelector
+            onProductSelect={handleEditProductSelect}
+            selectedProducts={localFormData.selectedProducts}
+            onQuantityChange={handleEditQuantityChange}
+            onProductRemove={handleEditProductRemove}
+          />
+        </div>
 
-        <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2 pt-4">
-          <Button 
-            variant="outline" 
-            onClick={onCancel}
-            className="w-full sm:w-auto"
-          >
-            Cancel
-          </Button>
+        <div>
+          <Label htmlFor="editRemarks">Remarks</Label>
+          <Textarea
+            id="editRemarks"
+            placeholder="Add any special instructions or notes..."
+            value={localFormData.remarks}
+            onChange={(e) => setLocalFormData({...localFormData, remarks: e.target.value})}
+            rows={3}
+          />
+        </div>
+
+        <div className="flex gap-3 pt-4">
           <Button 
             onClick={handleEditSubmit}
-            disabled={!localFormData.customerName || !localFormData.orderDate || localFormData.selectedProducts.length === 0}
-            className="w-full sm:w-auto"
+            disabled={updateOrderMutation.isPending}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
           >
-            Update Order
+            {updateOrderMutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                Updating...
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4 mr-2" />
+                Update Order
+              </>
+            )}
+          </Button>
+          <Button variant="outline" onClick={onCancel}>
+            Cancel
           </Button>
         </div>
       </div>
@@ -836,15 +638,12 @@ const MyOrders = () => {
             <h1 className="text-lg font-semibold">My Orders</h1>
           </div>
           <div className="flex items-center space-x-2">
-            {(canPerformAction('sales', 'orders', 'add') || canPerformAction('sales', 'myIndent', 'add') || canPerformAction('orders', 'indent', 'add')) && (
-              <Button 
-                variant="secondary" 
-                className="bg-white text-blue-600 hover:bg-blue-50 text-sm px-3 py-2"
-                onClick={() => setIsCreateModalOpen(true)}
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-            )}
+            <Button 
+              onClick={() => setIsCreateModalOpen(true)} 
+              className="bg-white text-blue-600 hover:bg-gray-100 text-sm px-3 py-2"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
             <Button 
               variant="outline" 
               className="bg-white/10 border-white/20 text-white hover:bg-white/20 text-sm px-3 py-2"
@@ -863,16 +662,13 @@ const MyOrders = () => {
             <span className="hidden lg:inline text-blue-100 text-sm">Manage and track your sales orders</span>
           </div>
           <div className="flex items-center space-x-3">
-            {(canPerformAction('sales', 'orders', 'add') || canPerformAction('sales', 'myIndent', 'add') || canPerformAction('orders', 'indent', 'add')) && (
-              <Button 
-                variant="secondary" 
-                className="bg-white text-blue-600 hover:bg-blue-50 text-sm px-3 py-2"
-                onClick={() => setIsCreateModalOpen(true)}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                <span>Create Order</span>
-              </Button>
-            )}
+            <Button 
+              onClick={() => setIsCreateModalOpen(true)} 
+              className="bg-white text-blue-600 hover:bg-gray-100"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Create Order
+            </Button>
             <Button 
               variant="outline" 
               className="bg-white/10 border-white/20 text-white hover:bg-white/20 text-sm px-3 py-2"
@@ -971,16 +767,6 @@ const MyOrders = () => {
                     >
                       <Eye className="h-3 w-3" />
                     </Button>
-                    {(canPerformAction('sales', 'orders', 'edit') || canPerformAction('sales', 'myIndent', 'edit') || canPerformAction('orders', 'indent', 'edit')) && (
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-6 w-6 p-0"
-                        onClick={() => handleEdit(order)}
-                      >
-                        <Edit className="h-3 w-3" />
-                      </Button>
-                    )}
 
                     {(canPerformAction('sales', 'orders', 'delete') || canPerformAction('sales', 'myIndent', 'delete') || canPerformAction('orders', 'indent', 'delete')) && (
                       <Button 
@@ -1155,31 +941,7 @@ const MyOrders = () => {
         )}
       </div>
 
-      {/* Edit Modal */}
-      <Dialog open={isEditModalOpen} onOpenChange={(open) => {
-        if (!open) {
-          setIsEditModalOpen(false);
-          setSelectedOrder(null);
-        }
-      }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto mx-2 sm:mx-auto">
-          <DialogHeader>
-            <DialogTitle className="text-lg sm:text-xl">Edit Order</DialogTitle>
-            <DialogDescription>
-              Update the order details below.
-            </DialogDescription>
-          </DialogHeader>
-          <EditOrderForm 
-            initialData={selectedOrder}
-            onUpdate={handleUpdate}
-            onCancel={() => {
-              setIsEditModalOpen(false);
-              setSelectedOrder(null);
-            }}
-            customersList={customersList}
-          />
-        </DialogContent>
-      </Dialog>
+
 
       {/* View Modal */}
       <Dialog open={isViewModalOpen} onOpenChange={(open) => {
@@ -1431,21 +1193,124 @@ const MyOrders = () => {
       </Dialog>
 
       {/* Create Order Modal */}
-      <Dialog open={isCreateModalOpen} onOpenChange={(open) => {
-        if (!open) {
-          setIsCreateModalOpen(false);
-        }
-      }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto mx-2 sm:mx-auto">
+      <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-lg sm:text-xl">Create New Order</DialogTitle>
-            <DialogDescription>
-              Fill in the details to create a new production order.
-            </DialogDescription>
+            <DialogTitle>Create New Order</DialogTitle>
+            <DialogDescription>Fill in the details to create a new production order.</DialogDescription>
           </DialogHeader>
-          <CreateOrderForm />
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="customer">Customer Name *</Label>
+                <Select 
+                  value={formData.customerId || ''} 
+                  onValueChange={(value) => {
+                    const customer = customersList.find(c => c._id === value);
+                    setFormData({
+                      ...formData, 
+                      customerId: value,
+                      customerName: customer?.name || ''
+                    });
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select customer" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {customersList.map((customer) => (
+                      <SelectItem key={customer._id} value={customer._id}>
+                        {customer.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="orderDate">Order Date *</Label>
+                <Input
+                  id="orderDate"
+                  type="date"
+                  value={formData.orderDate}
+                  onChange={(e) => setFormData({...formData, orderDate: e.target.value})}
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Select Products *</Label>
+              <ProductSelector
+                onProductSelect={handleProductSelect}
+                selectedProducts={formData.selectedProducts}
+                onQuantityChange={handleQuantityChange}
+                onProductRemove={handleProductRemove}
+              />
+            </div>
+            <div>
+              <Label htmlFor="remarks">Remarks</Label>
+              <Textarea
+                id="remarks"
+                placeholder="Add any special instructions or notes..."
+                value={formData.remarks}
+                onChange={(e) => setFormData({...formData, remarks: e.target.value})}
+                rows={3}
+              />
+            </div>
+            <div className="flex gap-3 pt-4">
+              <Button 
+                onClick={handleCreate}
+                disabled={createOrderMutation.isPending}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {createOrderMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4 mr-2" />
+                    Create Order
+                  </>
+                )}
+              </Button>
+              <Button variant="outline" onClick={() => setIsCreateModalOpen(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Order Modal */}
+      <Dialog open={isEditModalOpen} onOpenChange={(open) => {
+        if (!open) {
+          setIsEditModalOpen(false);
+          setSelectedOrder(null);
+        }
+      }}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto mx-2 sm:mx-auto">
+          <DialogHeader>
+            <DialogTitle className="text-lg sm:text-xl">Edit Order</DialogTitle>
+            <DialogDescription>
+              Update the order details below.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedOrder && (
+            <EditOrderForm 
+              initialData={selectedOrder}
+              onUpdate={handleUpdate}
+              onCancel={() => {
+                setIsEditModalOpen(false);
+                setSelectedOrder(null);
+              }}
+              customersList={customersList}
+              customersLoading={customersLoading}
+              updateOrderMutation={updateOrderMutation}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 };

@@ -188,19 +188,21 @@ export const initializeProductSummary = async (productId, productName, companyId
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
 
-    // Check if summary already exists for today
+    // ✅ FIXED: Check for existing entry by productId + companyId ONLY (ignore date)
     const existingSummary = await ProductDailySummary.findOne({
-      date: today,
       companyId: new mongoose.Types.ObjectId(companyId),
       productId: new mongoose.Types.ObjectId(productId)
     });
 
     if (existingSummary) {
-      console.log(`Summary already exists for product ${productName} on ${today.toISOString().split('T')[0]}`);
+      console.log(`Found existing summary for product ${productName}, updating date to today`);
+      // Update the existing entry's date to today and return
+      existingSummary.date = today;
+      await existingSummary.save();
       return existingSummary;
     }
 
-    // Create new summary with default values
+    // Create new summary ONLY if no entry exists for this product + company
     const summary = new ProductDailySummary({
       date: today,
       companyId: new mongoose.Types.ObjectId(companyId),
@@ -216,7 +218,7 @@ export const initializeProductSummary = async (productId, productName, companyId
     summary.calculateFormulas();
     await summary.save();
 
-    console.log(`Initialized summary for new product: ${productName}`);
+    console.log(`Initialized NEW summary for product: ${productName}`);
     return summary;
   } catch (error) {
     console.error('Error initializing product summary:', error);
