@@ -167,25 +167,45 @@ const ProductSelector = React.memo(({
 
   // Handle local quantity changes to prevent focus loss
   const handleLocalQuantityChange = (productId, value) => {
+    console.log('📝 Local quantity change:', { productId, value });
     setLocalQuantities(prev => ({
       ...prev,
       [productId]: value
     }));
+    // Don't call handleQuantityUpdate here - only on blur/enter
   };
 
   // Handle quantity submission/blur to update parent
   const handleQuantityUpdate = (productId, value) => {
-    const numQuantity = parseInt(value) || 0;
+    console.log('🔍 handleQuantityUpdate called with:', { productId, value });
     
-    // Clear local quantity
-    setLocalQuantities(prev => {
-      const newState = { ...prev };
-      delete newState[productId];
-      return newState;
-    });
+    // Don't clear local quantities yet - keep the value visible
+    // setLocalQuantities(prev => {
+    //   const newState = { ...prev };
+    //   delete newState[productId];
+    //   return newState;
+    // });
+    
+    // Use the entered value as-is, don't change it
+    const numQuantity = value === '' || value === null || value === undefined ? 0 : parseInt(value);
+    
+    // Only proceed if parsing was successful or value is explicitly 0
+    if (isNaN(numQuantity) && value !== '' && value !== '0') {
+      console.log('❌ Invalid value, not updating:', value);
+      return;
+    }
+    
+    console.log('✅ Processing quantity update:', { original: value, parsed: numQuantity });
     
     if (numQuantity <= 0) {
+      // Remove product if quantity is 0 or less
       onProductRemove(productId);
+      // Only clear local quantity if removing product
+      setLocalQuantities(prev => {
+        const newState = { ...prev };
+        delete newState[productId];
+        return newState;
+      });
     } else {
       // Check if product already selected
       const existingProduct = selectedProducts.find(p => p._id === productId);
@@ -198,7 +218,7 @@ const ProductSelector = React.memo(({
           const product = brandProducts.find(p => p._id === productId);
           if (product) foundProduct = product;
         });
-        
+          
         if (foundProduct) {
           onProductSelect({
             ...foundProduct,
@@ -206,6 +226,12 @@ const ProductSelector = React.memo(({
           });
         }
       }
+      
+      // Keep the local quantity to show the entered value
+      setLocalQuantities(prev => ({
+        ...prev,
+        [productId]: value
+      }));
     }
   };
 
@@ -233,7 +259,7 @@ const ProductSelector = React.memo(({
       console.log('🔍 Enter key pressed for product:', productId);
       console.log('📝 All visible product IDs:', getAllVisibleProductIds);
       
-      // Submit current quantity
+      // Submit current quantity as-is
       const currentValue = e.target.value;
       handleQuantityUpdate(productId, currentValue);
       
@@ -273,12 +299,15 @@ const ProductSelector = React.memo(({
   };
 
   const getDisplayQuantity = (productId) => {
-    // Use local quantity if available (user is typing), otherwise use selected quantity
+    // ALWAYS use local quantity if user is typing - this prevents value loss
     if (localQuantities.hasOwnProperty(productId)) {
+      console.log('📱 Using local quantity for', productId, ':', localQuantities[productId]);
       return localQuantities[productId];
     }
     const selectedProduct = selectedProducts.find(p => p._id === productId);
-    return selectedProduct?.quantity || '';
+    const quantity = selectedProduct?.quantity || '';
+    console.log('📱 Using selected quantity for', productId, ':', quantity);
+    return quantity;
   };
 
   if (itemsError) {
@@ -453,10 +482,11 @@ const ProductSelector = React.memo(({
                               }}
                               onBlur={(e) => {
                                 e.stopPropagation();
+                                console.log('🎯 Input blur for', product._id, 'with value:', e.target.value);
                                 if (!e.target.value) {
                                   e.target.placeholder = "0";
                                 }
-                                // Submit quantity on blur
+                                // Submit quantity on blur - this is when we update the parent
                                 handleQuantityUpdate(product._id, e.target.value);
                               }}
                               onClick={(e) => {

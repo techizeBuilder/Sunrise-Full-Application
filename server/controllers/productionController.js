@@ -657,21 +657,28 @@ export const getUngroupedItems = async (req, res) => {
       };
     }));
 
-    console.log('📤 Returning ungrouped items:', {
-      total: formattedItems.length,
-      withImages: formattedItems.filter(item => item.image).length,
+    // Filter out items with batchAdjusted = 0 (only return items with available batchAdjusted)
+    const availableItems = formattedItems.filter(item => item.batchAdjusted > 0);
+    
+    console.log(`📊 Filtered items: ${formattedItems.length} total → ${availableItems.length} with batchAdjusted > 0`);
+
+    console.log('📤 Returning ungrouped items with available batchAdjusted:', {
+      total: availableItems.length,
+      withImages: availableItems.filter(item => item.image).length,
       assignedItemsCount: assignedItemIds.length,
-      totalCompanyItems: totalCompanyItems
+      totalCompanyItems: totalCompanyItems,
+      filteredOut: formattedItems.length - availableItems.length
     });
 
     res.json({
       success: true,
       data: {
-        items: formattedItems,
-        totalItems: formattedItems.length,
+        items: availableItems,
+        totalItems: availableItems.length,
         assignedItemsCount: assignedItemIds.length,
         companyItemsCount: totalCompanyItems,
-        ungroupedItemsCount: formattedItems.length
+        ungroupedItemsCount: availableItems.length,
+        filteredItemsCount: formattedItems.length - availableItems.length
       }
     });
   } catch (error) {
@@ -679,6 +686,128 @@ export const getUngroupedItems = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch ungrouped items',
+      error: error.message
+    });
+  }
+};
+
+// Get ungrouped item group (duplicate of getUngroupedItems with different function name)
+export const getUngroupedItemGroup = async (req, res) => {
+  try {
+    console.log('🔍 Production Ungrouped Item Group Request:', {
+      role: req.user.role,
+      username: req.user.username,
+      companyId: req.user.companyId,
+      query: req.query
+    });
+
+    // Validate user and company
+    if (!req.user || !req.user.companyId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required with valid company'
+      });
+    }
+
+    const { search = '' } = req.query;
+    console.log('📝 Search params:', { search });
+
+    // Get total items in company
+    const totalCompanyItems = await Item.countDocuments({ store: req.user.companyId });
+    console.log('🔢 Total items in company:', totalCompanyItems);
+
+    // Get items already assigned to production groups
+    const assignedGroups = await ProductionGroup.find({
+      company: req.user.companyId,
+      isActive: true
+    }).select('items');
+    
+    const assignedItemIds = assignedGroups.flatMap(group => 
+      group.items.map(item => item.toString())
+    );
+    console.log('🚫 Total assigned items count:', assignedItemIds.length);
+
+    // Build filter for ungrouped items
+    const filter = {
+      store: req.user.companyId,
+      _id: { $nin: assignedItemIds }
+    };
+
+    // Add search filter
+    if (search && search.trim()) {
+      filter.$or = [
+        { name: { $regex: search.trim(), $options: 'i' } },
+        { code: { $regex: search.trim(), $options: 'i' } },
+        { category: { $regex: search.trim(), $options: 'i' } }
+      ];
+    }
+
+    console.log('🔍 Filter object:', JSON.stringify(filter, null, 2));
+
+    // Get ungrouped items
+    const items = await Item.find(filter)
+      .select('name code category subCategory qty unit price image description store')
+      .sort({ name: 1 })
+      .lean();
+
+    console.log('📦 Retrieved ungrouped item group:', items.length);
+
+    // Format items with proper image URLs and ProductDailySummary data
+    const formattedItems = await Promise.all(items.map(async (item) => {
+      const imageUrl = item.image ? (item.image.startsWith('/uploads/data:') ? item.image.replace('/uploads/', '') : item.image) : null;
+      
+      // Get ProductDailySummary data for this specific item - ONLY APPROVED ONES
+      const itemSummary = await ProductDailySummary.findOne({
+        productId: item._id,
+        companyId: req.user.companyId,
+        status: 'approved'  // Only get approved ProductDailySummary records
+      }).lean();
+
+      return {
+        _id: item._id,
+        name: item.name || 'Unnamed Item',
+        code: item.code || 'No Code',
+        category: item.category || 'No Category',
+        subCategory: item.subCategory || '',
+        qty: item.qty || 0,
+        unit: item.unit || '',
+        price: item.price || 0,
+        description: item.description || '',
+        image: imageUrl,
+        batchAdjusted: itemSummary?.batchAdjusted || 0,
+        qtyPerBatch: itemSummary?.qtyPerBatch || 0
+      };
+    }));
+
+    // Filter out items with qtyPerBatch = 0 (only return items with available Qty/Batch)
+    const availableItems = formattedItems.filter(item => item.qtyPerBatch > 0);
+    
+    console.log(`📊 Filtered item group: ${formattedItems.length} total → ${availableItems.length} with qtyPerBatch > 0`);
+
+    console.log('📤 Returning ungrouped item group with available Qty/Batch:', {
+      total: availableItems.length,
+      withImages: availableItems.filter(item => item.image).length,
+      assignedItemsCount: assignedItemIds.length,
+      totalCompanyItems: totalCompanyItems,
+      filteredOut: formattedItems.length - availableItems.length
+    });
+
+    res.json({
+      success: true,
+      data: {
+        items: availableItems,
+        totalItems: availableItems.length,
+        assignedItemsCount: assignedItemIds.length,
+        companyItemsCount: totalCompanyItems,
+        ungroupedItemsCount: availableItems.length,
+        filteredItemsCount: formattedItems.length - availableItems.length
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching ungrouped item group:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch ungrouped item group',
       error: error.message
     });
   }

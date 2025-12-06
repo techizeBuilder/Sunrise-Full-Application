@@ -93,20 +93,24 @@ export const getSalesBreakdown = async (productId, date, companyId) => {
       status: 'approved' // Only count approved orders for production summary
     };
 
+    // COMMENTED OUT: Date filter removed to show all data by default
     // Apply date filter if provided
-    if (date) {
-      const filterDate = new Date(date);
-      filterDate.setUTCHours(0, 0, 0, 0);
-      const nextDay = new Date(filterDate.getTime() + 24 * 60 * 60 * 1000);
-      
-      matchFilter.orderDate = {
-        $gte: filterDate,
-        $lt: nextDay
-      };
-      console.log(`📅 Applying date filter: ${filterDate.toISOString()} to ${nextDay.toISOString()}`);
-    } else {
-      console.log(`📅 No date filter applied - getting all orders`);
-    }
+    // if (date) {
+    //   const filterDate = new Date(date);
+    //   filterDate.setUTCHours(0, 0, 0, 0);
+    //   const nextDay = new Date(filterDate.getTime() + 24 * 60 * 60 * 1000);
+    //   
+    //   matchFilter.orderDate = {
+    //     $gte: filterDate,
+    //     $lt: nextDay
+    //   };
+    //   console.log(`📅 Applying date filter: ${filterDate.toISOString()} to ${nextDay.toISOString()}`);
+    // } else {
+    //   console.log(`📅 No date filter applied - getting all orders`);
+    // }
+    
+    // Show all orders by default - no date filtering
+    console.log(`📅 Date filter disabled - showing all orders`);
 
     console.log('🔍 Match filter for orders:', matchFilter);
 

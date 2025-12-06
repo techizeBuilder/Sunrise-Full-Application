@@ -28,7 +28,8 @@ const SalesApproval = () => {
 
   // Search and Filter states
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  // COMMENTED OUT: Date filter removed to show all data by default
+  // const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [showFilters, setShowFilters] = useState(false);
   const [filteredProducts, setFilteredProducts] = useState([]);
 
@@ -706,17 +707,19 @@ const SalesApproval = () => {
   // Load production summary status data
   const loadSummaryStatusData = async (filterDate = null) => {
     console.log('🔄 Loading summary status data...');
-    const targetDate = filterDate || selectedDate;
-    console.log('📅 Loading data for date:', targetDate);
+    // COMMENTED OUT: Date filter removed to show all data by default
+    // const targetDate = filterDate || selectedDate;
+    // console.log('📅 Loading data for date:', targetDate);
     
     try {
-      // Build URL with date parameter
+      // Build URL without date parameter to show all data
       const url = new URL(`${config.baseURL}/api/sales/product-summary`);
-      if (targetDate) {
-        url.searchParams.append('date', targetDate);
-      }
+      // COMMENTED OUT: Date filter removed
+      // if (targetDate) {
+      //   url.searchParams.append('date', targetDate);
+      // }
       
-      console.log('🔗 API URL with date filter:', url.toString());
+      console.log('🔗 API URL (no date filter):', url.toString());
       
       const response = await fetch(url, {
         headers: {
@@ -981,14 +984,16 @@ const SalesApproval = () => {
     try {
       setLoading(true);
       
-      const targetDate = filterDate || selectedDate;
-      console.log('📅 Fetching data for date:', targetDate);
+      // COMMENTED OUT: Date filter removed to show all data by default
+      // const targetDate = filterDate || selectedDate;
+      // console.log('📅 Fetching data for date:', targetDate);
 
-      // Build URL with date parameter
+      // Build URL without date parameter to show all data
       const url = new URL(`${config.baseURL}/api/sales/product-summary`);
-      if (targetDate) {
-        url.searchParams.append('date', targetDate);
-      }
+      // COMMENTED OUT: Date filter removed
+      // if (targetDate) {
+      //   url.searchParams.append('date', targetDate);
+      // }
       
       const productSummaryResponse = await fetch(url, {
         headers: {
@@ -996,7 +1001,7 @@ const SalesApproval = () => {
         }
       });
       
-      console.log('🔗 API URL with date filter:', url.toString());
+      console.log('🔗 API URL (no date filter):', url.toString());
       console.log('📡 Product Summary Response Status:', productSummaryResponse.status);
 
       // Fetch individual orders for status counting
@@ -1245,7 +1250,9 @@ const SalesApproval = () => {
 
   useEffect(() => {
     console.log('🔄 SalesApproval component mounted, fetching data...');
-    fetchData(selectedDate);
+    // COMMENTED OUT: Date filter removed to show all data by default
+    // fetchData(selectedDate);
+    fetchData();
   }, []); // Load data on mount
 
   // Force refresh function for debugging
@@ -1259,7 +1266,9 @@ const SalesApproval = () => {
       setInputValues({});
       
       // Fetch fresh data from backend
-      await fetchData(selectedDate);
+      // COMMENTED OUT: Date filter removed to show all data by default
+      // await fetchData(selectedDate);
+      await fetchData();
       await refreshProductionData();
     } catch (error) {
       console.error('Error during force refresh:', error);
@@ -1578,8 +1587,8 @@ const SalesApproval = () => {
                         </Button>
                       )}
                     </div>
-                     {/* Date Filter */}
-            <div className="flex items-center gap-2">
+                     {/* COMMENTED OUT: Date Filter removed to show all data by default */}
+            {/* <div className="flex items-center gap-2">
               <div className="flex flex-col gap-1">
                 <Input
                   id="date-filter"
@@ -1591,11 +1600,11 @@ const SalesApproval = () => {
               </div>
             
              
-            </div>
+            </div> */}
                   </div>
 
-                  {/* Clear Button and Results */}
-                  <div className="flex items-center gap-2">
+                  {/* COMMENTED OUT: Clear Button removed since date filter is disabled */}
+                  {/* <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
                       size="sm"
@@ -1604,7 +1613,8 @@ const SalesApproval = () => {
                     >
                       <X className="h-3 w-3" />
                       Clear
-                    </Button>
+                    </Button> */}
+                  <div className="flex items-center gap-2">
 
                     <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
                       {filteredProducts.length} of {products.length}
@@ -1616,14 +1626,14 @@ const SalesApproval = () => {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          {/* Responsive Table - Same UI for Mobile and Desktop */}
-          <div className="overflow-x-auto">
+          {/* Responsive Table with Sticky Header */}
+          <div className="overflow-auto max-h-[80vh] relative">
             <table className="w-full" style={{ minWidth: `${700 + (salesPersons.length * 150)}px` }}>
-              {/* Header Row - Fixed 10 columns */}
-              <thead>
+              {/* Header Row - Fixed 10 columns with Sticky positioning */}
+              <thead className="sticky top-0 z-10 bg-white shadow-sm">
                 <tr className="border-b bg-gray-50">
                   {/* 1. Selection Checkbox Column */}
-                  <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[50px]">
+                  <th className="sticky top-0 bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[50px]">
                     <div className="flex items-center justify-center">
                       <input
                         type="checkbox"
@@ -1635,14 +1645,14 @@ const SalesApproval = () => {
                     </div>
                   </th>
                   {/* 2. Products Column */}
-                  <th className="bg-gray-50 p-1 lg:p-2 text-left font-semibold text-gray-900 border-r min-w-[100px] lg:min-w-[160px]">
+                  <th className="sticky top-0 bg-gray-50 p-1 lg:p-2 text-left font-semibold text-gray-900 border-r min-w-[100px] lg:min-w-[160px]">
                     <div className="flex items-center gap-1 lg:gap-2">
                       <Package className="h-3 w-3 lg:h-4 lg:w-4" />
                       <span className="text-xs lg:text-sm">Products</span>
                     </div>
                   </th>
                   {/* 3. Production with final batches Column */}
-                  <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[90px] lg:min-w-[110px]">
+                  <th className="sticky top-0 bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[90px] lg:min-w-[110px]">
                     <div className="flex flex-col items-center gap-1">
                       <Package className="h-3 w-3 lg:h-4 lg:w-4 text-green-600" />
                       <div className="text-xs font-semibold text-gray-900">Production</div>
@@ -1651,7 +1661,7 @@ const SalesApproval = () => {
                     </div>
                   </th>
                   {/* 4. Produce / Batches Column */}
-                  <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[90px] lg:min-w-[110px]">
+                  <th className="sticky top-0 bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[90px] lg:min-w-[110px]">
                     <div className="flex flex-col items-center gap-1">
                       <Package className="h-3 w-3 lg:h-4 lg:w-4 text-purple-600" />
                       <div className="text-xs font-semibold text-gray-900">Produce /</div>
@@ -1659,7 +1669,7 @@ const SalesApproval = () => {
                     </div>
                   </th>
                   {/* 5. Physical Stock Column */}
-                  <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[80px] lg:min-w-[100px]">
+                  <th className="sticky top-0 bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[80px] lg:min-w-[100px]">
                     <div className="flex flex-col items-center gap-1">
                       <Package className="h-3 w-3 lg:h-4 lg:w-4 text-indigo-600" />
                       <div className="text-xs font-semibold text-gray-900">Physical</div>
@@ -1667,7 +1677,7 @@ const SalesApproval = () => {
                     </div>
                   </th>
                   {/* 6. Batch Adjusted Column */}
-                  <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[80px] lg:min-w-[100px]">
+                  <th className="sticky top-0 bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[80px] lg:min-w-[100px]">
                     <div className="flex flex-col items-center gap-1">
                       <Package className="h-3 w-3 lg:h-4 lg:w-4 text-cyan-600" />
                       <div className="text-xs font-semibold text-gray-900">Batch</div>
@@ -1675,7 +1685,7 @@ const SalesApproval = () => {
                     </div>
                   </th>
                   {/* 7. To be Produced/Day Column */}
-                  <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[90px] lg:min-w-[110px]">
+                  <th className="sticky top-0 bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[90px] lg:min-w-[110px]">
                     <div className="flex flex-col items-center gap-1">
                       <Package className="h-3 w-3 lg:h-4 lg:w-4 text-amber-600" />
                       <div className="text-xs font-semibold text-gray-900">To be Prod.</div>
@@ -1685,7 +1695,7 @@ const SalesApproval = () => {
 
                   {/* Dynamic Sales Person Columns */}
                   {salesPersons.map((salesPersonName, index) => (
-                    <th key={salesPersonName} className="p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[120px] lg:min-w-[150px]">
+                    <th key={salesPersonName} className="sticky top-0 bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[120px] lg:min-w-[150px]">
                       <div className="flex flex-col items-center gap-1">
                         <User className="h-3 w-3 lg:h-4 lg:w-4 text-gray-600" />
                         <div className="text-xs font-semibold text-gray-900 text-center leading-tight break-words max-w-[140px]">
@@ -1696,7 +1706,7 @@ const SalesApproval = () => {
                   ))}
 
                   {/* Total Indent Salesman Column */}
-                  <th className="p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[90px] lg:min-w-[120px] bg-gradient-to-r from-green-50 to-green-100">
+                  <th className="sticky top-0 bg-gradient-to-r from-green-50 to-green-100 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[90px] lg:min-w-[120px]">
                     <div className="flex flex-col items-center gap-1">
                       <Package className="h-3 w-3 lg:h-4 lg:w-4 text-green-600" />
                       <div className="text-xs font-bold text-gray-900">Total Indent</div>
@@ -1704,21 +1714,21 @@ const SalesApproval = () => {
                     </div>
                   </th>
                   {/* Qty/Batch Column */}
-                  <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[90px] lg:min-w-[110px]">
+                  <th className="sticky top-0 bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[90px] lg:min-w-[110px]">
                     <div className="flex flex-col items-center gap-1">
                       <Package className="h-3 w-3 lg:h-4 lg:w-4 text-orange-600" />
                       <div className="text-xs font-semibold text-gray-900">Qty/Batch</div>
                     </div>
                   </th>
                   {/* Status Column */}
-                  <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[80px] lg:min-w-[100px]">
+                  <th className="sticky top-0 bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 border-r min-w-[80px] lg:min-w-[100px]">
                     <div className="flex flex-col items-center gap-1">
                       <CheckCircle className="h-3 w-3 lg:h-4 lg:w-4 text-blue-600" />
                       <div className="text-xs font-semibold text-gray-900">Status</div>
                     </div>
                   </th>
                   {/* Actions Column - LAST COLUMN */}
-                  <th className="bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 min-w-[120px]">
+                  <th className="sticky top-0 bg-gray-50 p-1 lg:p-2 text-center font-semibold text-gray-900 min-w-[120px]">
                     <div className="flex flex-col items-center gap-1">
                       <Settings className="h-3 w-3 lg:h-4 lg:w-4 text-gray-600" />
                       <div className="text-xs font-semibold text-gray-900">Actions</div>

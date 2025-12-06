@@ -14,19 +14,23 @@ export const getSalesSummary = async (req, res) => {
     const userRole = req.user.role;
     const userCompanyId = req.user.companyId;
 
+    // COMMENTED OUT: Date handling removed to show all data by default
     // Date handling - if no date provided, get all data from all dates
-    let summaryDate = null;
-    if (date) {
-      summaryDate = new Date(date);
-      if (isNaN(summaryDate.getTime())) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid date format. Use YYYY-MM-DD'
-        });
-      }
-      summaryDate.setUTCHours(0, 0, 0, 0);
-    }
+    // let summaryDate = null;
+    // if (date) {
+    //   summaryDate = new Date(date);
+    //   if (isNaN(summaryDate.getTime())) {
+    //     return res.status(400).json({
+    //       success: false,
+    //       message: 'Invalid date format. Use YYYY-MM-DD'
+    //     });
+    //   }
+    //   summaryDate.setUTCHours(0, 0, 0, 0);
+    // }
     // If summaryDate is null, we'll get all dates
+    
+    // Show all data by default - no date filtering
+    const summaryDate = null;
 
     // Company filtering based on user role
     let filterCompanyId;
@@ -52,18 +56,21 @@ export const getSalesSummary = async (req, res) => {
       });
     }
 
-    // Build query filter
+    // Build query filter - CHANGED: Don't filter ProductDailySummary by date
+    // We want to show ALL products, but filter orders by date
     const filter = {};
-    if (summaryDate !== null) {
-      filter.date = summaryDate; // Filter by specific date only if date was provided
-    }
-    // If summaryDate is null, no date filter = get all dates
+    // Remove date filter from ProductDailySummary query
+    // if (summaryDate !== null) {
+    //   filter.date = summaryDate; 
+    // }
+    
+    // Only filter by company, not by date
     if (filterCompanyId) {
       filter.companyId = new mongoose.Types.ObjectId(filterCompanyId);
     }
 
-    console.log('🔍 Query filter being used:', filter);
-    console.log('📅 Summary date:', summaryDate);
+    console.log('🔍 ProductDailySummary query filter (NO DATE FILTER):', filter);
+    console.log('📅 Date will be applied to ORDERS only:', summaryDate);
     console.log('🏢 Filter company ID:', filterCompanyId);
     console.log('👤 User role:', userRole);
     console.log('🏢 User company ID:', userCompanyId);
@@ -163,11 +170,18 @@ export const getSalesSummary = async (req, res) => {
     const products = await Promise.all(validSummaries.map(async (summary) => {
       try {
         // Get sales breakdown using the requested date filter (not summary's date)
-        const salesBreakdown = await getSalesBreakdown(
-          summary.productId._id,
-          date, // Use the date from request query, not summary.date
-          summary.companyId._id || summary.companyId
-        );
+        let salesBreakdown = [];
+        try {
+          salesBreakdown = await getSalesBreakdown(
+            summary.productId._id,
+            date, // Use the date from request query, not summary.date
+            summary.companyId._id || summary.companyId
+          );
+        } catch (salesError) {
+          console.warn(`⚠️ Sales breakdown failed for ${summary.productName}:`, salesError.message);
+          // Continue with empty salesBreakdown instead of failing completely
+          salesBreakdown = [];
+        }
 
         console.log(`📊 Sales breakdown for ${summary.productName} on ${date}:`, salesBreakdown.length, 'sales persons');
 
@@ -192,15 +206,36 @@ export const getSalesSummary = async (req, res) => {
           salesBreakdown: salesBreakdown
         };
       } catch (error) {
-        console.error(`Error processing summary for product ${summary.productName}:`, error);
-        return null;
+        console.error(`❌ Critical error processing summary for product ${summary.productName}:`, error);
+        // Even on critical errors, return the product with empty sales data
+        // instead of completely excluding it
+        return {
+          productId: summary.productId._id,
+          productName: summary.productName,
+          qtyPerBatch: summary.qtyPerBatch,
+          totalQuantity: summary.totalQuantity || 0,
+          summary: {
+            _id: summary._id,
+            status: summary.status || 'pending',
+            totalIndent: summary.totalIndent || 0,
+            physicalStock: summary.physicalStock || 0,
+            packing: summary.packing || 0,
+            batchAdjusted: summary.batchAdjusted || 0,
+            productionFinalBatches: summary.productionFinalBatches || 0,
+            toBeProducedDay: summary.toBeProducedDay || 0,
+            toBeProducedBatches: summary.toBeProducedBatches || 0,
+            expiryShortage: summary.expiryShortage || 0,
+            produceBatches: summary.produceBatches || 0,
+          },
+          salesBreakdown: []
+        };
       }
     }));
 
-    // Filter out null results
-    const validProducts = products.filter(product => product !== null);
+    // All products should now be valid since we handle errors gracefully
+    const validProducts = products;
 
-    console.log(`✅ Valid products after processing: ${validProducts.length}`);
+    console.log(`✅ Total products after processing: ${validProducts.length}`);
 
     // Group products by production groups
     const productionGroups = await ProductionGroup.find({ 

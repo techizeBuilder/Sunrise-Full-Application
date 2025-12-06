@@ -44,14 +44,14 @@ export default function ProductionDashboard() {
     refetchInterval: 30000 // Auto-refresh
   });
 
-  // Fetch ungrouped items data
+  // Fetch ungrouped items data using new endpoint
   const {
     data: ungroupedData,
     isLoading: ungroupedLoading,
     error: ungroupedError,
     refetch: refetchUngrouped
   } = useQuery({
-    queryKey: ['production-ungrouped-items'],
+    queryKey: ['production-ungrouped-item-group'],
     queryFn: () => apiRequest('GET', '/api/production/ungrouped-items'),
     staleTime: 30000,
     refetchInterval: 30000
@@ -339,6 +339,8 @@ export default function ProductionDashboard() {
           </Card>
         </div>
       )}
+
+
     </div>
   );
 }

@@ -801,7 +801,7 @@ export default function UnitHeadCustomers() {
                           {customer.city && (
                             <div className="text-sm text-muted-foreground flex items-center">
                               <MapPin className="h-3 w-3 mr-1" />
-                              {customer.city}{customer.state && `, ${customer.state}`}
+                              Location:  {customer.city}{customer.state && `, ${customer.state}`}
                             </div>
                           )}
                         </div>

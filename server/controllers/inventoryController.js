@@ -169,6 +169,9 @@ export const getItems = async (req, res) => {
     // Add company filtering for Unit Head users
     if (req.user.role === 'Unit Head' && req.user.companyId) {
       query.store = req.user.companyId;
+      // Unit Head should only see Products, not other item types
+      query.type = 'Product';
+      console.log('🏢 Unit Head filtering applied: company =', req.user.companyId, ', type = Product');
     }
 
     // Search filter
@@ -180,8 +183,8 @@ export const getItems = async (req, res) => {
       ];
     }
 
-    // Type filter
-    if (type) {
+    // Type filter - only allow if not Unit Head (Unit Head is auto-filtered to Products)
+    if (type && req.user.role !== 'Unit Head') {
       query.type = type;
     }
 

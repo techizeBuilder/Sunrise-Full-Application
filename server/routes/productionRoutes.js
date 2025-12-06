@@ -7,6 +7,7 @@ import {
   getProductionDashboard,
   debugProductSummaryData,
   getUngroupedItems,
+  getUngroupedItemGroup,
   getUngroupedItemProduction,
   updateUngroupedItemProduction
 } from '../controllers/productionController.js';
@@ -34,6 +35,12 @@ router.get('/test', (req, res) => {
 router.get('/ungrouped-items', (req, res, next) => {
   console.log('🔍 Ungrouped items route hit:', req.method, req.path);
   getUngroupedItems(req, res, next);
+});
+
+// GET /api/production/ungrouped-item-group - Get items not assigned to any production group (duplicate endpoint)
+router.get('/ungrouped-item-group', (req, res, next) => {
+  console.log('🔍 Ungrouped item group route hit:', req.method, req.path);
+  getUngroupedItemGroup(req, res, next);
 });
 
 // GET /api/production/ungrouped-items/production - Get production data for ungrouped items
