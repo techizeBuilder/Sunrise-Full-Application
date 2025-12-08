@@ -195,19 +195,41 @@ export default function ModernInventoryUI() {
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState({ isOpen: false, items: [] });
   const [selectedItems, setSelectedItems] = useState(new Set());
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedType, setSelectedType] = useState('all');
   const [selectedStore, setSelectedStore] = useState('all');
   const [selectedLocation, setSelectedLocation] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+  const [itemsPerPage] = useState(10); // Frontend pagination: 10 items per page
   const [categoryManagementOpen, setCategoryManagementOpen] = useState(false);
   const [showCustomerCategoryModal, setShowCustomerCategoryModal] = useState(false);
 
-  // Data fetching with React Query
+  // Debounce search term to avoid excessive API calls
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Data fetching with React Query - let API handle ALL filtering
   const { data: itemsData, isLoading: itemsLoading } = useQuery({
-    queryKey: [`${apiBasePath}/items`],
+    queryKey: [`${apiBasePath}/items`, debouncedSearchTerm, selectedCategory, selectedType, selectedStore, selectedLocation],
+    queryFn: () => {
+      const params = new URLSearchParams({
+        page: 1,
+        limit: 100, // Fetch more items from API
+        ...(debouncedSearchTerm && { search: debouncedSearchTerm }),
+        ...(selectedCategory && selectedCategory !== 'all' && { category: selectedCategory }),
+        ...(selectedType && selectedType !== 'all' && { type: selectedType }),
+        ...(selectedStore && selectedStore !== 'all' && { store: selectedStore }),
+        ...(selectedLocation && selectedLocation !== 'all' && { location: selectedLocation })
+      });
+      return apiRequest('GET', `${apiBasePath}/items?${params.toString()}`);
+    },
   });
 
   const { data: stats, isLoading: statsLoading } = useQuery({
@@ -229,12 +251,14 @@ export default function ModernInventoryUI() {
     queryFn: () => apiRequest('GET', '/api/companies/dropdown'),
   });
 
-  // Extract arrays from API response
+  // Extract data from API response including pagination
   const items = Array.isArray(itemsData?.items) ? itemsData.items : [];
+  const apiPagination = itemsData?.pagination || {};
   const categories = Array.isArray(categoriesData?.categories) ? categoriesData.categories : [];
   const customerCategories = Array.isArray(customerCategoriesData?.customerCategories) ? customerCategoriesData.customerCategories : [];
   const companies = Array.isArray(companiesData?.companies) ? companiesData.companies : [];
 
+  console.log('API Response:', { items: items.length, pagination: apiPagination });
   console.log('Companies data:', companies);
 
   // Mutations
@@ -435,54 +459,20 @@ export default function ModernInventoryUI() {
     });
   };
 
-  // Filter and sort items (newest first by default)
-  const filteredItems = items.filter(item => {
-    const matchesSearch = !searchTerm || 
-      item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.store?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.storeLocation?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesCategory = !selectedCategory || selectedCategory === 'all' || item.category === selectedCategory;
-    const matchesType = !selectedType || selectedType === 'all' || item.type === selectedType;
-    const matchesStore = !selectedStore || selectedStore === 'all' || item.store === selectedStore;
-    
-    // Match location by company ID or store field
-    const matchesLocation = !selectedLocation || selectedLocation === 'all' || 
-      item.companyId === selectedLocation || 
-      item.store === selectedLocation ||
-      item.location === selectedLocation;
-    
-    return matchesSearch && matchesCategory && matchesType && matchesStore && matchesLocation;
-  }).sort((a, b) => {
-    switch (sortBy) {
-      case 'name':
-        return (a.name || '').localeCompare(b.name || '');
-      case 'code':
-        return (a.code || '').localeCompare(b.code || '');
-      case 'category':
-        return (a.category || '').localeCompare(b.category || '');
-      case 'qty':
-        return (b.qty || 0) - (a.qty || 0);
-      case 'newest':
-      default:
-        // Default: newest items first (by creation date)
-        return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
-    }
-  });
+  // No frontend filtering - API handles ALL filters
+  const filteredItems = items; // Use items directly from API
 
-  // Pagination logic
-  const totalItems = filteredItems.length;
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  // Frontend pagination only - API does the filtering
+  const totalItems = apiPagination.total || items.length;
+  const totalPages = Math.ceil(items.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const paginatedItems = filteredItems.slice(startIndex, endIndex);
+  const paginatedItems = items.slice(startIndex, endIndex);
 
   // Reset to first page when search or filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedCategory, selectedStore, selectedLocation, sortBy]);
+  }, [debouncedSearchTerm, selectedCategory, selectedType, selectedStore, selectedLocation, sortBy]);
 
   // Auto-select location for Unit Head users
   useEffect(() => {
@@ -494,6 +484,7 @@ export default function ModernInventoryUI() {
 
   const handlePageChange = (page) => {
     setCurrentPage(page);
+    // Frontend pagination - no API refetch needed
   };
 
   return (
@@ -873,7 +864,7 @@ export default function ModernInventoryUI() {
             {totalPages > 1 && (
               <div className="flex items-center justify-between px-2 py-4">
                 <div className="text-sm text-gray-500">
-                  Showing {startIndex + 1} to {Math.min(endIndex, totalItems)} of {totalItems} items
+                  Showing {startIndex + 1} to {Math.min(endIndex, items.length)} of {totalItems} items
                 </div>
                 <div className="flex items-center space-x-2">
                   <Button

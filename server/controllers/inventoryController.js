@@ -145,6 +145,7 @@ const generateItemCode = async (type) => {
 export const getItems = async (req, res) => {
   console.log('=== ITEMS API CALLED ===');
   console.log('User:', req.user?.username, 'Role:', req.user?.role, 'CompanyId:', req.user?.companyId);
+  console.log('Query params:', req.query);
   
   try {
     if (!checkInventoryPermission(req.user, 'view')) {
@@ -158,6 +159,8 @@ export const getItems = async (req, res) => {
       type, 
       category, 
       subCategory, 
+      store,
+      location,
       lowStock,
       sortBy = 'name',
       sortOrder = 'asc'
@@ -174,13 +177,53 @@ export const getItems = async (req, res) => {
       console.log('🏢 Unit Head filtering applied: company =', req.user.companyId, ', type = Product');
     }
 
-    // Search filter
+    // Search filter with improved partial matching
     if (search) {
-      query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { code: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } }
-      ];
+      try {
+        // Split search into words for better matching
+        const searchWords = search.trim().split(/\s+/).filter(word => word.length > 0);
+        console.log('🔍 Search words:', searchWords);
+        
+        if (searchWords.length === 1) {
+          // Single word search - use simple regex
+          const escapedSearch = searchWords[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          query.$or = [
+            { name: { $regex: escapedSearch, $options: 'i' } },
+            { code: { $regex: escapedSearch, $options: 'i' } },
+            { description: { $regex: escapedSearch, $options: 'i' } }
+          ];
+        } else {
+          // Multi-word search - each word should be found somewhere in the name
+          const wordRegexes = searchWords.map(word => ({
+            name: { $regex: word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' }
+          }));
+          
+          // Also try exact phrase matching
+          const exactPhrase = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          
+          query.$or = [
+            // All words must be found in name
+            { $and: wordRegexes },
+            // Or exact phrase in name
+            { name: { $regex: exactPhrase, $options: 'i' } },
+            // Or exact phrase in code
+            { code: { $regex: exactPhrase, $options: 'i' } },
+            // Or exact phrase in description
+            { description: { $regex: exactPhrase, $options: 'i' } }
+          ];
+        }
+        
+        console.log('🔍 Search query applied:', JSON.stringify(query.$or, null, 2));
+      } catch (error) {
+        console.error('❌ Search regex error:', error);
+        // Fallback to simple text matching if regex fails
+        const simpleSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        query.$or = [
+          { name: { $regex: simpleSearch, $options: 'i' } },
+          { code: { $regex: simpleSearch, $options: 'i' } },
+          { description: { $regex: simpleSearch, $options: 'i' } }
+        ];
+      }
     }
 
     // Type filter - only allow if not Unit Head (Unit Head is auto-filtered to Products)
@@ -196,6 +239,16 @@ export const getItems = async (req, res) => {
     // Subcategory filter
     if (subCategory) {
       query.subCategory = subCategory;
+    }
+
+    // Store filter (for Super Admin to filter by specific store/company)
+    if (store && req.user.role !== 'Unit Head') {
+      query.store = store;
+    }
+
+    // Location filter (alias for store)
+    if (location && req.user.role !== 'Unit Head') {
+      query.store = location;
     }
 
     // Low stock filter
@@ -219,10 +272,25 @@ export const getItems = async (req, res) => {
       }
     }
 
-    const items = await Item.find(query)
-      .sort(sortOptions)
-      .skip(skip)
-      .limit(parseInt(limit));
+    console.log('🔍 Final query:', JSON.stringify(query, null, 2));
+    console.log('📊 Sort options:', sortOptions);
+
+    let items, total;
+    
+    try {
+      // Execute database queries with error handling
+      items = await Item.find(query)
+        .sort(sortOptions)
+        .skip(skip)
+        .limit(parseInt(limit));
+
+      total = await Item.countDocuments(query);
+      
+      console.log(`📦 Found ${items.length} items out of ${total} total`);
+    } catch (dbError) {
+      console.error('❌ Database query error:', dbError);
+      throw new Error(`Database query failed: ${dbError.message}`);
+    }
 
     // Resolve company names for store locations
     const itemsWithCompanyNames = await Promise.all(
@@ -252,7 +320,6 @@ export const getItems = async (req, res) => {
       })
     );
 
-    const total = await Item.countDocuments(query);
     console.log(`-----------------------Fetched ${items.length} items out of ${total} total matching items.`);
   
     // Calculate inventory statistics
@@ -294,8 +361,13 @@ export const getItems = async (req, res) => {
       typeStats
     });
   } catch (error) {
-    console.error('Get items error:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    console.error('❌ Get items error:', error);
+    console.error('❌ Error stack:', error.stack);
+    console.error('❌ Query that caused error:', JSON.stringify(req.query));
+    res.status(500).json({ 
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+    });
   }
 };
 
