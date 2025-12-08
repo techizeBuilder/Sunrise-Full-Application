@@ -166,7 +166,10 @@ export const getItems = async (req, res) => {
       sortOrder = 'asc'
     } = req.query;
 
-    const skip = (page - 1) * limit;
+    // For Unit Head users, remove pagination to show all items
+    const isUnitHead = req.user.role === 'Unit Head';
+    const actualLimit = isUnitHead ? 0 : parseInt(limit); // 0 means no limit in MongoDB
+    const skip = isUnitHead ? 0 : (page - 1) * limit;
     let query = {};
 
     // Add company filtering for Unit Head users
@@ -256,8 +259,8 @@ export const getItems = async (req, res) => {
       query.$expr = { $lte: ['$qty', '$minStock'] };
     }
 
-    // Sort options - always prioritize newest items first
-    let sortOptions = { createdAt: -1 }; // Default: newest first
+    // Sort options - default to category A-Z for Unit Head, newest first for others
+    let sortOptions = req.user.role === 'Unit Head' ? { category: 1, name: 1 } : { createdAt: -1 };
     
     // Add secondary sorting if specified
     if (sortBy && sortBy !== 'createdAt') {
@@ -279,11 +282,14 @@ export const getItems = async (req, res) => {
     
     try {
       // Execute database queries with error handling
-      items = await Item.find(query)
-        .sort(sortOptions)
-        .skip(skip)
-        .limit(parseInt(limit));
-
+      const query_builder = Item.find(query).sort(sortOptions).skip(skip);
+      
+      // Only apply limit if not Unit Head (Unit Head gets all items)
+      if (actualLimit > 0) {
+        query_builder.limit(actualLimit);
+      }
+      
+      items = await query_builder;
       total = await Item.countDocuments(query);
       
       console.log(`📦 Found ${items.length} items out of ${total} total`);
@@ -349,14 +355,22 @@ export const getItems = async (req, res) => {
       }
     ]);
 
+    // Prepare pagination response
+    const paginationResponse = isUnitHead ? {
+      page: 1,
+      limit: total, // Show actual total as limit for Unit Head
+      total,
+      pages: 1 // Only one page since all items are shown
+    } : {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      total,
+      pages: Math.ceil(total / limit)
+    };
+
     res.json({
       items: itemsWithCompanyNames,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / limit)
-      },
+      pagination: paginationResponse,
       stats: stats[0] || { totalItems: 0, totalValue: 0, lowStockCount: 0 },
       typeStats
     });

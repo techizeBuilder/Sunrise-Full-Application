@@ -690,7 +690,9 @@ export const getSalespersonItems = async (req, res) => {
       sortOrder = 'asc'
     } = req.query;
 
-    const skip = (page - 1) * limit;
+    // Remove pagination - show all items for sales users
+    const skip = 0; // No skip for sales
+    const actualLimit = 0; // No limit for sales
     let query = {};
 
     // Company location filtering - only show items from same company
@@ -747,8 +749,8 @@ export const getSalespersonItems = async (req, res) => {
       query.$expr = { $lte: ['$qty', '$minStock'] };
     }
 
-    // Sort options
-    let sortOptions = { createdAt: -1 }; // Default: newest first
+    // Sort options - default to category A-Z for sales items
+    let sortOptions = { category: 1, name: 1 }; // Default: category A-Z, then name A-Z
     
     if (sortBy && sortBy !== 'createdAt') {
       if (sortBy === 'name') {
@@ -763,9 +765,8 @@ export const getSalespersonItems = async (req, res) => {
     }
 
     const items = await Item.find(query)
-      .sort(sortOptions)
-      .skip(skip)
-      .limit(parseInt(limit));
+      .sort(sortOptions);
+      // No skip or limit - return all items
 
     // Resolve company names for store locations
     const itemsWithCompanyNames = await Promise.all(
@@ -801,10 +802,10 @@ export const getSalespersonItems = async (req, res) => {
       success: true,
       items: itemsWithCompanyNames,
       pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
+        page: 1,
+        limit: total, // Show actual total as limit
         total,
-        pages: Math.ceil(total / limit)
+        pages: 1 // Only one page since all items are shown
       }
     });
   } catch (error) {

@@ -121,8 +121,7 @@ export default function UnitHeadInventoryView() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedStore, setSelectedStore] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+  // Pagination removed - showing all items
 
   // Data fetching with React Query (Unit Head specific endpoints)
   const { data: itemsData, isLoading: itemsLoading, refetch: refetchItems, error: itemsError } = useQuery({
@@ -268,17 +267,13 @@ export default function UnitHeadInventoryView() {
     console.log('Sample filtered item:', filteredItems[0]);
   }
 
-  // Pagination logic
+  // Show all items without pagination
   const totalItems = filteredItems.length;
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedItems = filteredItems.slice(startIndex, endIndex);
+  const paginatedItems = filteredItems; // Show all items
+  const startIndex = 0;
+  const endIndex = totalItems;
 
-  // Reset to first page when search or filter changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, selectedCategory, selectedStore, sortBy]);
+  // No pagination - no need to reset page
 
   const handleView = (item) => {
     setViewItem(item);
@@ -412,34 +407,9 @@ export default function UnitHeadInventoryView() {
         {/* Results Summary */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-sm text-gray-600 dark:text-gray-400">
           <p className="text-xs sm:text-sm">
-            Showing {startIndex + 1}-{Math.min(endIndex, totalItems)} of {totalItems} items
+            Showing all {totalItems} items
             {searchTerm && ` for "${String(searchTerm)}"`}
           </p>
-          {totalPages > 1 && (
-            <div className="flex items-center gap-2 self-start sm:self-auto">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                className="border-gray-300 dark:border-gray-600 text-xs px-2 py-1 h-8"
-              >
-                Previous
-              </Button>
-              <span className="px-2 sm:px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 rounded-md text-xs font-medium whitespace-nowrap">
-                {currentPage} of {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                className="border-gray-300 dark:border-gray-600 text-xs px-2 py-1 h-8"
-              >
-                Next
-              </Button>
-            </div>
-          )}
         </div>
 
         {/* Items Table */}
