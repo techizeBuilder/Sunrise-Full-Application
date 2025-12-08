@@ -64,25 +64,33 @@ export default function ProductionShift() {
         // Initialize batch data with proper values from database
         const initialBatchData = {};
         data.data.groups.forEach(group => {
-          const batchKey = `${group._id}`;
+          const batchCount = group.noOfBatchesForProduction || 1;
           
           console.log('🔍 Initializing group data:', {
             name: group.name,
-            mouldingTime: group.mouldingTime,
-            unloadingTime: group.unloadingTime,
-            productionLoss: group.productionLoss
+            batchCount: batchCount,
+            batchData: group.batchData
           });
           
-          initialBatchData[batchKey] = {
-            productGroup: group.name,
-            // Keep existing datetime values if they exist
-            mouldingTime: group.mouldingTime || '',
-            unloadingTime: group.unloadingTime || '',
-            // Keep existing production loss value, don't default to 0 if empty
-            productionLoss: group.productionLoss !== undefined && group.productionLoss !== null ? group.productionLoss : '',
-            qtyBatch: group.qtyPerBatch || 0, // Use qtyPerBatch from ProductionGroup model
-            qtyAchieved: Math.max(0, (group.qtyPerBatch || 0) - (group.productionLoss || 0)) // Auto-calculated: Qty/Batch - Production Loss
-          };
+          // Create batch data for each individual batch
+          for (let batchIndex = 0; batchIndex < batchCount; batchIndex++) {
+            const batchKey = `${group._id}_batch_${batchIndex + 1}`;
+            
+            // Get individual batch data from API response or use defaults
+            const batchFromAPI = group.batchData?.[batchKey] || {};
+            
+            initialBatchData[batchKey] = {
+              productGroup: group.name,
+              batchNumber: batchIndex + 1,
+              totalBatches: batchCount,
+              // Use individual batch timing data if available, otherwise empty
+              mouldingTime: batchFromAPI.mouldingTime || '',
+              unloadingTime: batchFromAPI.unloadingTime || '',
+              productionLoss: batchFromAPI.productionLoss !== undefined ? batchFromAPI.productionLoss : '',
+              qtyBatch: group.qtyPerBatch || 0,
+              qtyAchieved: batchFromAPI.qtyAchieved !== undefined ? batchFromAPI.qtyAchieved : Math.max(0, (group.qtyPerBatch || 0) - (batchFromAPI.productionLoss || 0))
+            };
+          }
         });
         
         console.log('📊 Final initialized batch data:', initialBatchData);
@@ -413,20 +421,28 @@ export default function ProductionShift() {
     }
   };
 
-  // Render batch rows - ONE ROW PER GROUP
+  // Render batch rows - MULTIPLE ROWS PER GROUP based on noOfBatchesForProduction
   const renderBatchRows = (group, groupIndex) => {
-    const batchKey = `${group._id}`;
-    const batch = batchData[batchKey] || {};
-    const batchNumber = groupIndex + 1; // Sequential batch numbering per group
+    const batchCount = group.noOfBatchesForProduction || 1; // Default to 1 if no batch count specified
+    const rows = [];
 
-    return (
-      <TableRow key={batchKey}>
-        <TableCell className="text-center">{batchNumber}</TableCell>
-        
-        {/* Product Group - Simple text, not editable */}
-        <TableCell>
-          {group.name}
-        </TableCell>
+    // Create multiple batch rows based on noOfBatchesForProduction
+    for (let batchIndex = 0; batchIndex < batchCount; batchIndex++) {
+      const batchKey = `${group._id}_batch_${batchIndex + 1}`;
+      const batch = batchData[batchKey] || {};
+      const batchNumber = (groupIndex * batchCount) + (batchIndex + 1); // Sequential batch numbering across all groups
+
+      rows.push(
+        <TableRow key={batchKey}>
+          <TableCell className="text-center">{batchNumber}</TableCell>
+          
+          {/* Product Group - Simple text, not editable */}
+          <TableCell>
+            {group.name}
+            {batchCount > 1 && (
+              <div className="text-xs text-gray-500">Batch {batchIndex + 1} of {batchCount}</div>
+            )}
+          </TableCell>
         
         {/* Moulding Time - Punch In/Out System */}
         <TableCell>
@@ -527,30 +543,33 @@ export default function ProductionShift() {
           </div>
         </TableCell>
         
-        {/* Actions */}
-        <TableCell>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleViewBatch(group, null, batchKey)}
-              title="View Group Details"
-            >
-              <Eye className="w-4 h-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleDeleteBatch(batchKey)}
-              title="Delete Batch"
-              className="text-red-600 hover:text-red-800"
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
-          </div>
-        </TableCell>
-      </TableRow>
-    );
+          {/* Actions */}
+          <TableCell>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleViewBatch(group, null, batchKey)}
+                title="View Group Details"
+              >
+                <Eye className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleDeleteBatch(batchKey)}
+                title="Delete Batch"
+                className="text-red-600 hover:text-red-800"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
+          </TableCell>
+        </TableRow>
+      );
+    }
+
+    return rows;
   };
 
   return (
@@ -620,7 +639,7 @@ export default function ProductionShift() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Clock className="w-5 h-5" />
-            Production Sheet Data ({productionGroups.length} Batches)
+            Production Sheet Data ({productionGroups.reduce((total, group) => total + (group.noOfBatchesForProduction || 1), 0)} Batches)
           </CardTitle>
         </CardHeader>
         <CardContent>

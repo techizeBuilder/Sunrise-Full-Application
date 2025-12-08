@@ -3,6 +3,44 @@ import ProductDailySummary from '../models/ProductDailySummary.js';
 import { Item } from '../models/Inventory.js';
 import User from '../models/User.js';
 import UngroupedItemProduction from '../models/UngroupedItemProduction.js';
+import ProductionBatchData from '../models/ProductionBatchData.js';
+
+// Helper function to calculate number of batches for a production group
+const calculateBatchesForGroup = async (groupId, companyId) => {
+  try {
+    // Get the production group
+    const group = await ProductionGroup.findById(groupId);
+    if (!group || !group.items || group.items.length === 0) {
+      return 0;
+    }
+
+    // Get all item IDs from this production group
+    const itemIds = group.items.map(item => item._id);
+    
+    // Query ProductDailySummary for all items in this group - ONLY APPROVED ONES
+    const summaryQuery = {
+      productId: { $in: itemIds },
+      status: 'approved'  // Only get approved ProductDailySummary records
+    };
+    
+    // Add company filter if provided
+    if (companyId) {
+      summaryQuery.companyId = companyId;
+    }
+    
+    const productSummaries = await ProductDailySummary.find(summaryQuery);
+    
+    // Calculate total batchAdjusted for all items in this group
+    const totalBatches = productSummaries.reduce((total, summary) => {
+      return total + (summary.batchAdjusted || 0);
+    }, 0);
+    
+    return totalBatches;
+  } catch (error) {
+    console.error('Error calculating batches for group:', error);
+    return 0;
+  }
+};
 
 // Get production dashboard statistics and recent data
 export const getProductionDashboard = async (req, res) => {
@@ -239,6 +277,24 @@ export const getProductionShiftData = async (req, res) => {
         productionLoss: group.productionLoss
       });
 
+      // Load individual batch data for this group
+      const batchCount = await calculateBatchesForGroup(group._id, req.user.companyId);
+      const batchDataArray = await ProductionBatchData.find({
+        groupId: group._id,
+        company: req.user.companyId
+      }).lean();
+
+      // Create batch data map for easy access
+      const batchDataMap = {};
+      batchDataArray.forEach(batch => {
+        batchDataMap[batch.batchKey] = {
+          mouldingTime: batch.mouldingTime ? batch.mouldingTime.toISOString().slice(0, 16) : null,
+          unloadingTime: batch.unloadingTime ? batch.unloadingTime.toISOString().slice(0, 16) : null,
+          productionLoss: batch.productionLoss || 0,
+          qtyAchieved: batch.qtyAchieved || 0
+        };
+      });
+
       return {
         _id: group._id,
         name: group.name,
@@ -248,6 +304,10 @@ export const getProductionShiftData = async (req, res) => {
         // Batch quantity fields from ProductionGroup model
         qtyPerBatch: groupQtyPerBatch,
         qtyAchievedPerBatch: groupQtyAchievedPerBatch,
+        // Calculate number of batches for production
+        noOfBatchesForProduction: batchCount,
+        // Individual batch data
+        batchData: batchDataMap,
         unitHeadOrManager: group.unitHeadOrManager || null,
         // Format time fields properly for frontend
         mouldingTime: group?.mouldingTime ? 
@@ -363,28 +423,42 @@ export const getProductionGroupShiftDetails = async (req, res) => {
 export const updateProductionShiftTiming = async (req, res) => {
   try {
     // Handle both URL param and body groupId
-    const groupId = req.params.groupId || req.body.groupId;
+    let batchKey = req.params.groupId || req.body.groupId;
     const { field, value, timingData } = req.body;
     
-    console.log('⏱️ Updating production shift timing for group:', groupId);
+    console.log('⏱️ Updating production shift timing for batch:', batchKey);
     console.log('Field:', field, 'Value:', value);
     
-    if (!groupId) {
+    if (!batchKey) {
       return res.status(400).json({
         success: false,
-        message: 'Group ID is required'
+        message: 'Batch key is required'
       });
     }
 
-    let query = { _id: groupId };
+    let groupId, batchNumber;
 
-    // COMPANY FILTERING: Only allow updates for same company groups
+    // Extract group ID and batch number from batch key (format: "groupId_batch_X")
+    if (batchKey.includes('_batch_')) {
+      const parts = batchKey.split('_batch_');
+      groupId = parts[0];
+      batchNumber = parseInt(parts[1]);
+    } else {
+      // Backward compatibility: if no batch number, treat as batch 1
+      groupId = batchKey;
+      batchNumber = 1;
+      batchKey = `${groupId}_batch_1`;
+    }
+    
+    console.log('📊 Parsed:', { groupId, batchNumber, batchKey });
+
+    // Verify the production group exists and user has access
+    let groupQuery = { _id: groupId };
     if (req.user.companyId) {
-      query.company = req.user.companyId;
+      groupQuery.company = req.user.companyId;
     }
 
-    const group = await ProductionGroup.findOne(query);
-
+    const group = await ProductionGroup.findOne(groupQuery);
     if (!group) {
       return res.status(404).json({
         success: false,
@@ -392,113 +466,108 @@ export const updateProductionShiftTiming = async (req, res) => {
       });
     }
 
+    // Find or create individual batch data
+    let batchData = await ProductionBatchData.findOne({ 
+      batchKey: batchKey,
+      company: req.user.companyId 
+    });
+
+    if (!batchData) {
+      // Create new batch data record
+      batchData = new ProductionBatchData({
+        groupId: groupId,
+        batchNumber: batchNumber,
+        batchKey: batchKey,
+        company: req.user.companyId
+      });
+    }
+
     // Handle auto-save field updates
     if (field && value !== undefined) {
-      const updateData = {};
-      
       switch (field) {
         case 'mouldingTime':
-          // Frontend sends ISO string or null
-          updateData.mouldingTime = value ? new Date(value) : null;
+          batchData.mouldingTime = value ? new Date(value) : null;
           break;
         case 'unloadingTime':
-          // Frontend sends ISO string or null
-          updateData.unloadingTime = value ? new Date(value) : null;
+          batchData.unloadingTime = value ? new Date(value) : null;
           break;
         case 'productionLoss':
-          updateData.productionLoss = parseFloat(value) || 0;
+          batchData.productionLoss = parseFloat(value) || 0;
           
-          // Auto-calculate qtyAchievedPerBatch when production loss changes
-          // First get the current production group to access qtyPerBatch
-          const currentGroup = await ProductionGroup.findOne(query);
-          if (currentGroup) {
-            const qtyPerBatch = currentGroup.qtyPerBatch || 0;
-            const productionLoss = updateData.productionLoss;
-            // Calculate: qtyAchievedPerBatch = qtyPerBatch - productionLoss (minimum 0)
-            updateData.qtyAchievedPerBatch = Math.max(0, qtyPerBatch - productionLoss);
-            
-            console.log('🧮 Auto-calculating qtyAchievedPerBatch:', {
-              qtyPerBatch: qtyPerBatch,
-              productionLoss: productionLoss,
-              calculatedAchieved: updateData.qtyAchievedPerBatch
-            });
-          }
-          break;
-        case 'qtyPerBatch':
-          // Handle quantity per batch updates
-          updateData.qtyPerBatch = parseFloat(value) || 0;
-          if (updateData.qtyPerBatch < 0) {
-            return res.status(400).json({
-              success: false,
-              message: 'Quantity per batch cannot be negative'
-            });
-          }
-          
-          // Auto-calculate qtyAchievedPerBatch when qtyPerBatch changes
-          // First get the current production group to access productionLoss
-          const currentGroupForQty = await ProductionGroup.findOne(query);
-          if (currentGroupForQty) {
-            const productionLoss = currentGroupForQty.productionLoss || 0;
-            const qtyPerBatch = updateData.qtyPerBatch;
-            // Calculate: qtyAchievedPerBatch = qtyPerBatch - productionLoss (minimum 0)
-            updateData.qtyAchievedPerBatch = Math.max(0, qtyPerBatch - productionLoss);
-            
-            console.log('🧮 Auto-calculating qtyAchievedPerBatch for qtyPerBatch change:', {
-              qtyPerBatch: qtyPerBatch,
-              productionLoss: productionLoss,
-              calculatedAchieved: updateData.qtyAchievedPerBatch
-            });
-          }
-          break;
-        case 'qtyAchievedPerBatch':
-          // Handle achieved quantity per batch updates
-          updateData.qtyAchievedPerBatch = parseFloat(value) || 0;
-          if (updateData.qtyAchievedPerBatch < 0) {
-            return res.status(400).json({
-              success: false,
-              message: 'Achieved quantity per batch cannot be negative'
-            });
-          }
+          // Auto-calculate qtyAchieved when production loss changes
+          const qtyPerBatch = group.qtyPerBatch || 0;
+          batchData.qtyAchieved = Math.max(0, qtyPerBatch - batchData.productionLoss);
           break;
         default:
           return res.status(400).json({
             success: false,
-            message: `Invalid field: ${field}. Allowed fields: mouldingTime, unloadingTime, productionLoss, qtyPerBatch, qtyAchievedPerBatch`
+            message: `Invalid field: ${field}`
           });
       }
 
-      // Update the production group
-      await ProductionGroup.findOneAndUpdate(query, updateData, { new: true });
+      await batchData.save();
+
+      console.log('✅ Batch timing updated successfully:', {
+        batchKey,
+        field,
+        value,
+        updatedData: batchData
+      });
 
       return res.json({
         success: true,
         message: `${field} updated successfully`,
         data: {
+          batchKey: batchKey,
           groupId: groupId,
-          field: field,
-          value: value,
-          updatedAt: new Date()
+          batchNumber: batchNumber,
+          field,
+          value,
+          updatedAt: batchData.updatedAt
         }
       });
     }
 
-    // Handle bulk timing data updates (legacy)
+    // Handle bulk timing data updates (if needed for backward compatibility)
     if (timingData) {
-      res.json({
+      if (timingData.mouldingTime !== undefined) {
+        batchData.mouldingTime = timingData.mouldingTime ? new Date(timingData.mouldingTime) : null;
+      }
+      if (timingData.unloadingTime !== undefined) {
+        batchData.unloadingTime = timingData.unloadingTime ? new Date(timingData.unloadingTime) : null;
+      }
+      if (timingData.productionLoss !== undefined) {
+        batchData.productionLoss = parseFloat(timingData.productionLoss) || 0;
+        
+        // Auto-calculate qtyAchieved
+        const qtyPerBatch = group.qtyPerBatch || 0;
+        batchData.qtyAchieved = Math.max(0, qtyPerBatch - batchData.productionLoss);
+      }
+
+      await batchData.save();
+
+      return res.json({
         success: true,
         message: 'Production shift timing updated successfully',
         data: {
+          batchKey: batchKey,
           groupId: groupId,
-          updatedAt: new Date(),
-          timingData: timingData
+          batchNumber: batchNumber,
+          timingData: {
+            mouldingTime: batchData.mouldingTime,
+            unloadingTime: batchData.unloadingTime,
+            productionLoss: batchData.productionLoss,
+            qtyAchieved: batchData.qtyAchieved
+          },
+          updatedAt: batchData.updatedAt
         }
       });
-    } else {
-      return res.status(400).json({
-        success: false,
-        message: 'Either field/value or timingData is required'
-      });
     }
+
+    return res.status(400).json({
+      success: false,
+      message: 'No valid update data provided'
+    });
 
   } catch (error) {
     console.error('Error updating production shift timing:', error);
