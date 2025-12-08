@@ -468,10 +468,12 @@ export const createItem = async (req, res) => {
       // Escape special regex characters and create case-insensitive query
       const escapedName = trimmedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const query = {
-        name: { $regex: new RegExp(`^${escapedName}$`, 'i') }
+        name: { $regex: new RegExp(`^${escapedName}$`, 'i') },
+        category: itemData.category, // Include category to allow same names in different categories
+        type: itemData.type // Include type to allow same names with different types
       };
       
-      // Add company filter for proper isolation
+      // Add company/store filter for proper isolation
       if (companyIdForCheck) {
         // Check duplicates in both companyId and store fields
         // This handles both old items (stored in store field) and new items (stored in companyId)
@@ -479,10 +481,15 @@ export const createItem = async (req, res) => {
           { companyId: companyIdForCheck },
           { store: companyIdForCheck }
         ];
+      } else if (itemData.store) {
+        // If no companyIdForCheck but we have store, still filter by store to prevent cross-store duplicates
+        query.store = itemData.store;
+        console.log('🚨 No companyId available, falling back to store-only filtering:', itemData.store);
       }
       
       console.log('📋 Duplicate check details:', {
         itemName: trimmedName,
+        category: itemData.category,
         userCompanyId: req.user.companyId,
         storeValue: itemData.store,
         companyIdForCheck,
@@ -492,10 +499,10 @@ export const createItem = async (req, res) => {
       console.log('Found existing item:', existingItemByName ? `${existingItemByName.name} (${existingItemByName.code})` : 'None');
       
       if (existingItemByName) {
-        console.log(`Duplicate item name found: "${trimmedName}" (existing: "${existingItemByName.name}", ID: ${existingItemByName._id})`);
+        console.log(`Duplicate item found: "${trimmedName}" in category "${itemData.category}" (existing: "${existingItemByName.name}", ID: ${existingItemByName._id})`);
         return res.status(400).json({
           success: false,
-          message: `Duplicate item detected! Item "${trimmedName}" already exists (Code: ${existingItemByName.code}). Please use a different name.`,
+          message: `Duplicate item detected! Item "${trimmedName}" already exists in category "${itemData.category}" with type "${itemData.type}" (Code: ${existingItemByName.code}). Please use a different name, category, or type.`,
           duplicateItem: {
             name: existingItemByName.name,
             code: existingItemByName.code,
@@ -1521,7 +1528,30 @@ export const importItemsFromExcel = [upload.single('file'), async (req, res) => 
           throw new Error(`Item name is required and cannot be empty`);
         }
 
-        // Validate Store Location ID format if provided - check if it exists as a company (by ID or name)
+        // IMPORTANT: Normalize type field FIRST before duplicate checking
+        const validTypes = ['Product', 'Material', 'Spares', 'Assemblies'];
+        const normalizedType = itemData.type ? itemData.type.trim() : '';
+        
+        // Find matching type (case-insensitive)
+        const matchingType = validTypes.find(validType => 
+          validType.toLowerCase() === normalizedType.toLowerCase()
+        );
+        
+        if (!matchingType) {
+          errors.push(`Row ${rowNumber}: Invalid type "${itemData.type}". Must be one of: ${validTypes.join(', ')} (case-insensitive). Row skipped.`);
+          continue; // Skip this row but continue with others
+        }
+        
+        // Set the properly formatted type BEFORE duplicate checking
+        itemData.type = matchingType;
+        console.log(`✅ Type normalized: "${normalizedType}" → "${matchingType}"`);
+
+        // IMPORTANT: Normalize category field before duplicate checking  
+        if (itemData.category) {
+          itemData.category = itemData.category.trim();
+        }
+
+        // Validate Store Location ID format if provided - only accept valid company IDs
         if (itemData.store) {
           console.log(`🔍 Looking up company: "${itemData.store}" (Length: ${itemData.store.length} chars)`);
           
@@ -1529,9 +1559,9 @@ export const importItemsFromExcel = [upload.single('file'), async (req, res) => 
             const { Company } = await import('../models/Company.js');
             let company = null;
             
-            // First try to find by ID (if it looks like an ObjectId - flexible length check)
-            if (itemData.store.match(/^[0-9a-fA-F]{20,24}$/)) {
-              console.log(`📋 Searching by ID: ${itemData.store} (${itemData.store.length} chars)`);
+            // Only try to find by ID (must be a valid ObjectId format)
+            if (itemData.store.match(/^[0-9a-fA-F]{24}$/)) {
+              console.log(`📋 Searching by ID: ${itemData.store}`);
               try {
                 company = await Company.findById(itemData.store);
                 console.log(`📋 Found by ID:`, company ? `✅ ${company.name} (${company._id})` : '❌ NOT FOUND');
@@ -1539,43 +1569,15 @@ export const importItemsFromExcel = [upload.single('file'), async (req, res) => 
                 console.log(`📋 ID lookup failed:`, idError.message);
               }
             } else {
-              console.log(`📋 Not an ObjectId format, trying name search`);
-            }
-            
-            // If not found by ID, try to find by name (exact match first, then partial)
-            if (!company) {
-              console.log(`📋 Searching by name: "${itemData.store}"`);
-              
-              // Try exact match first
-              company = await Company.findOne({ 
-                name: { $regex: new RegExp(`^${itemData.store.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
-              });
-              
-              console.log(`📋 Exact name match:`, company ? `✅ ${company.name}` : '❌ NOT FOUND');
-              
-              // If no exact match, try partial match
-              if (!company) {
-                company = await Company.findOne({ 
-                  name: { $regex: new RegExp(itemData.store.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') }
-                });
-                console.log(`📋 Partial name match:`, company ? `✅ ${company.name}` : '❌ NOT FOUND');
-              }
+              console.log(`📋 Not a valid 24-character ObjectId format, skipping this row`);
+              errors.push(`Row ${rowNumber}: Invalid Store Location ID format "${itemData.store}". Must be a valid 24-character company ID. Row skipped.`);
+              continue; // Skip this row but continue with others
             }
             
             if (!company) {
-              // Better error message for Unit Head vs Super Admin
-              if (req.user.role === 'Unit Head' && req.user.companyId) {
-                // Get user's company name for better error message
-                const userCompany = await Company.findById(req.user.companyId).select('name');
-                const userCompanyName = userCompany ? userCompany.name : 'Your Company';
-                
-                throw new Error(`Location Not Found: "${itemData.store}" is not a valid company location. As a Unit Head, you can only import items for your assigned location "${userCompanyName}". Please use your company name or ID in the Store Location ID column.`);
-              } else {
-                // List available companies for debugging (Super Admin)
-                const availableCompanies = await Company.find({}).select('_id name').limit(5);
-                console.log(`📋 Available companies (first 5):`, availableCompanies.map(c => `${c.name} (ID: ${c._id})`));
-                throw new Error(`Store Location "${itemData.store}" not found. Please use a valid company ID or company name`);
-              }
+              // Add to error list instead of throwing error
+              errors.push(`Row ${rowNumber}: Store Location ID "${itemData.store}" not found. Please use a valid company ID. Row skipped.`);
+              continue; // Skip this row but continue with others
             }
             
             // 🔒 UNIT HEAD RESTRICTION: Only allow their own company
@@ -1589,7 +1591,8 @@ export const importItemsFromExcel = [upload.single('file'), async (req, res) => 
                 const userCompanyName = userCompany ? userCompany.name : 'Your Company';
                 
                 console.log(`🚫 Unit Head restriction: User company ${userCompanyId} (${userCompanyName}) ≠ Item company ${itemCompanyId} (${company.name})`);
-                throw new Error(`Access Denied: You can only import items for your location "${userCompanyName}". This item belongs to "${company.name}" which is not your assigned location.`);
+                errors.push(`Row ${rowNumber}: Access Denied - You can only import items for your location "${userCompanyName}". This item belongs to "${company.name}". Row skipped.`);
+                continue; // Skip this row but continue with others
               } else {
                 console.log(`✅ Unit Head validation passed: Item company matches user company`);
               }
@@ -1600,12 +1603,20 @@ export const importItemsFromExcel = [upload.single('file'), async (req, res) => 
             console.log(`✅ Valid Store Location: ${itemData.store} -> ${company.name}`);
           } catch (err) {
             console.error(`❌ Company lookup error:`, err.message);
-            throw new Error(`Store Location "${itemData.store}" not found. Please use a valid company ID or company name`);
+            errors.push(`Row ${rowNumber}: Store Location ID "${itemData.store}" validation failed. Please use a valid company ID. Row skipped.`);
+            continue; // Skip this row but continue with others
           }
-        } else if (req.user.role === 'Unit Head') {
-          // 🔒 If no store provided and user is Unit Head, auto-assign their company
-          console.log(`🏢 Unit Head: Auto-assigning company ${req.user.companyId}`);
-          itemData.store = req.user.companyId;
+        } else {
+          // Handle blank/empty Store Location ID
+          if (req.user.role === 'Unit Head') {
+            // 🔒 If no store provided and user is Unit Head, auto-assign their company
+            console.log(`🏢 Unit Head: Auto-assigning company ${req.user.companyId}`);
+            itemData.store = req.user.companyId;
+          } else {
+            // For Super Admin, require Store Location ID
+            errors.push(`Row ${rowNumber}: Store Location ID is required and cannot be blank. Row skipped.`);
+            continue; // Skip this row but continue with others
+          }
         }
 
         const trimmedName = itemData.name.trim();
@@ -1618,39 +1629,51 @@ export const importItemsFromExcel = [upload.single('file'), async (req, res) => 
 
         // Check for duplicate item name in same location
         console.log(`📦 Checking for duplicate item "${trimmedName}" in location: ${companyIdForCheck}`);
-        
-        // Check if item with same name already exists in same location
-        const existingItem = await Item.findOne({ 
-          name: { $regex: new RegExp(`^${trimmedName}$`, 'i') }, // Case insensitive exact match
-          store: companyIdForCheck 
+        console.log(`🔍 Duplicate check details:`, {
+          name: trimmedName,
+          category: itemData.category,
+          type: itemData.type,
+          store: itemData.store,
+          companyIdForCheck: companyIdForCheck
         });
         
+        // Build duplicate check query - EXACT name match for better duplicate prevention
+        const duplicateQuery = {
+          name: trimmedName, // Exact name match (case sensitive for consistency)
+          category: itemData.category,
+          type: itemData.type,
+          store: companyIdForCheck // Direct store match since all items use store field
+        };
+        
+        console.log(`🔎 Duplicate check query:`, {
+          name: `"${trimmedName}"`,
+          category: itemData.category,
+          type: itemData.type,
+          store: companyIdForCheck
+        });
+        
+        // Check if item with same name already exists in same location
+        const existingItem = await Item.findOne(duplicateQuery);
+        
+        console.log(`🎯 Duplicate search result:`, existingItem ? {
+          found: true,
+          id: existingItem._id,
+          name: `"${existingItem.name}"`,
+          category: existingItem.category,
+          type: existingItem.type,
+          store: existingItem.store,
+          code: existingItem.code
+        } : { found: false, message: 'No duplicate found' });
+        
         if (existingItem) {
-          errors.push(`Row ${rowNumber}: Item "${trimmedName}" already exists in this location`);
+          console.log(`🚫 BLOCKING DUPLICATE IMPORT: "${trimmedName}" already exists!`);
+          errors.push(`Row ${rowNumber}: Item "${trimmedName}" already exists in category "${itemData.category}" with type "${itemData.type}" at this location (Code: ${existingItem.code}). Duplicate import blocked.`);
           continue; // Skip this row but continue with others
         }
         
-        console.log(`📋 Item "${trimmedName}" is unique in company: ${companyIdForCheck}`);
+        console.log(`✅ Item "${trimmedName}" is unique - proceeding with import`);
         
         // ✅ Item name is unique in this location, proceed with import
-
-        // Validate and normalize type field - case insensitive and trim spaces
-        const validTypes = ['Product', 'Material', 'Spares', 'Assemblies'];
-        const normalizedType = itemData.type.trim();
-        
-        // Find matching type (case-insensitive)
-        const matchingType = validTypes.find(validType => 
-          validType.toLowerCase() === normalizedType.toLowerCase()
-        );
-        
-        if (!matchingType) {
-          errors.push(`Row ${rowNumber}: Invalid type "${itemData.type}". Must be one of: ${validTypes.join(', ')} (case-insensitive)`);
-          continue; // Skip this row but continue with others
-        }
-        
-        // Set the properly formatted type
-        itemData.type = matchingType;
-        console.log(`✅ Type normalized: "${normalizedType}" → "${matchingType}"`);
 
         // Ensure importance has a valid value - also normalize case and spaces
         const validImportance = ['Low', 'Normal', 'High', 'Critical'];

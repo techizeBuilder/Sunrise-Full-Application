@@ -748,6 +748,8 @@ const SalesApproval = () => {
                 newStatusData[product.productName] = {
                   status: product.summary?.status || 'pending',
                   summaryId: product.summary?._id || null,
+                  category: product.category || 'Unknown Category', // Add category
+                  subCategory: product.subCategory || '', // Add subCategory
                   productionGroup: {
                     groupId: group.groupId,
                     groupName: group.groupName,
@@ -766,6 +768,8 @@ const SalesApproval = () => {
               newStatusData[product.productName] = {
                 status: product.summary?.status || 'pending',
                 summaryId: product.summary?._id || null,
+                category: product.category || 'Unknown Category', // Add category
+                subCategory: product.subCategory || '', // Add subCategory
                 productionGroup: null // No production group - won't show any tag
               };
             });
@@ -803,6 +807,19 @@ const SalesApproval = () => {
   const getProductionGroupName = (productName) => {
     const group = getProductionGroup(productName);
     return group?.groupName || 'Unknown Group';
+  };
+
+  // Get product category for display
+  const getProductCategory = (productName) => {
+    // Get category from summaryStatusData which includes the product API response
+    const productInfo = summaryStatusData[productName];
+    return productInfo?.category || 'Unknown Category';
+  };
+
+  // Get product subcategory for display
+  const getProductSubCategory = (productName) => {
+    const productInfo = summaryStatusData[productName];
+    return productInfo?.subCategory || '';
   };
 
   // Refresh production data from backend
@@ -1510,6 +1527,88 @@ const SalesApproval = () => {
         </Card>
       </div>
 
+      {/* Production Groups Summary Table */}
+      {(() => {
+        // Group products by production group
+        const productGroups = {};
+        filteredProducts.forEach(product => {
+          const group = getProductionGroup(product);
+          const groupName = group?.groupName || 'Ungrouped';
+          
+          if (!productGroups[groupName]) {
+            productGroups[groupName] = [];
+          }
+          productGroups[groupName].push(product);
+        });
+
+        // Only show if there are production groups
+        if (Object.keys(productGroups).length > 1 || (Object.keys(productGroups).length === 1 && !productGroups['Ungrouped'])) {
+          return (
+            <Card className="shadow-sm border-0 mb-4">
+              <CardHeader className="border-b bg-gray-50/50 px-3 lg:px-6 py-2">
+                <CardTitle className="text-md font-semibold text-gray-900">Production Groups Summary</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr className="border-b">
+                        <th className="p-2 text-left font-semibold text-gray-900 border-r">Product Group</th>
+                        <th className="p-2 text-center font-semibold text-gray-900 border-r">Production with final batches</th>
+                        <th className="p-2 text-center font-semibold text-gray-900 border-r">Produce/Batches</th>
+                        <th className="p-2 text-center font-semibold text-gray-900 border-r">Physical Stock</th>
+                        <th className="p-2 text-center font-semibold text-gray-900 border-r">Batch Adjusted</th>
+                        <th className="p-2 text-center font-semibold text-gray-900 border-r">To be Prod./Day</th>
+                        <th className="p-2 text-center font-semibold text-gray-900">Total Indent</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(productGroups).map(([groupName, groupProducts]) => {
+                        if (groupName === 'Ungrouped') return null;
+                        
+                        return (
+                          <tr key={groupName} className="border-b bg-blue-50 hover:bg-blue-100">
+                            <td className="p-2 border-r text-sm font-bold text-gray-900">
+                              {groupName} Total
+                            </td>
+                            <td className="p-2 border-r text-center text-sm font-bold text-green-700">
+                              {groupProducts.reduce((sum, product) => sum + getProductionWithFinalBatches(product), 0)}
+                            </td>
+                            <td className="p-2 border-r text-center text-sm font-bold text-purple-700">
+                              {groupProducts.reduce((sum, product) => sum + getProduceBatches(product), 0)}
+                            </td>
+                            <td className="p-2 border-r text-center text-sm font-bold text-indigo-700">
+                              {groupProducts.reduce((sum, product) => sum + (getProductionData(product).physicalStock || 0), 0)}
+                            </td>
+                            <td className="p-2 border-r text-center text-sm font-bold text-cyan-700">
+                              {groupProducts.reduce((sum, product) => sum + getBatchAdjusted(product), 0)}
+                            </td>
+                            <td className="p-2 border-r text-center text-sm font-bold text-amber-700">
+                              {groupProducts.reduce((sum, product) => {
+                                const productData = orders.find(p => p.productName === product);
+                                const totalQuantity = productData ? productData.totalQuantity : 0;
+                                return sum + Math.max(0, totalQuantity - (getProductionData(product).physicalStock || 0));
+                              }, 0)}
+                            </td>
+                            <td className="p-2 text-center text-sm font-bold text-blue-700">
+                              {groupProducts.reduce((sum, product) => {
+                                const productData = orders.find(p => p.productName === product);
+                                return sum + (productData ? productData.totalQuantity : 0);
+                              }, 0)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        }
+        return null;
+      })()}
+
       {/* Grid Container */}
       <Card className="shadow-sm border-0">
         <CardHeader className="border-b bg-gray-50/50 px-3 lg:px-6 py-4">
@@ -1763,7 +1862,10 @@ const SalesApproval = () => {
                       {/* 2. Product Name Column */}
                       <td className="bg-white p-1 lg:p-2 font-medium text-gray-900 border-r max-w-[100px] lg:max-w-[160px]">
                         <div className="flex flex-col">
-                          <span className="text-xs font-semibold text-gray-900 leading-tight break-words">{product}</span>
+                          <span className="text-xs font-semibold text-gray-900 leading-tight break-words">
+                            {product} - {getProductCategory(product)}
+                            {getProductSubCategory(product)}
+                          </span>
                           <span className="text-xs text-gray-500">
                             Total Qty: {totalQuantity} ({totalOrderCount} orders)
                           </span>
@@ -1933,7 +2035,7 @@ const SalesApproval = () => {
                   <div className="text-gray-500 text-lg mb-2">
                     {searchTerm ? 'No products found matching your search' : 
                      loading ? 'Loading data...' : 
-                     `No data available for ${new Date(selectedDate).toLocaleDateString()}`}
+                     'No data available'}
                   </div>
                   <div className="text-gray-400 text-sm">
                     {searchTerm ? (
@@ -1948,7 +2050,7 @@ const SalesApproval = () => {
                       </>
                     ) : (
                       loading ? 'Please wait while we fetch the data...' :
-                      'Try selecting a different date or check if data exists for this date'
+                      'Check if there are products available in your inventory'
                     )}
                   </div>
                 </div>

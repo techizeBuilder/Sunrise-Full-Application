@@ -77,7 +77,7 @@ export const getSalesSummary = async (req, res) => {
 
     // Get all summaries for the date
     const summaries = await ProductDailySummary.find(filter)
-      .populate('productId', 'name')
+      .populate('productId', 'name category subCategory') // Include category and subCategory
       .populate('companyId', 'name')
       .sort({ productName: 1 });
 
@@ -102,7 +102,7 @@ export const getSalesSummary = async (req, res) => {
         }
         
         const allProducts = await ProductDailySummary.find(fallbackFilter)
-          .populate('productId', 'name')
+          .populate('productId', 'name category subCategory') // Include category and subCategory
           .populate('companyId', 'name')
           .sort({ productName: 1 });
         
@@ -188,6 +188,8 @@ export const getSalesSummary = async (req, res) => {
         return {
           productId: summary.productId._id,
           productName: summary.productName,
+          category: summary.productId.category, // Add category
+          subCategory: summary.productId.subCategory, // Add subCategory  
           qtyPerBatch: summary.qtyPerBatch,
           totalQuantity: summary.totalQuantity || 0, // ADD totalQuantity from database
           summary: {
@@ -212,6 +214,8 @@ export const getSalesSummary = async (req, res) => {
         return {
           productId: summary.productId._id,
           productName: summary.productName,
+          category: summary.productId?.category || 'Unknown', // Add category with fallback
+          subCategory: summary.productId?.subCategory || '', // Add subCategory with fallback
           qtyPerBatch: summary.qtyPerBatch,
           totalQuantity: summary.totalQuantity || 0,
           summary: {
