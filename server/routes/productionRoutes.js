@@ -7,6 +7,7 @@ import {
   getProductionDashboard,
   debugProductSummaryData,
   getUngroupedItems,
+  getUngroupedItemsForSheet,
   getUngroupedItemGroup,
   getUngroupedItemProduction,
   updateUngroupedItemProduction
@@ -31,10 +32,16 @@ router.get('/test', (req, res) => {
   });
 });
 
-// GET /api/production/ungrouped-items - Get items not assigned to any production group
+// GET /api/production/ungrouped-items - Get items not assigned to any production group (for dashboard)
 router.get('/ungrouped-items', (req, res, next) => {
   console.log('🔍 Ungrouped items route hit:', req.method, req.path);
   getUngroupedItems(req, res, next);
+});
+
+// GET /api/production/ungrouped-items-sheet - Get individual batch entries for production sheet
+router.get('/ungrouped-items-sheet', (req, res, next) => {
+  console.log('📊 Ungrouped items sheet route hit:', req.method, req.path);
+  getUngroupedItemsForSheet(req, res, next);
 });
 
 // GET /api/production/ungrouped-item-group - Get items not assigned to any production group (duplicate endpoint)

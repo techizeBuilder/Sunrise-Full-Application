@@ -15,7 +15,8 @@ import {
   createUnitManagerProductionGroup,
   updateUnitManagerProductionGroup,
   deleteUnitManagerProductionGroup,
-  getUnitManagerAvailableItems
+  getUnitManagerAvailableItems,
+  getApprovedProductSummaries
 } from '../controllers/unitManagerController.js';
 // Import models for debug endpoint
 import User from '../models/User.js';
@@ -162,6 +163,9 @@ router.get('/dashboard/stats', getDashboardStats);
 
 // Product Summary Approval Routes (Single endpoint for both individual and bulk)
 router.post('/product-summary/approve', approveProductSummaries); // Individual & Bulk approve
+
+// Get approved product summaries with available batches
+router.get('/product-summaries/approved', getApprovedProductSummaries);
 
 // Production Groups routes (Unit Manager specific functions)
 router.get('/production-groups', getUnitManagerProductionGroups);

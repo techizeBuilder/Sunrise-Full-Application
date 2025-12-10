@@ -2262,3 +2262,130 @@ export const getUnitManagerAvailableItems = async (req, res) => {
     });
   }
 };
+
+// Get approved product summaries with available batches (non-zero)
+export const getApprovedProductSummaries = async (req, res) => {
+  try {
+    console.log('🚀 Unit Manager Approved Product Summaries Request:', {
+      role: req.user.role,
+      username: req.user.username,
+      companyId: req.user.companyId
+    });
+
+    // Only allow Unit Manager role
+    if (req.user.role !== 'Unit Manager') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied - Unit Manager role required'
+      });
+    }
+
+    const { page = 1, limit = 50, search = '' } = req.query;
+    const skip = (page - 1) * limit;
+
+    // Build filter for approved summaries with available batches
+    let filter = {
+      companyId: req.user.companyId,
+      status: 'approved',
+      // Only show items with production final batches > 0 or batch adjusted > 0
+      $or: [
+        { productionFinalBatches: { $gt: 0 } },
+        { batchAdjusted: { $gt: 0 } }
+      ]
+    };
+
+    // Add search functionality
+    if (search.trim()) {
+      filter.$and = filter.$and || [];
+      filter.$and.push({
+        productName: { $regex: search.trim(), $options: 'i' }
+      });
+    }
+
+    // Get approved product summaries with pagination
+    const [summaries, totalCount] = await Promise.all([
+      ProductDailySummary.find(filter)
+        .populate({
+          path: 'productId',
+          select: 'name code category subCategory price stock image'
+        })
+        .select('productName qtyPerBatch batchAdjusted productionFinalBatches totalQuantity totalIndent physicalStock status createdAt updatedAt productId')
+        .sort({ updatedAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      ProductDailySummary.countDocuments(filter)
+    ]);
+
+    // Get all production groups for this company to find which products belong to which groups
+    const productionGroups = await ProductionGroup.find({
+      company: req.user.companyId,
+      isActive: true
+    }).select('name items').lean();
+
+    // Create a map of productId to group names
+    const productToGroupMap = {};
+    productionGroups.forEach(group => {
+      group.items.forEach(itemId => {
+        const itemIdStr = itemId.toString();
+        if (!productToGroupMap[itemIdStr]) {
+          productToGroupMap[itemIdStr] = [];
+        }
+        productToGroupMap[itemIdStr].push(group.name);
+      });
+    });
+
+    // Format the response data
+    const formattedSummaries = summaries.map(summary => {
+      const productId = summary.productId?._id?.toString() || summary.productId?.toString();
+      const productGroups = productToGroupMap[productId] || [];
+
+      return {
+        id: summary._id,
+        productName: summary.productName,
+        productCode: summary.productId?.code || 'N/A',
+        category: summary.productId?.category || 'N/A',
+        subCategory: summary.productId?.subCategory || 'N/A',
+        qtyPerBatch: summary.qtyPerBatch,
+        batchAdjusted: summary.batchAdjusted,
+        productionFinalBatches: summary.productionFinalBatches,
+        availableBatches: summary.batchAdjusted > 0 ? summary.batchAdjusted : summary.productionFinalBatches,
+        totalQuantity: summary.totalQuantity,
+        totalIndent: summary.totalIndent,
+        physicalStock: summary.physicalStock,
+        status: summary.status,
+        lastUpdated: summary.updatedAt,
+        productImage: summary.productId?.image,
+        productGroups: productGroups // Add product groups array
+      };
+    });
+
+    console.log(`✅ Found ${formattedSummaries.length} approved product summaries with available batches`);
+
+    res.json({
+      success: true,
+      message: 'Approved product summaries with available batches fetched successfully',
+      data: {
+        summaries: formattedSummaries,
+        pagination: {
+          total: totalCount,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          pages: Math.ceil(totalCount / limit)
+        },
+        stats: {
+          totalApprovedWithBatches: totalCount,
+          currentPageCount: formattedSummaries.length
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching approved product summaries:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch approved product summaries',
+      error: error.message
+    });
+  }
+};

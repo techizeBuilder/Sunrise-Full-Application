@@ -90,44 +90,44 @@ export default function UnitHeadDashboard() {
 
   if (isLoading) {
     return (
-      <div className="p-6 space-y-4">
+      <div className="p-3 sm:p-6 space-y-4">
         <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-1/3 mb-4"></div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="h-6 sm:h-8 bg-gray-200 rounded w-1/2 sm:w-1/3 mb-4"></div>
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
             {[1,2,3,4].map(i => (
-              <div key={i} className="h-24 bg-gray-200 rounded"></div>
+              <div key={i} className="h-20 sm:h-24 bg-gray-200 rounded"></div>
             ))}
           </div>
-          <div className="h-96 bg-gray-200 rounded"></div>
+          <div className="h-64 sm:h-96 bg-gray-200 rounded"></div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="bg-gradient-to-r from-purple-600 to-purple-800 text-white px-6 py-4 rounded-lg">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Users className="h-6 w-6" />
-              Unit Head Dashboard
+      <div className="bg-gradient-to-r from-purple-600 to-purple-800 text-white px-3 sm:px-6 py-3 sm:py-4 rounded-lg">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-0">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
+              <Users className="h-5 w-5 sm:h-6 sm:w-6 flex-shrink-0" />
+              <span className="truncate">Unit Head Dashboard</span>
             </h1>
-            <p className="text-purple-100 mt-1">
+            <p className="text-purple-100 mt-1 text-sm sm:text-base">
               Real-time overview of unit operations and performance metrics - {periodOptions.find(p => p.value === selectedPeriod)?.label}
             </p>
             {dashboard.unitLocation && (
               <div className="flex items-center gap-1 mt-2 text-purple-200">
-                <MapPin className="h-4 w-4" />
-                <span className="text-sm">{dashboard.unitLocation}</span>
+                <MapPin className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                <span className="text-xs sm:text-sm truncate">{dashboard.unitLocation}</span>
               </div>
             )}
           </div>
-          <div className="flex gap-3 items-center">
+          <div className="flex gap-2 sm:gap-3 items-center flex-shrink-0">
             <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
-              <SelectTrigger className="w-48 bg-white text-gray-900">
-                <Calendar className="h-4 w-4 mr-2" />
+              <SelectTrigger className="w-36 sm:w-48 bg-white text-gray-900 text-sm">
+                <Calendar className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                 <SelectValue placeholder="Period" />
               </SelectTrigger>
               <SelectContent>
@@ -145,56 +145,56 @@ export default function UnitHeadDashboard() {
               onClick={() => refetch()} 
               variant="outline" 
               size="sm"
-              className="bg-white text-purple-600 hover:bg-purple-50"
+              className="bg-white text-purple-600 hover:bg-purple-50 px-2 sm:px-3"
             >
-              <RefreshCw className="h-4 w-4" />
+              <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4" />
             </Button>
           </div>
         </div>
       </div>
 
       {/* Metrics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Monthly Orders</CardTitle>
-            <ShoppingCart className="h-4 w-4 text-blue-600" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+            <CardTitle className="text-xs sm:text-sm font-medium">Monthly Orders</CardTitle>
+            <ShoppingCart className="h-3 w-3 sm:h-4 sm:w-4 text-blue-600 flex-shrink-0" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{dashboard.monthlyOrders || 0}</div>
+          <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
+            <div className="text-lg sm:text-2xl font-bold">{dashboard.monthlyOrders || 0}</div>
             <p className="text-xs text-muted-foreground">Orders this month from your unit</p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Monthly Revenue</CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-600" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+            <CardTitle className="text-xs sm:text-sm font-medium">Monthly Revenue</CardTitle>
+            <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4 text-green-600 flex-shrink-0" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(dashboard.monthlyRevenue)}</div>
+          <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
+            <div className="text-lg sm:text-2xl font-bold">{formatCurrency(dashboard.monthlyRevenue)}</div>
             <p className="text-xs text-muted-foreground">Revenue generated this month</p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Customers</CardTitle>
-            <Users className="h-4 w-4 text-purple-600" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+            <CardTitle className="text-xs sm:text-sm font-medium">Total Customers</CardTitle>
+            <Users className="h-3 w-3 sm:h-4 sm:w-4 text-purple-600 flex-shrink-0" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{dashboard.totalCustomers || 0}</div>
+          <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
+            <div className="text-lg sm:text-2xl font-bold">{dashboard.totalCustomers || 0}</div>
             <p className="text-xs text-muted-foreground">Active customers in your unit</p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Sales</CardTitle>
-            <TrendingUp className="h-4 w-4 text-orange-600" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
+            <CardTitle className="text-xs sm:text-sm font-medium">Active Sales</CardTitle>
+            <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4 text-orange-600 flex-shrink-0" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{dashboard.activeSalesPersons || 0}</div>
+          <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
+            <div className="text-lg sm:text-2xl font-bold">{dashboard.activeSalesPersons || 0}</div>
             <p className="text-xs text-muted-foreground">Active sales persons in unit</p>
           </CardContent>
         </Card>
@@ -202,92 +202,162 @@ export default function UnitHeadDashboard() {
 
       {/* Recent Orders Section */}
       <Card>
-        <CardHeader>
-          <div className="flex justify-between items-center">
-            <div>
+        <CardHeader className="px-3 sm:px-6 pt-3 sm:pt-6">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-0">
+            <div className="min-w-0 flex-1">
               <CardTitle className="flex items-center gap-2">
-                <Package className="h-5 w-5" />
-                Recent Orders
+                <Package className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                <span className="text-sm sm:text-base">Recent Orders</span>
               </CardTitle>
-              <CardDescription>Latest orders from your unit location</CardDescription>
+              <CardDescription className="text-xs sm:text-sm">Latest orders from your unit location</CardDescription>
             </div>
-            <Badge variant="outline" className="text-xs">
+            <Badge variant="outline" className="text-xs w-fit">
               {recentOrders.length} orders
             </Badge>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
           {recentOrders.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <Package className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-              <p className="text-lg font-medium">No recent orders</p>
-              <p className="text-sm">Orders from your unit will appear here</p>
+            <div className="text-center py-6 sm:py-8 text-gray-500">
+              <Package className="h-8 w-8 sm:h-12 sm:w-12 mx-auto mb-2 sm:mb-4 text-gray-300" />
+              <p className="text-base sm:text-lg font-medium">No recent orders</p>
+              <p className="text-xs sm:text-sm">Orders from your unit will appear here</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Order Code</TableHead>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Sales Person</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Items</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {recentOrders.map((order) => (
-                    <TableRow key={order._id}>
-                      <TableCell className="font-mono text-sm">
-                        {order.orderCode || order._id.slice(-6)}
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <div className="font-medium">{order.customer?.name || 'Unknown'}</div>
-                          {order.customer?.email && (
-                            <div className="text-sm text-gray-500">{order.customer.email}</div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          {order.salesPerson?.username || 'N/A'}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={getStatusVariant(order.status)}>
-                          {order.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {order.itemsCount || 0}
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {formatCurrency(order.totalAmount)}
-                      </TableCell>
-                      <TableCell className="text-sm text-gray-600">
-                        {formatDate(order.createdAt)}
-                      </TableCell>
-                      <TableCell>
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => {
-                            // Navigate to order details or open modal
-                            window.location.href = `/unit-head/orders`;
-                          }}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
+            <>
+              {/* Desktop Table View */}
+              <div className="hidden lg:block overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Order Code</TableHead>
+                      <TableHead>Customer</TableHead>
+                      <TableHead>Sales Person</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Items</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {recentOrders.map((order) => (
+                      <TableRow key={order._id}>
+                        <TableCell className="font-mono text-sm">
+                          {order.orderCode || order._id.slice(-6)}
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <div className="font-medium">{order.customer?.name || 'Unknown'}</div>
+                            {order.customer?.email && (
+                              <div className="text-sm text-gray-500">{order.customer.email}</div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            {order.salesPerson?.username || 'N/A'}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={getStatusVariant(order.status)}>
+                            {order.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {order.itemsCount || 0}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {formatCurrency(order.totalAmount)}
+                        </TableCell>
+                        <TableCell className="text-sm text-gray-600">
+                          {formatDate(order.createdAt)}
+                        </TableCell>
+                        <TableCell>
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => {
+                              // Navigate to order details or open modal
+                              window.location.href = `/unit-head/orders`;
+                            }}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Mobile Card View */}
+              <div className="block lg:hidden space-y-3">
+                {recentOrders.map((order) => (
+                  <Card key={order._id} className="border border-gray-200">
+                    <CardContent className="p-3">
+                      <div className="space-y-3">
+                        {/* Header Row */}
+                        <div className="flex items-center justify-between">
+                          <div className="font-mono text-sm font-medium">
+                            #{order.orderCode || order._id.slice(-6)}
+                          </div>
+                          <Badge variant={getStatusVariant(order.status)} className="text-xs">
+                            {order.status}
+                          </Badge>
+                        </div>
+                        
+                        {/* Customer & Sales Info */}
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <p className="text-gray-600">Customer</p>
+                            <p className="font-medium truncate">{order.customer?.name || 'Unknown'}</p>
+                            {order.customer?.email && (
+                              <p className="text-xs text-gray-500 truncate">{order.customer.email}</p>
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-gray-600">Sales Person</p>
+                            <p className="font-medium">{order.salesPerson?.username || 'N/A'}</p>
+                          </div>
+                        </div>
+
+                        {/* Items & Amount */}
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <p className="text-gray-600">Items</p>
+                            <p className="font-medium">{order.itemsCount || 0}</p>
+                          </div>
+                          <div>
+                            <p className="text-gray-600">Amount</p>
+                            <p className="font-medium">{formatCurrency(order.totalAmount)}</p>
+                          </div>
+                        </div>
+
+                        {/* Date & Action */}
+                        <div className="flex items-center justify-between pt-2 border-t">
+                          <div className="text-xs text-gray-500">
+                            {formatDate(order.createdAt)}
+                          </div>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => {
+                              // Navigate to order details or open modal
+                              window.location.href = `/unit-head/orders`;
+                            }}
+                            className="text-xs px-2 py-1"
+                          >
+                            <Eye className="h-3 w-3 mr-1" />
+                            View
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

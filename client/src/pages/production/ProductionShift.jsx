@@ -122,8 +122,8 @@ export default function ProductionShift() {
     console.log('🚀 Starting fetchUngroupedItems...');
     setUngroupedLoading(true);
     try {
-      console.log('📡 Making API call to /api/production/ungrouped-items');
-      const response = await fetch('/api/production/ungrouped-items', {
+      console.log('📡 Making API call to /api/production/ungrouped-items-sheet');
+      const response = await fetch('/api/production/ungrouped-items-sheet', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -233,10 +233,27 @@ export default function ProductionShift() {
     }));
 
     try {
-      // Extract item ID from key
-      const itemId = itemKey.replace('ungrouped_', '');
+      // Extract the full item ID from key (includes batch info like _batch_1)
+      const fullItemId = itemKey.replace('ungrouped_', '');
       
-      console.log(`🔄 Saving ungrouped item ${field}:`, { itemId, field, value });
+      // Extract original item ID (remove _batch_X suffix if present)
+      let originalItemId = fullItemId;
+      if (fullItemId.includes('_batch_')) {
+        originalItemId = fullItemId.split('_batch_')[0];
+      }
+      
+      console.log(`🔄 Saving ungrouped item ${field}:`, { 
+        itemKey, 
+        fullItemId, 
+        originalItemId, 
+        field, 
+        value,
+        itemData: {
+          id: fullItemId,
+          hasOriginalId: fullItemId.includes('_batch_'),
+          willSend: originalItemId
+        }
+      });
       
       const response = await fetch('/api/production/ungrouped-items/production', {
         method: 'PUT',
@@ -245,7 +262,7 @@ export default function ProductionShift() {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         body: JSON.stringify({
-          itemId,
+          itemId: originalItemId,  // Use original item ID without batch suffix
           field,
           value
         })
@@ -712,6 +729,17 @@ export default function ProductionShift() {
                   {ungroupedItems.map((item, index) => {
                     const itemKey = `ungrouped_${item._id}`;
                     const batch = ungroupedBatchData[itemKey] || {};
+                    
+                    // Debug logging to see item structure
+                    if (index < 3) { // Only log first 3 items to avoid spam
+                      console.log(`🔍 Item ${index + 1}:`, {
+                        id: item._id,
+                        originalItemId: item.originalItemId,
+                        name: item.name,
+                        batchNumber: item.batchNumber,
+                        itemKey: itemKey
+                      });
+                    }
                     
                     return (
                       <TableRow key={item._id}>

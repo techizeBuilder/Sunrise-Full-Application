@@ -448,7 +448,7 @@ const MyOrders = () => {
             quantity: orderProduct.quantity || 1,
             totalPrice: (orderProduct.product.salePrice || orderProduct.product.price || orderProduct.price || 0) * (orderProduct.quantity || 1),
             brand: orderProduct.product.brand || 'Unknown Brand',
-            image: orderProduct.product.image || 'https://images.unsplash.com/photo-1586953208448-b95a79798f07?w=150&h=150&fit=crop'
+            image: orderProduct.product.image || null
           };
         });
 
@@ -768,6 +768,17 @@ const MyOrders = () => {
                       <Eye className="h-3 w-3" />
                     </Button>
 
+                    {(canPerformAction('sales', 'orders', 'edit') || canPerformAction('sales', 'myIndent', 'edit') || canPerformAction('orders', 'indent', 'edit')) && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-6 w-6 p-0"
+                        onClick={() => handleEdit(order)}
+                      >
+                        <Edit className="h-3 w-3" />
+                      </Button>
+                    )}
+
                     {(canPerformAction('sales', 'orders', 'delete') || canPerformAction('sales', 'myIndent', 'delete') || canPerformAction('orders', 'indent', 'delete')) && (
                       <Button 
                         variant="ghost" 
@@ -1008,7 +1019,7 @@ const MyOrders = () => {
                           salePrice: orderProduct.price || 0,
                           price: orderProduct.price || 0,
                           brand: 'Unknown',
-                          image: 'https://images.unsplash.com/photo-1586953208448-b95a79798f07?w=150&h=150&fit=crop',
+                          image: null,
                           quantity: orderProduct.quantity
                         });
                       }
@@ -1070,19 +1081,7 @@ const MyOrders = () => {
                               <div className="divide-y">
                                 {groupedOrderProducts[category].map((product) => (
                                   <div key={product._id} className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-800">
-                                    {/* Product Image */}
-                                    <div className="flex-shrink-0">
-                                      <img 
-                                        src={product.image} 
-                                        alt={product.name}
-                                        className="w-12 h-12 sm:w-10 sm:h-10 rounded-lg object-cover"
-                                        onError={(e) => {
-                                          e.target.src = 'https://images.unsplash.com/photo-1586953208448-b95a79798f07?w=150&h=150&fit=crop';
-                                        }}
-                                      />
-                                    </div>
-                                    
-                                    {/* Product Info */}
+                                    {/* Product Info - No Image */}
                                     <div className="flex-1 min-w-0 w-full sm:w-auto">
                                       <h4 className={`text-sm font-medium mb-1 ${
                                         category === 'Unavailable Products' 
@@ -1090,9 +1089,6 @@ const MyOrders = () => {
                                           : 'text-gray-900 dark:text-gray-100'
                                       }`}>{product.name}</h4>
                                       <div className="flex flex-wrap items-center gap-2">
-                                        <Badge variant="outline" className="text-xs">
-                                          {product.brand}
-                                        </Badge>
                                         <span className="text-xs text-gray-500">₹{product.salePrice || product.price || 0} each</span>
                                       </div>
                                     </div>
@@ -1194,15 +1190,17 @@ const MyOrders = () => {
 
       {/* Create Order Modal */}
       <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto mx-2 sm:mx-auto w-[calc(100vw-1rem)] sm:w-full">
           <DialogHeader>
-            <DialogTitle>Create New Order</DialogTitle>
-            <DialogDescription>Fill in the details to create a new production order.</DialogDescription>
+            <DialogTitle className="text-lg sm:text-xl">Create New Order</DialogTitle>
+            <DialogDescription className="text-sm sm:text-base">
+              Fill in the details to create a new production order.
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-6">
-            <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-4 sm:space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div>
-                <Label htmlFor="customer">Customer Name *</Label>
+                <Label htmlFor="customer" className="text-sm font-medium">Customer Name *</Label>
                 <Select 
                   value={formData.customerId || ''} 
                   onValueChange={(value) => {
@@ -1214,7 +1212,7 @@ const MyOrders = () => {
                     });
                   }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="mt-1">
                     <SelectValue placeholder="Select customer" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1227,23 +1225,26 @@ const MyOrders = () => {
                 </Select>
               </div>
               <div>
-                <Label htmlFor="orderDate">Order Date *</Label>
+                <Label htmlFor="orderDate" className="text-sm font-medium">Order Date *</Label>
                 <Input
                   id="orderDate"
                   type="date"
                   value={formData.orderDate}
                   onChange={(e) => setFormData({...formData, orderDate: e.target.value})}
+                  className="mt-1"
                 />
               </div>
             </div>
             <div>
-              <Label>Select Products *</Label>
-              <ProductSelector
-                onProductSelect={handleProductSelect}
-                selectedProducts={formData.selectedProducts}
-                onQuantityChange={handleQuantityChange}
-                onProductRemove={handleProductRemove}
-              />
+              <Label className="text-sm font-medium">Select Products *</Label>
+              <div className="mt-1">
+                <ProductSelector
+                  onProductSelect={handleProductSelect}
+                  selectedProducts={formData.selectedProducts}
+                  onQuantityChange={handleQuantityChange}
+                  onProductRemove={handleProductRemove}
+                />
+              </div>
             </div>
             <div>
               <Label htmlFor="remarks">Remarks</Label>
@@ -1255,11 +1256,11 @@ const MyOrders = () => {
                 rows={3}
               />
             </div>
-            <div className="flex gap-3 pt-4">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 pt-3 sm:pt-4">
               <Button 
                 onClick={handleCreate}
                 disabled={createOrderMutation.isPending}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
+                className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto"
               >
                 {createOrderMutation.isPending ? (
                   <>
@@ -1273,7 +1274,11 @@ const MyOrders = () => {
                   </>
                 )}
               </Button>
-              <Button variant="outline" onClick={() => setIsCreateModalOpen(false)}>
+              <Button 
+                variant="outline" 
+                onClick={() => setIsCreateModalOpen(false)}
+                className="w-full sm:w-auto"
+              >
                 Cancel
               </Button>
             </div>

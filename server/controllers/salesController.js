@@ -6,6 +6,7 @@ import { Item } from '../models/Inventory.js';
 import { Company } from '../models/Company.js';
 import { USER_ROLES } from '../../shared/schema.js';
 import User from '../models/User.js';
+import PriorityProduct from '../models/PriorityProduct.js';
 
 export const getSales = async (req, res) => {
   try {
@@ -1100,5 +1101,272 @@ export const getSalesOrders = async (req, res) => {
   } catch (error) {
     console.error('Error in getSalesOrders:', error);
     res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+// Get priority products for a sales user
+export const getPriorityProducts = async (req, res) => {
+  try {
+    console.log('🚀 Getting priority products for user:', req.user._id, req.user.role);
+
+    // Only allow Sales users or Super Users
+    if (!['Sales', 'sales', 'SALES', 'Super User'].includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied - Sales role required'
+      });
+    }
+
+    const { page = 1, limit = 50 } = req.query;
+    const skip = (page - 1) * limit;
+
+    // Get user's priority products
+    const priorityProducts = await PriorityProduct.find({
+      userId: req.user._id,
+      companyId: req.user.companyId,
+      isActive: true
+    })
+    .populate({
+      path: 'productId',
+      select: 'name code category subCategory price stock image unit'
+    })
+    .sort({ priority: -1, lastUsed: -1 })
+    .skip(skip)
+    .limit(parseInt(limit))
+    .lean();
+
+    const totalCount = await PriorityProduct.countDocuments({
+      userId: req.user._id,
+      companyId: req.user.companyId,
+      isActive: true
+    });
+
+    // Format the response
+    const formattedProducts = priorityProducts.map(pp => ({
+      id: pp._id,
+      priorityId: pp._id,
+      productId: pp.productId?._id,
+      name: pp.productId?.name || 'Unknown Product',
+      code: pp.productId?.code || 'N/A',
+      category: pp.productId?.category || 'N/A',
+      subCategory: pp.productId?.subCategory || '',
+      price: pp.productId?.price || 0,
+      stock: pp.productId?.stock || 0,
+      image: pp.productId?.image || '',
+      unit: pp.productId?.unit || 'pcs',
+      priority: pp.priority,
+      usageCount: pp.usageCount,
+      lastUsed: pp.lastUsed,
+      isPriority: true
+    }));
+
+    console.log(`✅ Found ${formattedProducts.length} priority products for user`);
+
+    res.json({
+      success: true,
+      message: 'Priority products retrieved successfully',
+      data: {
+        products: formattedProducts,
+        pagination: {
+          total: totalCount,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          pages: Math.ceil(totalCount / limit)
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error getting priority products:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get priority products',
+      error: error.message
+    });
+  }
+};
+
+// Add product to priority list
+export const addPriorityProduct = async (req, res) => {
+  try {
+    console.log('🚀 Adding priority product for user:', req.user._id);
+    console.log('Request body:', req.body);
+
+    // Only allow Sales users or Super Users
+    if (!['Sales', 'sales', 'SALES', 'Super User'].includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied - Sales role required'
+      });
+    }
+
+    const { productId, priority = 1 } = req.body;
+
+    if (!productId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Product ID is required'
+      });
+    }
+
+    // Check if product exists and belongs to user's company
+    const product = await Item.findOne({
+      _id: productId,
+      store: req.user.companyId
+    });
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: 'Product not found or not accessible'
+      });
+    }
+
+    // Check if already in priority list
+    const existingPriority = await PriorityProduct.findOne({
+      userId: req.user._id,
+      productId,
+      companyId: req.user.companyId
+    });
+
+    if (existingPriority) {
+      if (existingPriority.isActive) {
+        return res.status(400).json({
+          success: false,
+          message: 'Product is already in your priority list'
+        });
+      } else {
+        // Reactivate if it was deactivated
+        existingPriority.isActive = true;
+        existingPriority.priority = priority;
+        await existingPriority.save();
+        
+        return res.json({
+          success: true,
+          message: 'Product reactivated in priority list',
+          data: existingPriority
+        });
+      }
+    }
+
+    // Create new priority product
+    const priorityProduct = new PriorityProduct({
+      userId: req.user._id,
+      companyId: req.user.companyId,
+      productId,
+      priority: Math.min(Math.max(priority, 1), 10), // Ensure priority is between 1-10
+      usageCount: 0
+    });
+
+    await priorityProduct.save();
+    
+    // Populate product details for response
+    await priorityProduct.populate('productId', 'name code category price');
+
+    console.log('✅ Priority product added successfully:', priorityProduct._id);
+
+    res.status(201).json({
+      success: true,
+      message: 'Product added to priority list successfully',
+      data: priorityProduct
+    });
+
+  } catch (error) {
+    console.error('Error adding priority product:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to add priority product',
+      error: error.message
+    });
+  }
+};
+
+// Remove product from priority list
+export const removePriorityProduct = async (req, res) => {
+  try {
+    console.log('🚀 Removing priority product:', req.params.id, 'for user:', req.user._id);
+
+    // Only allow Sales users or Super Users
+    if (!['Sales', 'sales', 'SALES', 'Super User'].includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied - Sales role required'
+      });
+    }
+
+    const { id: priorityProductId } = req.params;
+
+    // Find and verify ownership
+    const priorityProduct = await PriorityProduct.findOne({
+      _id: priorityProductId,
+      userId: req.user._id,
+      companyId: req.user.companyId
+    });
+
+    if (!priorityProduct) {
+      return res.status(404).json({
+        success: false,
+        message: 'Priority product not found or not accessible'
+      });
+    }
+
+    // Soft delete by setting isActive to false
+    priorityProduct.isActive = false;
+    await priorityProduct.save();
+
+    console.log('✅ Priority product removed successfully');
+
+    res.json({
+      success: true,
+      message: 'Product removed from priority list successfully'
+    });
+
+  } catch (error) {
+    console.error('Error removing priority product:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to remove priority product',
+      error: error.message
+    });
+  }
+};
+
+// Update priority product usage (called when product is used in order)
+export const updatePriorityProductUsage = async (req, res) => {
+  try {
+    const { productId } = req.body;
+
+    if (!productId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Product ID is required'
+      });
+    }
+
+    // Find priority product and update usage
+    const priorityProduct = await PriorityProduct.findOne({
+      userId: req.user._id,
+      productId,
+      companyId: req.user.companyId,
+      isActive: true
+    });
+
+    if (priorityProduct) {
+      await priorityProduct.markAsUsed();
+      console.log('✅ Updated priority product usage for:', productId);
+    }
+
+    res.json({
+      success: true,
+      message: 'Priority product usage updated'
+    });
+
+  } catch (error) {
+    console.error('Error updating priority product usage:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update priority product usage',
+      error: error.message
+    });
   }
 };

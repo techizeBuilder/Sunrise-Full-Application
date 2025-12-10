@@ -8,7 +8,11 @@ import {
   getSalespersonItems,
   getSalesSummary,
   getSalesRecentOrders,
-  getSalesOrders
+  getSalesOrders,
+  getPriorityProducts,
+  addPriorityProduct,
+  removePriorityProduct,
+  updatePriorityProductUsage
 } from '../controllers/salesController.js';
 // Import with different names to avoid conflicts
 import { 
@@ -149,6 +153,12 @@ salesRouter.get('/recent-orders', getSalesRecentOrders);
 
 // Sales-specific order routes (filtered by individual salesperson)
 salesRouter.get('/orders', getSalesOrders);
+
+// Priority Products routes
+salesRouter.get('/priority-products', getPriorityProducts);
+salesRouter.post('/priority-products', addPriorityProduct);
+salesRouter.delete('/priority-products/:id', removePriorityProduct);
+salesRouter.post('/priority-products/usage', updatePriorityProductUsage);
 
 // Sales-specific customer routes (filtered by salesperson assignment)
 salesRouter.get('/customers', getSalespersonCustomers);

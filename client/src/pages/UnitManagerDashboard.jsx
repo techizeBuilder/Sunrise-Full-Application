@@ -59,6 +59,22 @@ export default function UnitManagerDashboard() {
     }
   });
 
+  // Query for approved product summaries
+  const { data: productSummariesData, isLoading: isLoadingProductSummaries, error: productSummariesError } = useQuery({
+    queryKey: ['unit-manager-approved-product-summaries'],
+    queryFn: () => {
+      console.log('🔄 Fetching approved product summaries...');
+      return apiRequest('GET', '/api/unit-manager/product-summaries/approved?limit=1000'); // Get all records
+    },
+    retry: 1,
+    onSuccess: (data) => {
+      console.log('✅ Approved product summaries received:', data);
+    },
+    onError: (error) => {
+      console.error('❌ Product summaries API error:', error);
+    }
+  });
+
   const handleRefresh = () => {
     window.location.reload();
   };
@@ -70,6 +86,10 @@ export default function UnitManagerDashboard() {
   const salesPersons = dashboard.salesPersons || [];
   const customers = dashboard.customers || {};
   const monthlyTrends = dashboard.monthlyTrends || [];
+  
+  // Product summaries data
+  const productSummaries = productSummariesData?.data?.summaries || [];
+  const productSummariesStats = productSummariesData?.data?.stats || {};
 
   // Debug logging
   console.log('🔍 Dashboard state:', {
@@ -381,6 +401,127 @@ export default function UnitManagerDashboard() {
           </CardContent>
         </Card> */}
       </div>
+
+      {/* Approved Product Summaries Overview */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <Package className="h-5 w-5 mr-2" />
+            Approved Product Summary Overview
+            <Badge className="ml-2 bg-green-100 text-green-800">
+              {productSummariesStats.totalApprovedWithBatches || 0} Available
+            </Badge>
+          </CardTitle>
+          <CardDescription>
+            Products with final batches available for production
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoadingProductSummaries ? (
+            <div className="space-y-3">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="flex items-center space-x-4">
+                  <div className="h-12 w-12 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="flex-1">
+                    <div className="h-4 w-32 bg-gray-200 rounded animate-pulse mb-2"></div>
+                    <div className="h-3 w-48 bg-gray-200 rounded animate-pulse"></div>
+                  </div>
+                  <div className="h-8 w-16 bg-gray-200 rounded animate-pulse"></div>
+                </div>
+              ))}
+            </div>
+          ) : productSummariesError ? (
+            <div className="flex items-center space-x-2 text-amber-600">
+              <AlertTriangle className="h-4 w-4" />
+              <span className="text-sm">Unable to load product summaries</span>
+            </div>
+          ) : productSummaries.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Package className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+              <p>No approved products with available batches found</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Product Name</TableHead>
+                    <TableHead>Code</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead className="text-right">Qty Per Batch</TableHead>
+                    <TableHead className="text-right">Batch Adjusted</TableHead>
+                    <TableHead className="text-right">Production Final Batches</TableHead>
+                    {/* <TableHead className="text-right">Total Quantity</TableHead>
+                    <TableHead className="text-right">Physical Stock</TableHead> */}
+                    <TableHead className="text-center">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {productSummaries.map((summary) => (
+                    <TableRow key={summary.id}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center space-x-2">
+                          <Package className="h-4 w-4 text-blue-600" />
+                          <div className="flex flex-col space-y-1">
+                            <span>{summary.productName}</span>
+                            {summary.productGroups && summary.productGroups.length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                {summary.productGroups.map((groupName, idx) => (
+                                  <Badge key={idx} variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
+                                    {groupName}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-mono text-sm">
+                        {summary.productCode}
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium text-sm">{summary.category}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {summary.qtyPerBatch || 0}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <span className={`font-medium ${summary.batchAdjusted > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                          {summary.batchAdjusted || 0}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <span className={`font-bold ${summary.productionFinalBatches > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
+                          {summary.productionFinalBatches || 0}
+                        </span>
+                      </TableCell>
+                      {/* <TableCell className="text-right">
+                        {summary.totalQuantity || 0}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {summary.physicalStock || 0}
+                      </TableCell> */}
+                      <TableCell className="text-center">
+                        <Badge className="bg-green-100 text-green-800 capitalize">
+                          {summary.status}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              
+              {productSummaries.length > 0 && (
+                <div className="mt-4 text-sm text-muted-foreground text-center">
+                  Showing {productSummaries.length} approved product{productSummaries.length !== 1 ? 's' : ''} with available batches
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Charts and Tables Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

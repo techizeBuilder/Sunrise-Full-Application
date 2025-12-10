@@ -407,10 +407,10 @@ const SalesApproval = () => {
       console.log(`🔥 FORCE SAVE ${productName}.${field}=${value} | physicalStock=${physicalStock}, batchAdjusted=${batchAdjusted}, qtyPerBatch=${qtyPerBatch}`);
       
       const today = new Date().toISOString().split('T')[0];
-      const productionFinalBatches = Math.round((batchAdjusted * qtyPerBatch) * 100) / 100;
+      const productionFinalBatches = parseFloat((batchAdjusted * qtyPerBatch).toFixed(2));
       const totalIndentSalesman = product.totalQuantity || 0;
       const toBeProducedDay = Math.max(0, totalIndentSalesman - physicalStock);
-      const produceBatches = Math.round((toBeProducedDay / qtyPerBatch) * 100) / 100;
+      const produceBatches = parseFloat((toBeProducedDay / qtyPerBatch).toFixed(2));
 
       const apiPayload = {
         date: today,
@@ -506,12 +506,12 @@ const SalesApproval = () => {
       const today = new Date().toISOString().split('T')[0];
 
       // Calculate dependent fields
-      const productionFinalBatches = Math.round((batchAdjusted * qtyPerBatch) * 100) / 100;
+      const productionFinalBatches = parseFloat((batchAdjusted * qtyPerBatch).toFixed(2));
       const totalIndentSalesman = product.totalQuantity || 0;
       const toBeProducedDay = Math.max(0, totalIndentSalesman - physicalStock);
 
       // Auto-calculate dependent values
-      const produceBatches = Math.round((toBeProducedDay / qtyPerBatch) * 100) / 100;
+      const produceBatches = parseFloat((toBeProducedDay / qtyPerBatch).toFixed(2));
 
       const apiPayload = {
         date: today,
@@ -607,7 +607,7 @@ const SalesApproval = () => {
     const data = getProductionData(productName);
     const batchAdjusted = data.batchAdjusted || 0;
     const qtyPerBatch = data.qtyPerBatch || 1;
-    return Math.round((batchAdjusted * qtyPerBatch) * 100) / 100;
+    return parseFloat((batchAdjusted * qtyPerBatch).toFixed(2));
   };
 
   // Calculate Expiry/Shortage = Production_with_final_batches - To_be_produced_day
@@ -618,7 +618,7 @@ const SalesApproval = () => {
       return data.expiryShortage;
     }
     const productionWithFinalBatches = getProductionWithFinalBatches(productName);
-    return Math.round((productionWithFinalBatches - data.toBeProducedDay) * 100) / 100;
+    return parseFloat((productionWithFinalBatches - data.toBeProducedDay).toFixed(2));
   };
 
   // Calculate Produce / Batches = Frontend "To be Prod./Day" / qtyPerBatch  
@@ -634,7 +634,8 @@ const SalesApproval = () => {
     
     // Produce / Batches = frontend toBeProducedDay / qtyPerBatch
     if (qtyPerBatch === 0) return 0;
-    return Math.round((toBeProducedDay / qtyPerBatch) * 100) / 100;
+    const result = toBeProducedDay / qtyPerBatch;
+    return parseFloat(result.toFixed(2));
   };
 
   // Get Batch Adjusted - user entered value
@@ -651,7 +652,7 @@ const SalesApproval = () => {
       return data.toBeProducedBatches;
     }
     if (data.qtyPerBatch === 0) return 0;
-    return Math.round((data.toBeProducedDay / data.qtyPerBatch) * 100) / 100; // Round to 2 decimals
+    return parseFloat((data.toBeProducedDay / data.qtyPerBatch).toFixed(2)); // Round to 2 decimals
   };
 
   // Filter and search functions
@@ -1572,10 +1573,10 @@ const SalesApproval = () => {
                               {groupName} Total
                             </td>
                             <td className="p-2 border-r text-center text-sm font-bold text-green-700">
-                              {groupProducts.reduce((sum, product) => sum + getProductionWithFinalBatches(product), 0)}
+                              {parseFloat(groupProducts.reduce((sum, product) => sum + getProductionWithFinalBatches(product), 0).toFixed(2))}
                             </td>
                             <td className="p-2 border-r text-center text-sm font-bold text-purple-700">
-                              {groupProducts.reduce((sum, product) => sum + getProduceBatches(product), 0)}
+                              {parseFloat(groupProducts.reduce((sum, product) => sum + getProduceBatches(product), 0).toFixed(2))}
                             </td>
                             <td className="p-2 border-r text-center text-sm font-bold text-indigo-700">
                               {groupProducts.reduce((sum, product) => sum + (getProductionData(product).physicalStock || 0), 0)}

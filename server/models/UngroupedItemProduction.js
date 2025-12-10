@@ -12,6 +12,13 @@ const ungroupedItemProductionSchema = new mongoose.Schema({
     required: true
   },
   
+  // Batch number for supporting individual batch tracking
+  batchNumber: {
+    type: Number,
+    default: 1,
+    min: 1
+  },
+  
   // Production Timing Fields
   mouldingTime: {
     type: Date,
@@ -72,9 +79,9 @@ const ungroupedItemProductionSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Compound index to ensure one production record per item per day per company
+// Compound index to ensure one production record per item per batch per day per company
 ungroupedItemProductionSchema.index(
-  { companyId: 1, itemId: 1, productionDate: 1 }, 
+  { companyId: 1, itemId: 1, batchNumber: 1, productionDate: 1 }, 
   { unique: true }
 );
 
@@ -109,13 +116,14 @@ ungroupedItemProductionSchema.methods.getFormattedTimings = function() {
   };
 };
 
-// Static method to get or create production record for today
-ungroupedItemProductionSchema.statics.getOrCreateTodayRecord = async function(companyId, itemId, createdBy) {
+// Static method to get or create production record for today with batch support
+ungroupedItemProductionSchema.statics.getOrCreateTodayRecord = async function(companyId, itemId, createdBy, batchNumber = 1) {
   const today = new Date().setHours(0, 0, 0, 0);
   
   let record = await this.findOne({
     companyId,
     itemId,
+    batchNumber,
     productionDate: today
   });
   
@@ -123,6 +131,7 @@ ungroupedItemProductionSchema.statics.getOrCreateTodayRecord = async function(co
     record = new this({
       companyId,
       itemId,
+      batchNumber,
       productionDate: today,
       createdBy
     });

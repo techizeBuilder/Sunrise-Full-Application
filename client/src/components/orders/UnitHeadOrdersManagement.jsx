@@ -491,15 +491,17 @@ const UnitHeadOrdersManagement = () => {
 
       {/* Create Order Modal */}
       <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-[100vw] sm:max-w-4xl max-h-[95vh] overflow-y-auto mx-0 sm:mx-auto w-full sm:w-[95vw] p-3 sm:p-6">
           <DialogHeader>
-            <DialogTitle>Create New Order</DialogTitle>
-            <DialogDescription>Fill in the details to create a new order.</DialogDescription>
+            <DialogTitle className="text-base sm:text-lg">Create New Order</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">
+              Fill in the details to create a new order.
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-6">
-            <div className="grid grid-cols-3 gap-4">
+          <div className="space-y-3 sm:space-y-4">
+            <div className="grid grid-cols-1 gap-3 sm:gap-4">
               <div>
-                <Label htmlFor="customer">Customer Name *</Label>
+                <Label htmlFor="customer" className="text-xs sm:text-sm font-medium">Customer Name *</Label>
                 <Select 
                   value={formData.customerId || ''} 
                   onValueChange={(value) => {
@@ -511,7 +513,7 @@ const UnitHeadOrdersManagement = () => {
                     });
                   }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="mt-1 h-9">
                     <SelectValue placeholder="Select customer" />
                   </SelectTrigger>
                   <SelectContent>
@@ -524,7 +526,7 @@ const UnitHeadOrdersManagement = () => {
                 </Select>
               </div>
               <div>
-                <Label htmlFor="salesPerson">Sales Person *</Label>
+                <Label htmlFor="salesPerson" className="text-xs sm:text-sm font-medium">Sales Person *</Label>
                 <Select 
                   value={formData.salesPersonId || ''} 
                   onValueChange={(value) => {
@@ -534,8 +536,8 @@ const UnitHeadOrdersManagement = () => {
                     });
                   }}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder={isLoadingSalesPersons ? "Loading sales persons..." : "Select sales person"} />
+                  <SelectTrigger className="mt-1 h-9">
+                    <SelectValue placeholder={isLoadingSalesPersons ? "Loading..." : "Select sales person"} />
                   </SelectTrigger>
                   <SelectContent>
                     {isLoadingSalesPersons ? (
@@ -553,29 +555,32 @@ const UnitHeadOrdersManagement = () => {
                 </Select>
               </div>
               <div>
-                <Label htmlFor="orderDate">Order Date *</Label>
+                <Label htmlFor="orderDate" className="text-xs sm:text-sm font-medium">Order Date *</Label>
                 <Input
                   id="orderDate"
                   type="date"
                   value={formData.orderDate}
                   onChange={(e) => setFormData({...formData, orderDate: e.target.value})}
+                  className="mt-1 h-9"
                 />
               </div>
             </div>
             <div>
-              <Label>Select Products *</Label>
-              <ProductSelector
-                onProductSelect={handleProductSelect}
-                selectedProducts={formData.selectedProducts}
-                onQuantityChange={handleQuantityChange}
-                onProductRemove={handleProductRemove}
-              />
+              <Label className="text-sm font-medium">Select Products *</Label>
+              <div className="mt-1">
+                <ProductSelector
+                  onProductSelect={handleProductSelect}
+                  selectedProducts={formData.selectedProducts}
+                  onQuantityChange={handleQuantityChange}
+                  onProductRemove={handleProductRemove}
+                />
+              </div>
             </div>
-            <div className="flex gap-3 pt-4">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 pt-3 sm:pt-4">
               <Button 
                 onClick={handleCreate}
                 disabled={createOrderMutation.isPending}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
+                className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto"
               >
                 {createOrderMutation.isPending ? (
                   <>
@@ -589,7 +594,11 @@ const UnitHeadOrdersManagement = () => {
                   </>
                 )}
               </Button>
-              <Button variant="outline" onClick={() => setIsCreateModalOpen(false)}>
+              <Button 
+                variant="outline" 
+                onClick={() => setIsCreateModalOpen(false)}
+                className="w-full sm:w-auto"
+              >
                 Cancel
               </Button>
             </div>
@@ -752,16 +761,16 @@ const UnitHeadOrdersManagement = () => {
 
       {/* Edit Order Modal - Same as Create Order */}
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto mx-2 sm:mx-auto w-[calc(100vw-1rem)] sm:w-full">
           <DialogHeader>
-            <DialogTitle>Edit Order</DialogTitle>
-            <DialogDescription>Update the order details below.</DialogDescription>
+            <DialogTitle className="text-lg sm:text-xl">Edit Order</DialogTitle>
+            <DialogDescription className="text-sm sm:text-base">Update the order details below.</DialogDescription>
           </DialogHeader>
           {selectedOrder && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-4 sm:space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 <div>
-                  <Label htmlFor="edit-customer">Customer Name *</Label>
+                  <Label htmlFor="edit-customer" className="text-sm font-medium">Customer Name *</Label>
                   <Select 
                     value={selectedOrder.customerId || ''} 
                     onValueChange={(value) => {
@@ -773,7 +782,7 @@ const UnitHeadOrdersManagement = () => {
                       });
                     }}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="mt-1">
                       <SelectValue placeholder="Select customer" />
                     </SelectTrigger>
                     <SelectContent>
@@ -786,7 +795,7 @@ const UnitHeadOrdersManagement = () => {
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="edit-salesPerson">Sales Person *</Label>
+                  <Label htmlFor="edit-salesPerson" className="text-sm font-medium">Sales Person *</Label>
                   <Select 
                     value={selectedOrder.salesPersonId || ''} 
                     onValueChange={(value) => {
@@ -796,7 +805,7 @@ const UnitHeadOrdersManagement = () => {
                       });
                     }}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="mt-1">
                       <SelectValue placeholder={isLoadingSalesPersons ? "Loading sales persons..." : "Select sales person"} />
                     </SelectTrigger>
                     <SelectContent>
@@ -815,20 +824,22 @@ const UnitHeadOrdersManagement = () => {
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="edit-date">Order Date *</Label>
+                  <Label htmlFor="edit-date" className="text-sm font-medium">Order Date *</Label>
                   <Input
                     id="edit-date"
                     type="date"
                     value={selectedOrder.orderDate ? new Date(selectedOrder.orderDate).toISOString().split('T')[0] : ''}
                     onChange={(e) => setSelectedOrder({...selectedOrder, orderDate: e.target.value})}
+                    className="mt-1"
                   />
                 </div>
               </div>
               
               <div>
-                <Label>Select Products *</Label>
-                <ProductSelector
-                  onProductSelect={(product) => {
+                <Label className="text-sm font-medium">Select Products *</Label>
+                <div className="mt-1">
+                  <ProductSelector
+                    onProductSelect={(product) => {
                     const updatedProducts = selectedOrder.selectedProducts || [];
                     const existingIndex = updatedProducts.findIndex(p => p._id === product._id);
                     if (existingIndex >= 0) {
@@ -857,9 +868,10 @@ const UnitHeadOrdersManagement = () => {
                     setSelectedOrder({...selectedOrder, selectedProducts: updatedProducts});
                   }}
                 />
+                </div>
               </div>
               
-              <div className="flex gap-3 pt-4">
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 pt-3 sm:pt-4">
                 <Button 
                   onClick={() => {
                     if (!selectedOrder.customerId || !selectedOrder.salesPersonId || !selectedOrder.selectedProducts?.length) {
@@ -887,7 +899,7 @@ const UnitHeadOrdersManagement = () => {
                     });
                   }}
                   disabled={updateOrderMutation.isPending}
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto"
                 >
                   {updateOrderMutation.isPending ? (
                     <>
@@ -901,7 +913,11 @@ const UnitHeadOrdersManagement = () => {
                     </>
                   )}
                 </Button>
-                <Button variant="outline" onClick={() => setIsEditModalOpen(false)}>
+                <Button 
+                  variant="outline" 
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="w-full sm:w-auto"
+                >
                   Cancel
                 </Button>
               </div>

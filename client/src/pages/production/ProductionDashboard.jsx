@@ -244,8 +244,8 @@ export default function ProductionDashboard() {
         <div>
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Package className="h-5 w-5 text-orange-600" />
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Package className="h-5 w-5 text-orange-500" />
                 Ungrouped Items - Production with Final Batches
                 <Badge variant="outline" className="ml-2 bg-orange-50 text-orange-700 border-orange-200">
                   {ungroupedStats.ungroupedItemsCount} items
@@ -298,11 +298,7 @@ export default function ProductionDashboard() {
                                 <Skeleton className="h-4 w-24" />
                               </div>
                             </TableCell>
-                            <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                             <TableCell className="text-center"><Skeleton className="h-4 w-12 mx-auto" /></TableCell>
-                            <TableCell className="text-center"><Skeleton className="h-4 w-16 mx-auto" /></TableCell>
-                            <TableCell className="text-center"><Skeleton className="h-6 w-12 mx-auto rounded-full" /></TableCell>
-                            <TableCell className="text-center"><Skeleton className="h-6 w-12 mx-auto rounded-full" /></TableCell>
                           </TableRow>
                         ))
                       ) : (
