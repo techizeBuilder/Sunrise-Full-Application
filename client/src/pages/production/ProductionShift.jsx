@@ -242,18 +242,61 @@ export default function ProductionShift() {
         originalItemId = fullItemId.split('_batch_')[0];
       }
       
+      // Find the item to get the batchNo - MUST match by full _id (with batch suffix)
+      const item = ungroupedItems.find(item => item._id === fullItemId);
+      
+      const batchNo = item?.batchNo;
+      
       console.log(`🔄 Saving ungrouped item ${field}:`, { 
         itemKey, 
         fullItemId, 
         originalItemId, 
+        foundItem: !!item,
+        batchNo,
         field, 
         value,
         itemData: {
           id: fullItemId,
           hasOriginalId: fullItemId.includes('_batch_'),
-          willSend: originalItemId
+          willSend: originalItemId,
+          batchNo: batchNo,
+          totalUngroupedItems: ungroupedItems.length
         }
       });
+      
+      // DEBUGGING: Log all items to check if we have the right data
+      console.log('🔍 DEBUG: All ungrouped items:', ungroupedItems.map(i => ({
+        id: i._id,
+        batchNo: i.batchNo,
+        name: i.name
+      })));
+      
+      console.log('🔍 DEBUG: Looking for item with _id:', fullItemId);
+      console.log('🔍 DEBUG: Found item:', item);
+      
+      if (!item) {
+        console.error('❌ CRITICAL: Item not found in ungroupedItems array!');
+        console.error('Available items:', ungroupedItems.map(i => i._id));
+        return;
+      }
+      
+      if (!batchNo) {
+        console.error('❌ CRITICAL: batchNo is missing from item!');
+        console.error('Item data:', item);
+        return;
+      }
+      
+      const requestPayload = {
+        itemId: originalItemId,  // Use original item ID without batch suffix
+        field,
+        value
+      };
+      
+      // Include batchno if available (CRITICAL for separate database entries)
+      if (batchNo) {
+        requestPayload.batchno = batchNo;
+        console.log(`🏷️ Including batchno in request: ${batchNo}`);
+      }
       
       const response = await fetch('/api/production/ungrouped-items/production', {
         method: 'PUT',
@@ -261,11 +304,7 @@ export default function ProductionShift() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
-        body: JSON.stringify({
-          itemId: originalItemId,  // Use original item ID without batch suffix
-          field,
-          value
-        })
+        body: JSON.stringify(requestPayload)
       });
 
       const result = await response.json();
@@ -743,9 +782,11 @@ export default function ProductionShift() {
                     
                     return (
                       <TableRow key={item._id}>
-                        {/* Item No. */}
+                        {/* Batch No. */}
                         <TableCell className="text-center font-medium">
-                          {index + 1}
+                          <div className="text-sm font-bold text-blue-600">
+                            {item.batchNo}
+                          </div>
                         </TableCell>
                         
                         {/* Product Name */}

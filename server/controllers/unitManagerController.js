@@ -2,6 +2,7 @@ import Order from '../models/Order.js';
 import { Item } from '../models/Inventory.js';
 import User from '../models/User.js';
 import ProductDailySummary from '../models/ProductDailySummary.js';
+import ProductDetailsDailySummary from '../models/ProductDetailsDailySummary.js';
 import mongoose from 'mongoose';
 
 // Get items for Unit Manager (inventory access)
@@ -2215,7 +2216,7 @@ export const getUnitManagerAvailableItems = async (req, res) => {
 
     // Get all items
     const allItems = await Item.find(itemFilter)
-      .select('name code category subCategory qty unit price image')
+      .select('name code category subCategory batch qty unit price image')
       .lean();
 
     // Get items already assigned to production groups (excluding current group if provided)
@@ -2280,42 +2281,96 @@ export const getApprovedProductSummaries = async (req, res) => {
       });
     }
 
-    const { page = 1, limit = 50, search = '' } = req.query;
-    const skip = (page - 1) * limit;
+    const { search = '', date } = req.query;
 
-    // Build filter for approved summaries with available batches
-    let filter = {
-      companyId: req.user.companyId,
-      status: 'approved',
-      // Only show items with production final batches > 0 or batch adjusted > 0
-      $or: [
-        { productionFinalBatches: { $gt: 0 } },
-        { batchAdjusted: { $gt: 0 } }
-      ]
-    };
-
-    // Add search functionality
-    if (search.trim()) {
-      filter.$and = filter.$and || [];
-      filter.$and.push({
-        productName: { $regex: search.trim(), $options: 'i' }
-      });
+    // Date filtering support - default to current date if no date provided
+    let summaryDate = null;
+    if (date) {
+      summaryDate = new Date(date);
+      if (isNaN(summaryDate.getTime())) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid date format. Use YYYY-MM-DD'
+        });
+      }
+      summaryDate.setUTCHours(0, 0, 0, 0);
+    } else {
+      // Default to current date for dashboard
+      summaryDate = new Date();
+      summaryDate.setUTCHours(0, 0, 0, 0);
     }
 
-    // Get approved product summaries with pagination
-    const [summaries, totalCount] = await Promise.all([
-      ProductDailySummary.find(filter)
-        .populate({
-          path: 'productId',
-          select: 'name code category subCategory price stock image'
-        })
-        .select('productName qtyPerBatch batchAdjusted productionFinalBatches totalQuantity totalIndent physicalStock status createdAt updatedAt productId')
-        .sort({ updatedAt: -1 })
-        .skip(skip)
-        .limit(parseInt(limit))
-        .lean(),
-      ProductDailySummary.countDocuments(filter)
-    ]);
+    console.log('📅 Date filter:', summaryDate.toISOString().split('T')[0]);
+
+    // Get master product data from ProductDailySummary
+    const masterFilter = {
+      companyId: req.user.companyId
+    };
+
+    // Add search functionality for master data
+    if (search.trim()) {
+      masterFilter.productName = { $regex: search.trim(), $options: 'i' };
+    }
+
+    const masterProducts = await ProductDailySummary.find(masterFilter)
+      .populate({
+        path: 'productId',
+        select: 'name code category subCategory price stock image'
+      })
+      .select('productName qtyPerBatch productId')
+      .lean();
+
+    // Get daily details for the specific date - SHOW ALL APPROVED PRODUCTS
+    const dailyFilter = {
+      date: summaryDate,
+      companyId: req.user.companyId,
+      status: 'approved'
+      // REMOVED: Only show items with production final batches > 0 or batch adjusted > 0
+      // $or: [
+      //   { productionFinalBatches: { $gt: 0 } },
+      //   { batchAdjusted: { $gt: 0 } }
+      // ]
+    };
+
+    console.log('📋 Showing ALL approved products (including zero batches)');
+
+    const dailyDetails = await ProductDetailsDailySummary.find(dailyFilter)
+      .populate({
+        path: 'productId',
+        select: 'name code category subCategory price stock image'
+      })
+      .select('productName qtyPerBatch batchAdjusted productionFinalBatches totalQuantity totalIndent physicalStock status createdAt updatedAt productId toBeProducedDay toBeProducedBatches produceBatches expiryShortage balanceFinalBatches')
+      .sort({ updatedAt: -1 })
+      .lean();
+
+    // Create a map of daily details by productId
+    const dailyDetailsMap = new Map();
+    dailyDetails.forEach(detail => {
+      if (detail.productId && detail.productId._id) {
+        dailyDetailsMap.set(detail.productId._id.toString(), detail);
+      }
+    });
+
+    // Combine master data with daily details - only include products that have approved daily data
+    const combinedSummaries = [];
+    masterProducts.forEach(masterProduct => {
+      const productId = masterProduct.productId ? masterProduct.productId._id.toString() : null;
+      const dailyDetail = dailyDetailsMap.get(productId);
+      
+      // Only include products that have approved daily data with available batches
+      if (dailyDetail) {
+        combinedSummaries.push({
+          ...masterProduct,
+          ...dailyDetail,
+          // Ensure master data takes precedence for qtyPerBatch
+          qtyPerBatch: masterProduct.qtyPerBatch || dailyDetail.qtyPerBatch || 0
+        });
+      }
+    });
+
+    // Use all combined results (no pagination)
+    const totalCount = combinedSummaries.length;
+    const allSummaries = combinedSummaries;
 
     // Get all production groups for this company to find which products belong to which groups
     const productionGroups = await ProductionGroup.find({
@@ -2336,9 +2391,20 @@ export const getApprovedProductSummaries = async (req, res) => {
     });
 
     // Format the response data
-    const formattedSummaries = summaries.map(summary => {
+    const formattedSummaries = allSummaries.map(summary => {
       const productId = summary.productId?._id?.toString() || summary.productId?.toString();
       const productGroups = productToGroupMap[productId] || [];
+   
+      // Calculate available batches with better logic
+      // let availableBatches = 0;
+      // if (summary.batchAdjusted && summary.batchAdjusted > 0) {
+      //   availableBatches = summary.batchAdjusted;
+      // } else if (summary.productionFinalBatches && summary.productionFinalBatches > 0) {
+      //   availableBatches = summary.productionFinalBatches;
+      // } else if (summary.qtyPerBatch && summary.qtyPerBatch > 0) {
+      //   // If no batches set, default to 1 batch based on qtyPerBatch
+      //   availableBatches = 1;
+      // }
 
       return {
         id: summary._id,
@@ -2346,36 +2412,38 @@ export const getApprovedProductSummaries = async (req, res) => {
         productCode: summary.productId?.code || 'N/A',
         category: summary.productId?.category || 'N/A',
         subCategory: summary.productId?.subCategory || 'N/A',
-        qtyPerBatch: summary.qtyPerBatch,
-        batchAdjusted: summary.batchAdjusted,
-        productionFinalBatches: summary.productionFinalBatches,
-        availableBatches: summary.batchAdjusted > 0 ? summary.batchAdjusted : summary.productionFinalBatches,
-        totalQuantity: summary.totalQuantity,
-        totalIndent: summary.totalIndent,
-        physicalStock: summary.physicalStock,
-        status: summary.status,
+        qtyPerBatch: summary.qtyPerBatch || 0,
+        batchAdjusted: summary.batchAdjusted || 0,
+        productionFinalBatches: summary.productionFinalBatches || 0,
+        totalQuantity: summary.totalQuantity || 0,
+        totalIndent: summary.totalIndent || 0,
+        physicalStock: summary.physicalStock || 0,
+        toBeProducedDay: summary.toBeProducedDay || 0,
+        toBeProducedBatches: summary.toBeProducedBatches || 0,
+        produceBatches: summary.produceBatches || 0,
+        expiryShortage: summary.expiryShortage || 0,
+        balanceFinalBatches: summary.balanceFinalBatches || 0,
+        status: summary.status || 'approved',
         lastUpdated: summary.updatedAt,
         productImage: summary.productId?.image,
         productGroups: productGroups // Add product groups array
       };
     });
 
-    console.log(`✅ Found ${formattedSummaries.length} approved product summaries with available batches`);
+    console.log(`✅ Found ${formattedSummaries.length} approved product summaries for date: ${summaryDate.toISOString().split('T')[0]}`);
 
     res.json({
       success: true,
-      message: 'Approved product summaries with available batches fetched successfully',
+      message: 'All approved product summaries fetched successfully',
       data: {
         summaries: formattedSummaries,
-        pagination: {
-          total: totalCount,
-          page: parseInt(page),
-          limit: parseInt(limit),
-          pages: Math.ceil(totalCount / limit)
-        },
         stats: {
-          totalApprovedWithBatches: totalCount,
-          currentPageCount: formattedSummaries.length
+          totalApproved: totalCount,
+          totalCount: formattedSummaries.length
+        },
+        filterApplied: {
+          date: summaryDate.toISOString().split('T')[0],
+          search: search.trim() || null
         }
       }
     });

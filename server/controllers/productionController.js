@@ -1,5 +1,6 @@
 import ProductionGroup from '../models/ProductionGroup.js';
 import ProductDailySummary from '../models/ProductDailySummary.js';
+import ProductDetailsDailySummary from '../models/ProductDetailsDailySummary.js';
 import { Item } from '../models/Inventory.js';
 import User from '../models/User.js';
 import UngroupedItemProduction from '../models/UngroupedItemProduction.js';
@@ -17,10 +18,18 @@ const calculateBatchesForGroup = async (groupId, companyId) => {
     // Get all item IDs from this production group
     const itemIds = group.items.map(item => item._id);
     
-    // Query ProductDailySummary for all items in this group - ONLY APPROVED ONES
+    // Query ProductDetailsDailySummary for all items in this group for today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
     const summaryQuery = {
       productId: { $in: itemIds },
-      status: 'approved'  // Only get approved ProductDailySummary records
+      date: {
+        $gte: today,
+        $lt: tomorrow
+      }
     };
     
     // Add company filter if provided
@@ -28,10 +37,10 @@ const calculateBatchesForGroup = async (groupId, companyId) => {
       summaryQuery.companyId = companyId;
     }
     
-    const productSummaries = await ProductDailySummary.find(summaryQuery);
+    const productDetailsSummaries = await ProductDetailsDailySummary.find(summaryQuery);
     
     // Calculate total batchAdjusted for all items in this group
-    const totalBatches = productSummaries.reduce((total, summary) => {
+    const totalBatches = productDetailsSummaries.reduce((total, summary) => {
       return total + (summary.batchAdjusted || 0);
     }, 0);
     
@@ -131,10 +140,18 @@ export const getProductionDashboard = async (req, res) => {
         // Get all item IDs from this production group
         const itemIds = group.items.map(item => item._id);
         
-        // Query ProductDailySummary for all items in this group - ONLY APPROVED ONES
+        // Query ProductDetailsDailySummary for all items in this group for today
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        
         const summaryQuery = {
           productId: { $in: itemIds },
-          status: 'approved'  // Only get approved ProductDailySummary records
+          date: {
+            $gte: today,
+            $lt: tomorrow
+          }
         };
         
         // Add company filter if user has company
@@ -142,10 +159,10 @@ export const getProductionDashboard = async (req, res) => {
           summaryQuery.companyId = req.user.companyId;
         }
         
-        const productSummaries = await ProductDailySummary.find(summaryQuery);
+        const productDetailsSummaries = await ProductDetailsDailySummary.find(summaryQuery);
         
         // Calculate total batchAdjusted for all items in this group
-        const totalBatches = productSummaries.reduce((total, summary) => {
+        const totalBatches = productDetailsSummaries.reduce((total, summary) => {
           return total + (summary.batchAdjusted || 0);
         }, 0);
         
@@ -703,11 +720,25 @@ export const getUngroupedItems = async (req, res) => {
     const formattedItems = await Promise.all(items.map(async (item) => {
       const imageUrl = item.image ? (item.image.startsWith('/uploads/data:') ? item.image.replace('/uploads/', '') : item.image) : null;
       
-      // Get ProductDailySummary data for this specific item - ONLY APPROVED ONES
+      // Get ProductDailySummary data for qtyPerBatch
       const itemSummary = await ProductDailySummary.findOne({
         productId: item._id,
+        companyId: req.user.companyId
+      }).lean();
+
+      // Get today's ProductDetailsDailySummary for batchAdjusted
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      const todayDetails = await ProductDetailsDailySummary.findOne({
+        productId: item._id,
         companyId: req.user.companyId,
-        status: 'approved'  // Only get approved ProductDailySummary records
+        date: {
+          $gte: today,
+          $lt: tomorrow
+        }
       }).lean();
 
       return {
@@ -721,7 +752,7 @@ export const getUngroupedItems = async (req, res) => {
         price: item.price || 0,
         description: item.description || '',
         image: imageUrl,
-        batchAdjusted: itemSummary?.batchAdjusted || 0,
+        batchAdjusted: todayDetails?.batchAdjusted || 0,
         qtyPerBatch: itemSummary?.qtyPerBatch || 0
       };
     }));
@@ -825,11 +856,25 @@ export const getUngroupedItemsForSheet = async (req, res) => {
     const formattedItems = await Promise.all(items.map(async (item) => {
       const imageUrl = item.image ? (item.image.startsWith('/uploads/data:') ? item.image.replace('/uploads/', '') : item.image) : null;
       
-      // Get ProductDailySummary data for this specific item - ONLY APPROVED ONES
+      // Get ProductDailySummary data for qtyPerBatch
       const itemSummary = await ProductDailySummary.findOne({
         productId: item._id,
+        companyId: req.user.companyId
+      }).lean();
+
+      // Get today's ProductDetailsDailySummary for batchAdjusted
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      const todayDetails = await ProductDetailsDailySummary.findOne({
+        productId: item._id,
         companyId: req.user.companyId,
-        status: 'approved'  // Only get approved ProductDailySummary records
+        date: {
+          $gte: today,
+          $lt: tomorrow
+        }
       }).lean();
 
       return {
@@ -843,7 +888,7 @@ export const getUngroupedItemsForSheet = async (req, res) => {
         price: item.price || 0,
         description: item.description || '',
         image: imageUrl,
-        batchAdjusted: itemSummary?.batchAdjusted || 0,
+        batchAdjusted: todayDetails?.batchAdjusted || 0,
         qtyPerBatch: itemSummary?.qtyPerBatch || 0
       };
     }));
@@ -853,21 +898,26 @@ export const getUngroupedItemsForSheet = async (req, res) => {
     
     // Create individual batch entries for each item based on batchAdjusted
     const batchEntries = [];
-    itemsWithBatches.forEach(item => {
+    let globalBatchCounter = 1; // Global counter for sequential batch numbers
+    
+    for (const item of itemsWithBatches) {
       const totalBatches = Math.ceil(item.batchAdjusted); // Round up to get whole number of batches
       
-      for (let batchNumber = 1; batchNumber <= totalBatches; batchNumber++) {
+      for (let itemBatchNumber = 1; itemBatchNumber <= totalBatches; itemBatchNumber++) {
         // Calculate quantity for this batch
         let batchQuantity = item.qtyPerBatch;
         
         // For the last batch, if it's a partial batch, calculate the remaining quantity
-        if (batchNumber === totalBatches && item.batchAdjusted % 1 !== 0) {
+        if (itemBatchNumber === totalBatches && item.batchAdjusted % 1 !== 0) {
           const remainingBatchFraction = item.batchAdjusted % 1;
           batchQuantity = Math.round(item.qtyPerBatch * remainingBatchFraction);
         }
         
+        // Generate formatted batch number with global counter
+        const batchNo = `BATNO${globalBatchCounter.toString().padStart(2, '0')}`;
+        
         batchEntries.push({
-          _id: `${item._id}_batch_${batchNumber}`, // Unique ID for each batch entry
+          _id: `${item._id}_batch_${itemBatchNumber}`, // Unique ID for each batch entry
           originalItemId: item._id, // Reference to original item
           name: item.name,
           code: item.code,
@@ -878,14 +928,18 @@ export const getUngroupedItemsForSheet = async (req, res) => {
           price: item.price,
           description: item.description,
           image: item.image,
-          batchNumber: batchNumber,
+          batchNumber: itemBatchNumber, // Item-specific batch number
+          batchNo: batchNo, // Global formatted batch number (BATNO01, BATNO02, etc.)
+          globalBatchNumber: globalBatchCounter, // Global batch counter
           batchQuantity: batchQuantity,
           qtyPerBatch: item.qtyPerBatch,
           totalBatches: totalBatches,
           originalBatchAdjusted: item.batchAdjusted
         });
+        
+        globalBatchCounter++; // Increment global counter
       }
-    });
+    }
     
     console.log(`📊 Batch entries created: ${itemsWithBatches.length} items → ${batchEntries.length} batch entries`);
 
@@ -983,15 +1037,29 @@ export const getUngroupedItemGroup = async (req, res) => {
 
     console.log('📦 Retrieved ungrouped item group:', items.length);
 
-    // Format items with proper image URLs and ProductDailySummary data
+    // Format items with proper image URLs and ProductDetailsDailySummary data for item group
     const formattedItems = await Promise.all(items.map(async (item) => {
       const imageUrl = item.image ? (item.image.startsWith('/uploads/data:') ? item.image.replace('/uploads/', '') : item.image) : null;
       
-      // Get ProductDailySummary data for this specific item - ONLY APPROVED ONES
+      // Get ProductDailySummary data for qtyPerBatch
       const itemSummary = await ProductDailySummary.findOne({
         productId: item._id,
+        companyId: req.user.companyId
+      }).lean();
+
+      // Get today's ProductDetailsDailySummary for batchAdjusted
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      const todayDetails = await ProductDetailsDailySummary.findOne({
+        productId: item._id,
         companyId: req.user.companyId,
-        status: 'approved'  // Only get approved ProductDailySummary records
+        date: {
+          $gte: today,
+          $lt: tomorrow
+        }
       }).lean();
 
       return {
@@ -1005,7 +1073,7 @@ export const getUngroupedItemGroup = async (req, res) => {
         price: item.price || 0,
         description: item.description || '',
         image: imageUrl,
-        batchAdjusted: itemSummary?.batchAdjusted || 0,
+        batchAdjusted: todayDetails?.batchAdjusted || 0,
         qtyPerBatch: itemSummary?.qtyPerBatch || 0
       };
     }));
@@ -1115,134 +1183,348 @@ export const getUngroupedItemProduction = async (req, res) => {
   }
 };
 
-// Update ungrouped item production data
+// Update ungrouped item production data - Recreated with batchNo as primary identifier
 export const updateUngroupedItemProduction = async (req, res) => {
   try {
-    console.log('🔄 Update Ungrouped Item Production Request:', {
-      role: req.user.role,
+    console.log('🔄 Update Ungrouped Item Production Request:', req.body);
+    console.log('🔄 User Info:', {
+      userId: req.user._id,
       username: req.user.username,
-      companyId: req.user.companyId,
-      body: req.body
+      companyId: req.user.companyId
     });
 
-    // Validate user and company
-    if (!req.user || !req.user.companyId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Authentication required with valid company'
-      });
-    }
-
-    const { itemId, field, value, batchNumber } = req.body;
+    const { itemId, field, value, batchno } = req.body;
 
     // Validate required fields
-    if (!itemId || !field) {
+    if (!batchno) {
       return res.status(400).json({
         success: false,
-        message: 'Item ID and field are required'
+        message: 'batchno is required - this is the primary identifier'
       });
     }
 
-    console.log('📝 Update details:', { itemId, field, value, batchNumber });
-
-    // Check if this is a batch entry by looking at the itemId format
-    let isStandardItem = true;
-    let originalItemId = itemId;
-    let batchNum = batchNumber || 1;
-
-    // If itemId contains batch info, extract it
-    if (itemId.includes('_batch_')) {
-      isStandardItem = false;
-      const parts = itemId.split('_batch_');
-      originalItemId = parts[0];
-      batchNum = parseInt(parts[1]) || 1;
-      console.log('🔍 Detected batch entry:', { originalItemId, batchNum });
-    }
-
-    // Validate the original item ID is a valid ObjectId
-    if (!originalItemId.match(/^[0-9a-fA-F]{24}$/)) {
+    if (!field) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid item ID format'
+        message: 'field is required'
       });
     }
 
-    // For batch entries, create a unique record key that includes batch number
-    const recordKey = isStandardItem ? originalItemId : `${originalItemId}_batch_${batchNum}`;
+    if (!itemId) {
+      return res.status(400).json({
+        success: false,
+        message: 'itemId is required'
+      });
+    }
 
-    // Get or create production record for today with batch support
+    // Set today's production date
     const today = new Date();
-    today.setHours(0, 0, 0, 0);  // Set to beginning of day
-    
+    today.setHours(0, 0, 0, 0);
+
+    console.log(`🔍 Looking for existing record with batchNo: ${batchno} and date: ${today}`);
+
+    // Check if record exists with this batchNo and productionDate (unique combination)
     let productionRecord = await UngroupedItemProduction.findOne({
       companyId: req.user.companyId,
-      itemId: originalItemId,
-      batchNumber: batchNum,
+      batchNo: batchno,
       productionDate: today
     });
 
-    if (!productionRecord) {
-      // Create new record with batch support
+    if (productionRecord) {
+      console.log(`✅ EXISTING record found for batchNo: ${batchno}`);
+      console.log(`📋 Record ID: ${productionRecord._id}`);
+      console.log(`📋 Current itemId: ${productionRecord.itemId}`);
+    } else {
+      console.log(`🆕 NO existing record found for batchNo: ${batchno} - CREATING NEW`);
+      
+      // Extract batch number from batchno format (BATNO01 -> 1)
+      const batchNumberMatch = batchno.match(/BATNO(\d+)/);
+      const batchNumber = batchNumberMatch ? parseInt(batchNumberMatch[1]) : 1;
+      
+      // Get item details for default values
+      const item = await Item.findById(itemId).select('name code category qtyPerBatch');
+      if (!item) {
+        return res.status(404).json({
+          success: false,
+          message: 'Item not found'
+        });
+      }
+
+      // Get qtyPerBatch from ProductDailySummary
+      const itemSummary = await ProductDailySummary.findOne({
+        productId: itemId,
+        companyId: req.user.companyId
+      }).lean();
+
+      const defaultQtyPerBatch = itemSummary?.qtyPerBatch || 0;
+
+      // Create new production record
       productionRecord = new UngroupedItemProduction({
         companyId: req.user.companyId,
-        itemId: originalItemId,
-        batchNumber: batchNum,
+        itemId: itemId,
+        batchNo: batchno,
+        batchNumber: batchNumber,
         productionDate: today,
-        createdBy: req.user.username,
-        updatedBy: req.user.username
+        qtyPerBatch: defaultQtyPerBatch,
+        createdBy: req.user.username || req.user._id,
+        updatedBy: req.user.username || req.user._id
       });
-      console.log('📄 Created new production record for batch:', batchNum);
-    } else {
-      console.log('📄 Found existing production record for batch:', batchNum);
+      
+      console.log(`🆕 Created new record for batchNo: ${batchno}, itemId: ${itemId}`);
     }
 
-    // Update the specific field
+    // Validate and process the field value
+    const allowedFields = ['mouldingTime', 'unloadingTime', 'productionLoss', 'qtyPerBatch', 'qtyAchieved'];
+    if (!allowedFields.includes(field)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid field. Allowed fields: ${allowedFields.join(', ')}`
+      });
+    }
+
+    // Process the field value based on type
     let processedValue = value;
-    
-    // Handle datetime fields
     if (field === 'mouldingTime' || field === 'unloadingTime') {
-      if (value && value.trim() !== '') {
+      if (value) {
         processedValue = new Date(value);
-        console.log(`🕰️ Processed datetime ${field}:`, processedValue);
+        if (isNaN(processedValue.getTime())) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid datetime format'
+          });
+        }
       } else {
         processedValue = null;
-        console.log(`🕰️ Setting ${field} to null`);
       }
-    }
-    
-    // Handle numeric fields
-    if (field === 'productionLoss' || field === 'qtyPerBatch') {
-      processedValue = parseFloat(value) || 0;
-      console.log(`🔢 Processed numeric ${field}:`, processedValue);
+    } else if (field === 'productionLoss' || field === 'qtyPerBatch' || field === 'qtyAchieved') {
+      processedValue = parseFloat(value);
+      if (isNaN(processedValue)) {
+        processedValue = 0;
+      }
     }
 
     // Update the field
     productionRecord[field] = processedValue;
-    productionRecord.updatedBy = req.user.username;
+    productionRecord.updatedBy = req.user.username || req.user._id;
+    productionRecord.updatedAt = new Date();
 
-    // Save the record (this will trigger the pre-save middleware to calculate qtyAchieved)
+    console.log(`🔧 Updating field: ${field} with value:`, processedValue);
+
+    // Save the record
+    const savedRecord = await productionRecord.save();
+
+    console.log(`✅ Successfully ${savedRecord.isNew === false ? 'UPDATED' : 'CREATED'} record for batchNo: ${batchno}`);
+    console.log(`📋 Final Record ID: ${savedRecord._id}`);
+
+    // Return success response
+    res.json({
+      success: true,
+      message: `${field} updated successfully for batch ${batchno}`,
+      data: {
+        _id: savedRecord._id,
+        batchNo: savedRecord.batchNo,
+        batchNumber: savedRecord.batchNumber,
+        itemId: savedRecord.itemId,
+        companyId: savedRecord.companyId,
+        productionDate: savedRecord.productionDate,
+        mouldingTime: savedRecord.mouldingTime,
+        unloadingTime: savedRecord.unloadingTime,
+        productionLoss: savedRecord.productionLoss,
+        qtyPerBatch: savedRecord.qtyPerBatch,
+        qtyAchieved: savedRecord.qtyAchieved,
+        status: savedRecord.status,
+        updatedField: field,
+        updatedValue: processedValue,
+        isNewRecord: savedRecord.isNew !== false
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error updating ungrouped item production:', error);
+    
+    // Handle specific database errors
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: 'Duplicate entry detected',
+        error: 'A record with this batchNo and date already exists'
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update ungrouped item production',
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+};
+
+// Helper function to generate batch number in format BATNO01, BATNO02, etc.
+const generateBatchNumber = async (itemId, companyId, productionDate) => {
+  try {
+    // Find the highest batch number for this item, company, and date
+    const existingBatches = await UngroupedItemProduction.find({
+      itemId: itemId,
+      companyId: companyId,
+      productionDate: productionDate
+    }).sort({ batchNumber: -1 }).limit(1);
+
+    let nextBatchNumber = 1;
+    if (existingBatches.length > 0) {
+      nextBatchNumber = (existingBatches[0].batchNumber || 0) + 1;
+    }
+
+    // Format as BATNO01, BATNO02, etc.
+    const batchNo = `BATNO${nextBatchNumber.toString().padStart(2, '0')}`;
+    return { batchNo, batchNumber: nextBatchNumber };
+  } catch (error) {
+    console.error('Error generating batch number:', error);
+    return { batchNo: 'BATNO01', batchNumber: 1 };
+  }
+};
+
+// Create/update ungrouped item production with batch tracking
+export const updateUngroupedItemProductionWithBatch = async (req, res) => {
+  try {
+
+
+    console.log('🏭 updateUngroupedItemProductionWithBatch called');
+    console.log('Request body:', req.body);
+    console.log('User:', { id: req.user._id, role: req.user.role, companyId: req.user.companyId });
+    // return false;
+    
+    const { itemId, field, value, batchno } = req.body;
+    const userId = req.user._id.toString();
+    const companyId = req.user.companyId;
+
+    // Validate required fields
+    if (!itemId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Item ID is required'
+      });
+    }
+
+    if (!field) {
+      return res.status(400).json({
+        success: false,
+        message: 'Field name is required'
+      });
+    }
+
+    // Get today's production date
+    const today = new Date();
+    const productionDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+    console.log('📅 Production date:', productionDate.toISOString());
+
+    // batchno is required from frontend
+    if (!batchno) {
+      return res.status(400).json({
+        success: false,
+        message: 'batchno is required'
+      });
+    }
+
+    const finalBatchNo = batchno;
+    // Extract number from provided batch no (e.g., BATNO01 -> 1)
+    const match = batchno.match(/BATNO(\d+)/);
+    const batchNumber = match ? parseInt(match[1]) : 1;
+    
+    console.log(`📝 Using provided batch number: ${finalBatchNo} (${batchNumber})`);
+
+    // Find or create production record for this item and batch
+    let productionRecord = await UngroupedItemProduction.findOne({
+      itemId: itemId,
+      companyId: companyId,
+      productionDate: productionDate,
+      batchNo: finalBatchNo
+    });
+
+    if (!productionRecord) {
+      // Get item details for qtyPerBatch
+      const item = await Item.findById(itemId).select('name qty batch');
+      const qtyPerBatch = item?.batch ? parseInt(item.batch) : item?.qty || 234; // Default fallback
+
+      console.log('🆕 Creating new production record...');
+      productionRecord = new UngroupedItemProduction({
+        companyId: companyId,
+        itemId: itemId,
+        batchNumber: batchNumber,
+        qtyPerBatch: qtyPerBatch,
+        productionDate: productionDate,
+        createdBy: userId,
+        notes: `Batch: ${finalBatchNo}`
+      });
+    }
+
+    // Update the specified field
+    const allowedFields = ['mouldingTime', 'unloadingTime', 'productionLoss', 'qtyPerBatch'];
+    if (!allowedFields.includes(field)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid field. Allowed fields: ${allowedFields.join(', ')}`
+      });
+    }
+
+    // Set the field value
+    if (field === 'mouldingTime' || field === 'unloadingTime') {
+      productionRecord[field] = new Date(value);
+    } else {
+      productionRecord[field] = parseFloat(value) || 0;
+    }
+
+    productionRecord.updatedBy = userId;
+
+    // Save the record (pre-save middleware will calculate qtyAchieved and status)
     await productionRecord.save();
 
-    console.log('✅ Successfully updated production record:', {
-      field,
-      value: processedValue,
-      qtyAchieved: productionRecord.qtyAchieved,
+    console.log('✅ Production record updated successfully');
+    console.log('Updated record:', {
+      id: productionRecord._id,
+      itemId: productionRecord.itemId,
+      batchNo: finalBatchNo,
+      batchNumber: productionRecord.batchNumber,
+      field: field,
+      value: productionRecord[field],
       status: productionRecord.status
     });
 
     res.json({
       success: true,
-      message: `${field} updated successfully`,
+      message: 'Ungrouped item production updated successfully',
       data: {
-        _id: productionRecord._id,
-        [field]: processedValue,
+        id: productionRecord._id,
+        itemId: productionRecord.itemId,
+        companyId: productionRecord.companyId,
+        batchNo: finalBatchNo,
+        batchNumber: productionRecord.batchNumber,
+        mouldingTime: productionRecord.mouldingTime,
+        unloadingTime: productionRecord.unloadingTime,
+        productionLoss: productionRecord.productionLoss,
+        qtyPerBatch: productionRecord.qtyPerBatch,
         qtyAchieved: productionRecord.qtyAchieved,
         status: productionRecord.status,
+        productionDate: productionRecord.productionDate,
+        updatedField: field,
+        updatedValue: productionRecord[field],
+        createdAt: productionRecord.createdAt,
         updatedAt: productionRecord.updatedAt
       }
     });
   } catch (error) {
-    console.error('Error updating ungrouped item production:', error);
+    console.error('Error updating ungrouped item production with batch:', error);
+    
+    // Handle duplicate key error
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'A production record for this item and batch already exists for today',
+        error: 'Duplicate batch entry'
+      });
+    }
+
     res.status(500).json({
       success: false,
       message: 'Failed to update ungrouped item production',

@@ -652,6 +652,11 @@ const UnitHeadProductionGroup = () => {
                                   <div className="text-xs sm:text-sm text-gray-500 truncate">
                                     {item.code} | {item.category}
                                   </div>
+                                  {item.batch && (
+                                    <div className="text-xs sm:text-sm text-blue-600 font-medium">
+                                      Batch: {item.batch}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -758,6 +763,11 @@ const UnitHeadProductionGroup = () => {
                                   <div className="text-xs sm:text-sm text-gray-500 truncate">
                                     {item.code} | {item.category}
                                   </div>
+                                  {item.batch && (
+                                    <div className="text-xs sm:text-sm text-blue-600 font-medium">
+                                      Batch: {item.batch}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -797,6 +807,11 @@ const UnitHeadProductionGroup = () => {
                                   <div className="text-xs sm:text-sm text-gray-500 truncate">
                                     {item.code} | {item.category}
                                   </div>
+                                  {item.batch && (
+                                    <div className="text-xs sm:text-sm text-blue-600 font-medium">
+                                      Batch: {item.batch}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -889,6 +904,11 @@ const UnitHeadProductionGroup = () => {
                               <div className="text-xs sm:text-sm text-gray-500">
                                 Quantity: {item.qty} {item.unit}
                               </div>
+                              {item.batch && (
+                                <div className="text-xs sm:text-sm text-blue-600 font-medium">
+                                  Batch: {item.batch}
+                                </div>
+                              )}
                             </div>
                           </div>
                         ))}

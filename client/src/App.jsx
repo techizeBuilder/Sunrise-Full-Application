@@ -41,6 +41,7 @@ import UnitHeadDashboard from "@/pages/UnitHeadDashboard";
 import UnitHeadOrdersManagement from "@/components/orders/UnitHeadOrdersManagement";
 import UnitHeadSales from "@/pages/UnitHeadSales";
 import UnitHeadCustomers from "@/pages/UnitHeadCustomers";
+import UnitHeadCutoffTime from "@/pages/UnitHeadCutoffTime";
 import UnitManagerDashboard from "@/pages/UnitManagerDashboard";
 import SuperAdminDashboard from "@/pages/SuperAdminDashboard";
 import SuperAdminOrders from "@/pages/super-admin/SuperAdminOrders";
@@ -66,7 +67,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/login">
-        <Login />
+        {() => <Login />}
       </Route>
       <Route path="/">
         <ProtectedRoute>
@@ -277,6 +278,11 @@ function Router() {
       <Route path="/unit-head/production-group">
         <ProtectedRoute requiredRole="Unit Head">
           <UnitHeadProductionGroup />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/unit-head/cutoff-time">
+        <ProtectedRoute requiredRole="Unit Head">
+          <UnitHeadCutoffTime />
         </ProtectedRoute>
       </Route>
       

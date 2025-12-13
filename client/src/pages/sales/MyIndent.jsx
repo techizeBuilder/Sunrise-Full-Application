@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { orderApi } from '../../api/orderService';
 import { salesApi } from '../../api/salesService';
 import { customerApi } from '../../api/customerService';
+import { getSalesCutoffTimeStatus } from '@/services/api'; // Import sales cutoff time check
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -157,6 +158,21 @@ const MyOrders = () => {
   });
 
   const customersList = customersResponse?.customers || [];
+
+  // ============ CUTOFF TIME CHECK ============
+  // Check if orders can be placed based on cutoff time
+  const { data: orderPermissionResponse, isLoading: orderPermissionLoading } = useQuery({
+    queryKey: ['sales-cutoff-time-status'],
+    queryFn: getSalesCutoffTimeStatus,
+    refetchInterval: 60000, // Check every minute
+    staleTime: 30000 // Consider data stale after 30 seconds
+  });
+
+  const orderPermission = orderPermissionResponse?.data || { allowed: true, message: 'Loading...' };
+  const canCreateOrders = orderPermission.allowed;
+  const cutoffMessage = orderPermission.allowed ? 
+    `Orders allowed until ${orderPermission.cutoffTime || 'N/A'}` : 
+    orderPermission.message;
 
   // Create order mutation
   const createOrderMutation = useMutation({
@@ -641,6 +657,8 @@ const MyOrders = () => {
             <Button 
               onClick={() => setIsCreateModalOpen(true)} 
               className="bg-white text-blue-600 hover:bg-gray-100 text-sm px-3 py-2"
+              disabled={!canCreateOrders}
+              title={!canCreateOrders ? cutoffMessage : "Create new order"}
             >
               <Plus className="h-4 w-4" />
             </Button>
@@ -664,7 +682,9 @@ const MyOrders = () => {
           <div className="flex items-center space-x-3">
             <Button 
               onClick={() => setIsCreateModalOpen(true)} 
-              className="bg-white text-blue-600 hover:bg-gray-100"
+              className={`bg-white text-blue-600 hover:bg-gray-100 ${!canCreateOrders ? 'opacity-50 cursor-not-allowed' : ''}`}
+              disabled={!canCreateOrders}
+              title={cutoffMessage}
             >
               <Plus className="h-4 w-4 mr-2" />
               Create Order
@@ -680,6 +700,21 @@ const MyOrders = () => {
           </div>
         </div>
       </div>
+
+      {/* Cutoff Time Status Banner */}
+      {!canCreateOrders && (
+        <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg mx-0 sm:mx-0">
+          <div className="flex items-center gap-2">
+            <Clock className="h-5 w-5" />
+            <div>
+              <p className="font-medium">Order Creation Disabled</p>
+              <p className="text-sm">{cutoffMessage}</p>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Cutoff time banner removed - status now shown via button tooltips */}
 
       {/* Stats Cards */}
 
@@ -774,6 +809,8 @@ const MyOrders = () => {
                         size="sm" 
                         className="h-6 w-6 p-0"
                         onClick={() => handleEdit(order)}
+                        disabled={!canCreateOrders}
+                        title={!canCreateOrders ? cutoffMessage : "Edit order"}
                       >
                         <Edit className="h-3 w-3" />
                       </Button>
@@ -865,6 +902,8 @@ const MyOrders = () => {
                             size="sm" 
                             className="h-8 w-8 p-0"
                             onClick={() => handleEdit(order)}
+                            disabled={!canCreateOrders}
+                            title={!canCreateOrders ? cutoffMessage : "Edit order"}
                           >
                             <Edit className="h-4 w-4" />
                           </Button>

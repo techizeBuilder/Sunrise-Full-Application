@@ -5,6 +5,7 @@ import { Item } from '../models/Inventory.js';
 import User from '../models/User.js';
 import ProductionGroup from '../models/ProductionGroup.js';
 import ProductDailySummary from '../models/ProductDailySummary.js';
+import CutoffTime from '../models/CutoffTime.js';
 import { USER_ROLES } from '../../shared/schema.js';
 
 // Debug: Ensure models are loaded
@@ -2649,7 +2650,7 @@ export const getUnitHeadAvailableItems = async (req, res) => {
 
     // Get ALL available items (no pagination)
     const items = await Item.find(filter)
-      .select('name code category subCategory qty unit price image description store')
+      .select('name code category subCategory batch qty unit price image description store')
       .sort({ name: 1 })
       .lean();
 
@@ -2666,6 +2667,7 @@ export const getUnitHeadAvailableItems = async (req, res) => {
         code: item.code || 'No Code',
         category: item.category || 'No Category',
         subCategory: item.subCategory || '',
+        batch: item.batch || '',
         qty: item.qty || 0,
         unit: item.unit || '',
         price: item.price || 0,
@@ -2692,5 +2694,224 @@ export const getUnitHeadAvailableItems = async (req, res) => {
   } catch (error) {
     console.error('Error fetching available items:', error);
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
+  }
+};
+
+// ============ CUTOFF TIME MANAGEMENT ============
+
+// Get cutoff time setting for unit head's company
+export const getCutoffTime = async (req, res) => {
+  try {
+    const unitHead = req.user;
+    
+    console.log('🕐 Getting cutoff time for Unit Head:', unitHead.username, 'Company:', unitHead.companyId);
+
+    // Unit Head must have a company assigned
+    if (!unitHead.companyId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Unit Head is not assigned to any company. Please contact system administrator.'
+      });
+    }
+
+    // Find cutoff time for this company
+    const cutoffSetting = await CutoffTime.findOne({ 
+      companyId: unitHead.companyId,
+      isActive: true 
+    }).populate('unitHeadId', 'username fullName');
+
+    if (!cutoffSetting) {
+      return res.json({
+        success: true,
+        message: 'No cutoff time set for your company',
+        data: null
+      });
+    }
+
+    // Check current time status
+    const orderStatus = await CutoffTime.canPlaceOrder(unitHead.companyId);
+
+    res.json({
+      success: true,
+      data: {
+        _id: cutoffSetting._id,
+        cutoffTime: cutoffSetting.cutoffTime,
+        description: cutoffSetting.description,
+        isActive: cutoffSetting.isActive,
+        createdAt: cutoffSetting.createdAt,
+        updatedAt: cutoffSetting.updatedAt,
+        unitHead: cutoffSetting.unitHeadId,
+        currentStatus: orderStatus
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching cutoff time:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch cutoff time setting',
+      error: error.message
+    });
+  }
+};
+
+// Set or update cutoff time for unit head's company
+export const setCutoffTime = async (req, res) => {
+  try {
+    const unitHead = req.user;
+    const { cutoffTime, description = '' } = req.body;
+    
+    console.log('🕐 Setting cutoff time for Unit Head:', unitHead.username, 'Time:', cutoffTime);
+
+    // Validation
+    if (!unitHead.companyId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Unit Head is not assigned to any company. Please contact system administrator.'
+      });
+    }
+
+    if (!cutoffTime) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cutoff time is required'
+      });
+    }
+
+    // Validate time format
+    const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    if (!timeRegex.test(cutoffTime)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid time format. Please use HH:MM format (e.g., 15:00 for 3:00 PM)'
+      });
+    }
+
+    // Check if cutoff time already exists for this company
+    let cutoffSetting = await CutoffTime.findOne({ companyId: unitHead.companyId });
+
+    if (cutoffSetting) {
+      // Update existing setting
+      cutoffSetting.cutoffTime = cutoffTime;
+      cutoffSetting.description = description;
+      cutoffSetting.isActive = true;
+      cutoffSetting.updatedBy = unitHead._id;
+      await cutoffSetting.save();
+      
+      await cutoffSetting.populate('unitHeadId', 'username fullName');
+      
+      console.log('✅ Cutoff time updated successfully:', cutoffSetting.cutoffTime);
+    } else {
+      // Create new setting
+      cutoffSetting = await CutoffTime.create({
+        companyId: unitHead.companyId,
+        unitHeadId: unitHead._id,
+        cutoffTime,
+        description,
+        isActive: true,
+        createdBy: unitHead._id
+      });
+      
+      await cutoffSetting.populate('unitHeadId', 'username fullName');
+      
+      console.log('✅ Cutoff time created successfully:', cutoffSetting.cutoffTime);
+    }
+
+    // Get current order status
+    const orderStatus = await CutoffTime.canPlaceOrder(unitHead.companyId);
+
+    res.status(201).json({
+      success: true,
+      message: `Cutoff time ${cutoffSetting.createdAt === cutoffSetting.updatedAt ? 'created' : 'updated'} successfully`,
+      data: {
+        _id: cutoffSetting._id,
+        cutoffTime: cutoffSetting.cutoffTime,
+        description: cutoffSetting.description,
+        isActive: cutoffSetting.isActive,
+        createdAt: cutoffSetting.createdAt,
+        updatedAt: cutoffSetting.updatedAt,
+        unitHead: cutoffSetting.unitHeadId,
+        currentStatus: orderStatus
+      }
+    });
+
+  } catch (error) {
+    console.error('Error setting cutoff time:', error);
+    
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => ({
+        field: err.path,
+        message: err.message
+      }));
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to set cutoff time',
+      error: error.message
+    });
+  }
+};
+
+// Toggle cutoff time active status
+export const toggleCutoffTime = async (req, res) => {
+  try {
+    const unitHead = req.user;
+    const { isActive } = req.body;
+    
+    console.log('🔄 Toggling cutoff time active status for Unit Head:', unitHead.username, 'Active:', isActive);
+
+    if (!unitHead.companyId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Unit Head is not assigned to any company. Please contact system administrator.'
+      });
+    }
+
+    const cutoffSetting = await CutoffTime.findOne({ companyId: unitHead.companyId });
+    
+    if (!cutoffSetting) {
+      return res.status(404).json({
+        success: false,
+        message: 'No cutoff time setting found for your company'
+      });
+    }
+
+    cutoffSetting.isActive = isActive;
+    cutoffSetting.updatedBy = unitHead._id;
+    await cutoffSetting.save();
+    
+    await cutoffSetting.populate('unitHeadId', 'username fullName');
+
+    // Get current order status
+    const orderStatus = await CutoffTime.canPlaceOrder(unitHead.companyId);
+
+    res.json({
+      success: true,
+      message: `Cutoff time ${isActive ? 'activated' : 'deactivated'} successfully`,
+      data: {
+        _id: cutoffSetting._id,
+        cutoffTime: cutoffSetting.cutoffTime,
+        description: cutoffSetting.description,
+        isActive: cutoffSetting.isActive,
+        createdAt: cutoffSetting.createdAt,
+        updatedAt: cutoffSetting.updatedAt,
+        unitHead: cutoffSetting.unitHeadId,
+        currentStatus: orderStatus
+      }
+    });
+
+  } catch (error) {
+    console.error('Error toggling cutoff time:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to toggle cutoff time',
+      error: error.message
+    });
   }
 };

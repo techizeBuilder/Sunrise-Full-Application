@@ -1,12 +1,14 @@
 import ProductDailySummary from '../models/ProductDailySummary.js';
+import ProductDetailsDailySummary from '../models/ProductDetailsDailySummary.js';
 import { getSalesBreakdown } from '../services/productionSummaryService.js';
 import { Item } from '../models/Inventory.js';
 import ProductionGroup from '../models/ProductionGroup.js';
 import mongoose from 'mongoose';
 
 /**
- * GET /api/sales/summary
+ * GET /api/sales/product-summary
  * Get daily sales summary for all products (for Sales Approval Dashboard)
+ * Now uses ProductDetailsDailySummary for daily data
  */
 export const getSalesSummary = async (req, res) => {
   try {
@@ -14,28 +16,28 @@ export const getSalesSummary = async (req, res) => {
     const userRole = req.user.role;
     const userCompanyId = req.user.companyId;
 
-    // COMMENTED OUT: Date handling removed to show all data by default
-    // Date handling - if no date provided, get all data from all dates
-    // let summaryDate = null;
-    // if (date) {
-    //   summaryDate = new Date(date);
-    //   if (isNaN(summaryDate.getTime())) {
-    //     return res.status(400).json({
-    //       success: false,
-    //       message: 'Invalid date format. Use YYYY-MM-DD'
-    //     });
-    //   }
-    //   summaryDate.setUTCHours(0, 0, 0, 0);
-    // }
-    // If summaryDate is null, we'll get all dates
+    // Date handling enabled for unit-manager indent-summary
+    let summaryDate = null;
+    if (date) {
+      summaryDate = new Date(date);
+      if (isNaN(summaryDate.getTime())) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid date format. Use YYYY-MM-DD'
+        });
+      }
+      summaryDate.setUTCHours(0, 0, 0, 0);
+    }
     
-    // Show all data by default - no date filtering
-    const summaryDate = null;
+    // If no date provided, use today's date
+    if (!summaryDate) {
+      summaryDate = new Date();
+      summaryDate.setUTCHours(0, 0, 0, 0);
+    }
 
     // Company filtering based on user role
     let filterCompanyId;
     if (userRole === 'Unit Manager' || userRole === 'Unit Head') {
-      // Unit managers can only see their company data
       if (!userCompanyId) {
         return res.status(403).json({
           success: false,
@@ -44,10 +46,8 @@ export const getSalesSummary = async (req, res) => {
       }
       filterCompanyId = userCompanyId;
     } else if (userRole === 'Super Admin' && companyId) {
-      // Super admin can filter by specific company
       filterCompanyId = companyId;
     } else if (userRole === 'Super Admin') {
-      // Super admin sees all companies if no filter
       filterCompanyId = null;
     } else {
       return res.status(403).json({
@@ -56,250 +56,210 @@ export const getSalesSummary = async (req, res) => {
       });
     }
 
-    // Build query filter - CHANGED: Don't filter ProductDailySummary by date
-    // We want to show ALL products, but filter orders by date
-    const filter = {};
-    // Remove date filter from ProductDailySummary query
-    // if (summaryDate !== null) {
-    //   filter.date = summaryDate; 
-    // }
-    
-    // Only filter by company, not by date
-    if (filterCompanyId) {
-      filter.companyId = new mongoose.Types.ObjectId(filterCompanyId);
-    }
-
-    console.log('🔍 ProductDailySummary query filter (NO DATE FILTER):', filter);
-    console.log('📅 Date will be applied to ORDERS only:', summaryDate);
+    console.log('🔍 Getting product summary for date:', summaryDate.toISOString().split('T')[0]);
     console.log('🏢 Filter company ID:', filterCompanyId);
     console.log('👤 User role:', userRole);
-    console.log('🏢 User company ID:', userCompanyId);
 
-    // Get all summaries for the date
-    const summaries = await ProductDailySummary.find(filter)
-      .populate('productId', 'name category subCategory') // Include category and subCategory
+    // Step 1: Get master product data from ProductDailySummary
+    const masterFilter = {};
+    if (filterCompanyId) {
+      masterFilter.companyId = new mongoose.Types.ObjectId(filterCompanyId);
+    }
+
+    const masterProducts = await ProductDailySummary.find(masterFilter)
+      .populate('productId', 'name category subCategory')
       .populate('companyId', 'name')
       .sort({ productName: 1 });
 
-    console.log('📊 Raw summaries found:', summaries.length);
-    if (summaries.length > 0) {
-      console.log('📋 First few summaries:');
-      summaries.slice(0, 3).forEach((s, i) => {
-        console.log(`  ${i+1}. ${s.productName} | Date: ${s.date} | Company: ${s.companyId} | ProductId: ${s.productId ? 'exists' : 'NULL'}`);
-      });
-    } else {
-      console.log('❌ No summaries found with filter:', filter);
-      
-      // If no summaries found for the specific date, but date was provided,
-      // get all products and show them with empty sales data
-      if (summaryDate !== null) {
-        console.log('📅 No data for specific date, fetching all products to show with empty sales data...');
-        
-        // Get all unique products that have summaries in the system for this company
-        const fallbackFilter = {};
-        if (filterCompanyId) {
-          fallbackFilter.companyId = new mongoose.Types.ObjectId(filterCompanyId);
-        }
-        
-        const allProducts = await ProductDailySummary.find(fallbackFilter)
-          .populate('productId', 'name category subCategory') // Include category and subCategory
-          .populate('companyId', 'name')
-          .sort({ productName: 1 });
-        
-        console.log(`📦 Found ${allProducts.length} total products in system`);
-        
-        // Create fake summaries for the requested date with empty sales data
-        const fakeSummaries = [];
-        const seenProducts = new Set();
-        
-        allProducts.forEach(product => {
-          if (product.productId && product.productId._id && !seenProducts.has(product.productId._id.toString())) {
-            seenProducts.add(product.productId._id.toString());
-            fakeSummaries.push({
-              _id: `fake-${product.productId._id}`,
-              productId: product.productId,
-              productName: product.productName,
-              companyId: product.companyId,
-              date: summaryDate, // Use the requested date
-              qtyPerBatch: product.qtyPerBatch || 0,
-              totalQuantity: 0, // No sales data for this date
-              status: 'pending'
-            });
-          }
-        });
-        
-        console.log(`📋 Created ${fakeSummaries.length} fake summaries for products with no data on ${summaryDate.toISOString().split('T')[0]}`);
-        
-        // Use fake summaries if we found products
-        if (fakeSummaries.length > 0) {
-          summaries.length = 0; // Clear original array
-          summaries.push(...fakeSummaries); // Add fake summaries
-        }
-      }
-      
-      // Let's check if there are ANY records at all
-      const totalRecords = await ProductDailySummary.countDocuments();
-      console.log('🔍 Total ProductDailySummary records in database:', totalRecords);
-      
-      if (totalRecords > 0) {
-        const sampleRecord = await ProductDailySummary.findOne().lean();
-        console.log('📋 Sample record from database:', {
-          date: sampleRecord.date,
-          productName: sampleRecord.productName,
-          companyId: sampleRecord.companyId,
-          productId: sampleRecord.productId
-        });
-      }
+    console.log('📊 Master products found:', masterProducts.length);
+
+    // Step 2: Get daily details for the specific date
+    const dailyFilter = {
+      date: summaryDate
+    };
+    if (filterCompanyId) {
+      dailyFilter.companyId = new mongoose.Types.ObjectId(filterCompanyId);
     }
 
-    // Format response data - filter out summaries with missing products
-    console.log(`📊 Total summaries found: ${summaries.length}`);
-    
-    // Log summaries with null productId
-    const nullProductIdSummaries = summaries.filter(summary => !summary.productId);
-    if (nullProductIdSummaries.length > 0) {
-      console.log(`🚨 Found ${nullProductIdSummaries.length} summaries with null productId:`);
-      nullProductIdSummaries.forEach((summary, index) => {
-        console.log(`  ${index + 1}. ID: ${summary._id}, ProductName: ${summary.productName}, Date: ${summary.date}`);
-      });
-    }
-    
-    const validSummaries = summaries.filter(summary => summary.productId && summary.productId._id);
-    console.log(`✅ Valid summaries after filtering: ${validSummaries.length}`);
-    
-    const products = await Promise.all(validSummaries.map(async (summary) => {
-      try {
-        // Get sales breakdown using the requested date filter (not summary's date)
-        let salesBreakdown = [];
-        try {
-          salesBreakdown = await getSalesBreakdown(
-            summary.productId._id,
-            date, // Use the date from request query, not summary.date
-            summary.companyId._id || summary.companyId
-          );
-        } catch (salesError) {
-          console.warn(`⚠️ Sales breakdown failed for ${summary.productName}:`, salesError.message);
-          // Continue with empty salesBreakdown instead of failing completely
-          salesBreakdown = [];
-        }
+    const dailyDetails = await ProductDetailsDailySummary.find(dailyFilter)
+      .populate('productId', 'name category subCategory')
+      .populate('companyId', 'name');
 
-        console.log(`📊 Sales breakdown for ${summary.productName} on ${date}:`, salesBreakdown.length, 'sales persons');
+    console.log('📅 Daily details found for date:', dailyDetails.length);
 
-        return {
-          productId: summary.productId._id,
-          productName: summary.productName,
-          category: summary.productId.category, // Add category
-          subCategory: summary.productId.subCategory, // Add subCategory  
-          qtyPerBatch: summary.qtyPerBatch,
-          totalQuantity: summary.totalQuantity || 0, // ADD totalQuantity from database
-          summary: {
-            _id: summary._id, // Add ProductDailySummary ID for approval
-            status: summary.status || 'pending', // Add status for approval workflow
-            totalIndent: summary.totalIndent,
-            physicalStock: summary.physicalStock,
-            packing: summary.packing,
-            batchAdjusted: summary.batchAdjusted,
-            productionFinalBatches: summary.productionFinalBatches,
-            toBeProducedDay: summary.toBeProducedDay,
-            toBeProducedBatches: summary.toBeProducedBatches,
-            expiryShortage: summary.expiryShortage,
-            produceBatches: summary.produceBatches,
-          },
-          salesBreakdown: salesBreakdown
-        };
-      } catch (error) {
-        console.error(`❌ Critical error processing summary for product ${summary.productName}:`, error);
-        // Even on critical errors, return the product with empty sales data
-        // instead of completely excluding it
-        return {
-          productId: summary.productId._id,
-          productName: summary.productName,
-          category: summary.productId?.category || 'Unknown', // Add category with fallback
-          subCategory: summary.productId?.subCategory || '', // Add subCategory with fallback
-          qtyPerBatch: summary.qtyPerBatch,
-          totalQuantity: summary.totalQuantity || 0,
-          summary: {
-            _id: summary._id,
-            status: summary.status || 'pending',
-            totalIndent: summary.totalIndent || 0,
-            physicalStock: summary.physicalStock || 0,
-            packing: summary.packing || 0,
-            batchAdjusted: summary.batchAdjusted || 0,
-            productionFinalBatches: summary.productionFinalBatches || 0,
-            toBeProducedDay: summary.toBeProducedDay || 0,
-            toBeProducedBatches: summary.toBeProducedBatches || 0,
-            expiryShortage: summary.expiryShortage || 0,
-            produceBatches: summary.produceBatches || 0,
-          },
-          salesBreakdown: []
-        };
+    // Step 3: Create a map of daily details by productId
+    const dailyDetailsMap = new Map();
+    dailyDetails.forEach(detail => {
+      if (detail.productId && detail.productId._id) {
+        dailyDetailsMap.set(detail.productId._id.toString(), detail);
       }
-    }));
+    });
 
-    // All products should now be valid since we handle errors gracefully
-    const validProducts = products;
+    // Step 4: Combine master data with daily details
+    const combinedSummaries = masterProducts.map(masterProduct => {
+      const productId = masterProduct.productId ? masterProduct.productId._id.toString() : null;
+      const dailyDetail = dailyDetailsMap.get(productId);
 
-    console.log(`✅ Total products after processing: ${validProducts.length}`);
+      return {
+        _id: masterProduct._id,
+        productId: masterProduct.productId,
+        productName: masterProduct.productName,
+        companyId: masterProduct.companyId,
+        date: summaryDate,
+        qtyPerBatch: masterProduct.qtyPerBatch || 0,
+        
+        // Daily fields from ProductDetailsDailySummary (with defaults)
+        packing: dailyDetail?.packing || 0,
+        physicalStock: dailyDetail?.physicalStock || 0,
+        batchAdjusted: dailyDetail?.batchAdjusted || 0,
+        totalQuantity: dailyDetail?.totalQuantity || 0,
+        totalIndent: dailyDetail?.totalIndent || 0,
+        productionFinalBatches: dailyDetail?.productionFinalBatches || 0,
+        toBeProducedDay: dailyDetail?.toBeProducedDay || 0,
+        toBeProducedBatches: dailyDetail?.toBeProducedBatches || 0,
+        produceBatches: dailyDetail?.produceBatches || 0,
+        expiryShortage: dailyDetail?.expiryShortage || 0,
+        balanceFinalBatches: dailyDetail?.balanceFinalBatches || 0,
+        status: dailyDetail?.status || 'pending',
+        
+        // Additional metadata
+        hasDailyData: !!dailyDetail,
+        dailyDetailsId: dailyDetail?._id || null,
+        createdAt: masterProduct.createdAt,
+        updatedAt: dailyDetail?.updatedAt || masterProduct.updatedAt
+      };
+    });
 
-    // Group products by production groups
-    const productionGroups = await ProductionGroup.find({ 
-      company: filterCompanyId || userCompanyId,
-      isActive: true 
-    }).populate('items', 'name').lean();
+    console.log('🔄 Combined summaries created:', combinedSummaries.length);
+    console.log('📈 Products with daily data:', combinedSummaries.filter(s => s.hasDailyData).length);
 
-    console.log(`🏭 Found ${productionGroups.length} production groups`);
+    // Step 5: Get sales breakdown for orders
+    const salesBreakdown = await getSalesBreakdown(
+      combinedSummaries.map(s => s.productId),
+      summaryDate,
+      filterCompanyId
+    );
 
-    // Create a map of productId to production group for quick lookup
-    const productGroupMap = {};
-    productionGroups.forEach(group => {
+    console.log('📊 Sales breakdown processed:', salesBreakdown.length);
+
+    // Step 6: Attach sales data to each product (salesBreakdown separate from summary)
+    const productsWithSalesData = combinedSummaries.map(product => {
+      const salesData = salesBreakdown.find(s => 
+        s.productId && product.productId &&
+        s.productId._id.toString() === product.productId._id.toString()
+      );
+
+      return {
+        ...product,
+        summary: {
+          totalIndent: salesData?.summary?.totalIndent || 0,
+          totalQuantity: product.totalQuantity || 0,
+          productionFinalBatches: product.productionFinalBatches || 0,
+          status: product.status || 'pending'
+        },
+        salesBreakdown: salesData?.salesBreakdown || [] // Separate from summary
+      };
+    });
+
+    // Step 7: Build the response with production groups (new grouped format)
+    const productGroups = await ProductionGroup.find({
+      ...(filterCompanyId && { company: filterCompanyId }),
+      isActive: true
+    }).populate('items');
+
+    const validProducts = productsWithSalesData.filter(p => 
+      p.productId && p.productId._id && p.productName
+    );
+
+    console.log('🔍 Found production groups:', productGroups.length);
+    console.log('📦 Valid products for grouping:', validProducts.length);
+
+    const productionGroupsData = productGroups.map(group => {
+      const groupProducts = validProducts.filter(product => {
+        return group.items.some(item => 
+          product.productId && 
+          item._id.toString() === product.productId._id.toString()
+        );
+      });
+
+      console.log(`📋 Group "${group.name}" has ${groupProducts.length} products`);
+
+      return {
+        groupId: group._id,
+        groupName: group.name,
+        groupDescription: group.description || "",
+        products: groupProducts.map(product => ({
+          _id: product._id,
+          productId: product.productId,
+          productName: product.productName,
+          companyId: product.companyId,
+          date: product.date,
+          qtyPerBatch: product.qtyPerBatch,
+          batchAdjusted: product.batchAdjusted,
+          productionFinalBatches: product.productionFinalBatches,
+          totalQuantity: product.totalQuantity,
+          totalIndent: product.totalIndent,
+          physicalStock: product.physicalStock,
+          toBeProducedDay: product.toBeProducedDay,
+          toBeProducedBatches: product.toBeProducedBatches,
+          produceBatches: product.produceBatches,
+          expiryShortage: product.expiryShortage,
+          balanceFinalBatches: product.balanceFinalBatches,
+          status: product.status,
+          salesBreakdown: product.salesBreakdown || []
+        }))
+      };
+    });
+
+    // Ungrouped products
+    const groupedProductIds = new Set();
+    productGroups.forEach(group => {
       group.items.forEach(item => {
-        productGroupMap[item._id.toString()] = {
-          groupId: group._id,
-          groupName: group.name,
-          groupDescription: group.description
-        };
+        groupedProductIds.add(item._id.toString());
       });
     });
 
-    // Group products by their production groups
-    const groupedProducts = {};
-    const ungroupedProducts = [];
+    const ungroupedProducts = validProducts
+      .filter(product => !groupedProductIds.has(product.productId._id.toString()))
+      .map(product => ({
+        _id: product._id,
+        productId: product.productId,
+        productName: product.productName,
+        companyId: product.companyId,
+        date: product.date,
+        qtyPerBatch: product.qtyPerBatch,
+        batchAdjusted: product.batchAdjusted,
+        productionFinalBatches: product.productionFinalBatches,
+        totalQuantity: product.totalQuantity,
+        totalIndent: product.totalIndent,
+        physicalStock: product.physicalStock,
+        toBeProducedDay: product.toBeProducedDay,
+        toBeProducedBatches: product.toBeProducedBatches,
+        produceBatches: product.produceBatches,
+        expiryShortage: product.expiryShortage,
+        balanceFinalBatches: product.balanceFinalBatches,
+        status: product.status,
+        salesBreakdown: product.salesBreakdown || []
+      }));
 
-    validProducts.forEach(product => {
-      const productIdStr = product.productId.toString();
-      const groupInfo = productGroupMap[productIdStr];
-      
-      if (groupInfo) {
-        const groupKey = groupInfo.groupId.toString();
-        if (!groupedProducts[groupKey]) {
-          groupedProducts[groupKey] = {
-            groupId: groupInfo.groupId,
-            groupName: groupInfo.groupName,
-            groupDescription: groupInfo.groupDescription,
-            products: []
-          };
-        }
-        groupedProducts[groupKey].products.push(product);
-      } else {
-        // Products not assigned to any production group
-        ungroupedProducts.push(product);
-      }
-    });
+    console.log('✅ Response built successfully');
+    console.log('🏭 Production groups with products:', productionGroupsData.length);
+    console.log('📋 Ungrouped products:', ungroupedProducts.length);
+    console.log('📊 Total products processed:', validProducts.length);
 
-    // Convert to array format
-    const productionGroupsData = Object.values(groupedProducts);
-    
-    console.log(`📊 Grouped into ${productionGroupsData.length} production groups`);
-    console.log(`🔄 ${ungroupedProducts.length} products without production group`);
-
-    res.json({
+    // NEW GROUPED RESPONSE FORMAT
+    const responseData = {
       success: true,
-      date: summaryDate ? summaryDate.toISOString().split('T')[0] : 'all-dates',
-      companyId: filterCompanyId,
+      date: date || "all-dates",
+      companyId: filterCompanyId || "all-companies",
       totalProducts: validProducts.length,
       productionGroups: productionGroupsData,
-      ungroupedProducts: ungroupedProducts // Products not assigned to any group
-    });
+      ungroupedProducts: ungroupedProducts
+    };
+
+    console.log('🔍 New response format keys:', Object.keys(responseData));
+
+    res.json(responseData);
 
   } catch (error) {
     console.error('Error getting sales summary:', error);
@@ -312,8 +272,8 @@ export const getSalesSummary = async (req, res) => {
 };
 
 /**
- * POST /api/sales/update-summary
- * Update manual input fields and recalculate formulas
+ * POST /api/sales/update-product-summary
+ * Update daily product details in ProductDetailsDailySummary
  */
 export const updateSalesSummary = async (req, res) => {
   try {
@@ -321,21 +281,17 @@ export const updateSalesSummary = async (req, res) => {
     const userRole = req.user.role;
     const userCompanyId = req.user.companyId;
 
-    console.log('🔍 UPDATE SALES SUMMARY REQUEST:');
-    console.log('  📅 Requested Date:', date);
-    console.log('  🏢 User Company ID:', userCompanyId);
-    console.log('  📦 Product ID:', productId);
-    console.log('  📝 Updates:', updates);
+    console.log('📝 Update request received:', { date, productId, updates });
 
-    // Validation
+    // Validate required fields
     if (!date || !productId || !updates) {
       return res.status(400).json({
         success: false,
-        message: 'Date, productId, and updates are required'
+        message: 'Missing required fields: date, productId, and updates are required'
       });
     }
 
-    // Date validation - PRESERVE THE ORIGINAL DATE from request
+    // Parse and validate date
     const summaryDate = new Date(date);
     if (isNaN(summaryDate.getTime())) {
       return res.status(400).json({
@@ -344,169 +300,121 @@ export const updateSalesSummary = async (req, res) => {
       });
     }
     summaryDate.setUTCHours(0, 0, 0, 0);
-    
-    console.log('  🎯 Parsed Summary Date (UTC):', summaryDate.toISOString());
-    console.log('  📅 Summary Date (Local):', summaryDate.toISOString().split('T')[0]);
 
-    // Validate updates object
-    const allowedFields = ['packing', 'productionFinalBatches', 'physicalStock', 'batchAdjusted', 'qtyPerBatch', 'toBeProducedDay', 'produceBatches'];
-    const updateFields = {};
-    
-    for (const [field, value] of Object.entries(updates)) {
-      if (!allowedFields.includes(field)) {
-        return res.status(400).json({
-          success: false,
-          message: `Field '${field}' is not allowed for updates`
-        });
-      }
-      
-      const numValue = parseFloat(value);
-      if (isNaN(numValue) || numValue < 0) {
-        return res.status(400).json({
-          success: false,
-          message: `Field '${field}' must be a non-negative number`
-        });
-      }
-      
-      updateFields[field] = numValue;
+    // Extract productId - handle both string and object formats
+    let actualProductId;
+    if (typeof productId === 'string') {
+      actualProductId = productId;
+    } else if (typeof productId === 'object' && productId._id) {
+      actualProductId = productId._id;
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid productId format - must be string or object with _id'
+      });
     }
 
-    // Product validation
-    const product = await Item.findById(productId);
-    if (!product) {
+    // Validate productId
+    if (!mongoose.Types.ObjectId.isValid(actualProductId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid productId format'
+      });
+    }
+
+    console.log('✅ Using productId:', actualProductId);
+
+    // Get master product data to validate access and get qtyPerBatch
+    const masterProduct = await ProductDailySummary.findOne({
+      productId: new mongoose.Types.ObjectId(actualProductId)
+    }).populate('productId companyId');
+
+    if (!masterProduct) {
       return res.status(404).json({
         success: false,
-        message: 'Product not found'
+        message: 'Product not found in master data'
       });
     }
 
-    // Determine company ID for summary
-    let summaryCompanyId;
+    // Check permissions
     if (userRole === 'Unit Manager' || userRole === 'Unit Head') {
-      if (!userCompanyId) {
+      if (!userCompanyId || masterProduct.companyId._id.toString() !== userCompanyId.toString()) {
         return res.status(403).json({
           success: false,
-          message: 'User not assigned to any company'
+          message: 'Insufficient permissions to update this product'
         });
       }
-      summaryCompanyId = userCompanyId;
-    } else if (userRole === 'Super Admin') {
-      // For super admin, use the company from existing summary or user's company
-      summaryCompanyId = userCompanyId; // Default fallback
-    } else {
-      return res.status(403).json({
-        success: false,
-        message: 'Insufficient permissions to update sales summary'
-      });
     }
 
-    // Find existing summary document - FIXED: Use only company + product, ignore date completely
-    console.log('🔍 Searching for existing summary with:');
-    console.log('  🏢 Company ID:', summaryCompanyId);
-    console.log('  📦 Product ID:', productId);
-    console.log('  ⚠️ IGNORING DATE - Using only company + product for lookup');
-    
-    let summary = await ProductDailySummary.findOne({
-      companyId: summaryCompanyId,
-      productId: new mongoose.Types.ObjectId(productId)
+    console.log('✅ Master product found:', masterProduct.productName);
+    console.log('📅 Updating daily details for date:', summaryDate.toISOString().split('T')[0]);
+
+    // Find or create daily details record
+    let dailyDetails = await ProductDetailsDailySummary.findOne({
+      date: summaryDate,
+      productId: new mongoose.Types.ObjectId(actualProductId),
+      companyId: masterProduct.companyId._id
     });
 
-    console.log('📋 Found existing summary:', summary ? 'YES' : 'NO');
-    if (summary) {
-      console.log('  📅 Existing summary date:', summary.date.toISOString());
-      console.log('  📅 Existing summary date (local):', summary.date.toISOString().split('T')[0]);
-    }
-
-    if (!summary) {
-      // Create new summary when explicitly updating through API (legitimate business operation)
-      console.log(`✨ Creating new product summary for ${product.name} on ${summaryDate.toISOString().split('T')[0]} via API update`);
-      
-      summary = new ProductDailySummary({
-        date: summaryDate, // IMPORTANT: Use the exact date from request, not current date
-        companyId: summaryCompanyId,
-        productId: new mongoose.Types.ObjectId(productId),
-        productName: product.name,
-        totalIndent: 0,
-        status: 'pending', // Always set to pending for new summaries
-        // Use values from frontend payload, with fallbacks for fields NOT being updated
-        qtyPerBatch: updateFields.qtyPerBatch || 0,
-        packing: updateFields.packing || 0,
-        physicalStock: updateFields.physicalStock || 0,
-        batchAdjusted: updateFields.batchAdjusted || 0,
-        productionFinalBatches: updateFields.productionFinalBatches || 0,
-        toBeProducedDay: updateFields.toBeProducedDay || 0,
-        produceBatches: updateFields.produceBatches || 0
+    if (!dailyDetails) {
+      // Create new daily details record
+      dailyDetails = new ProductDetailsDailySummary({
+        date: summaryDate,
+        productId: new mongoose.Types.ObjectId(actualProductId),
+        productDailySummaryId: masterProduct._id,
+        companyId: masterProduct.companyId._id
       });
-      
-      console.log('📅 New summary will have date:', summary.date.toISOString());
-      console.log('📊 New summary with frontend values:', {
-        produceBatches: summary.produceBatches,
-        productionFinalBatches: summary.productionFinalBatches,
-        toBeProducedDay: summary.toBeProducedDay
-      });
+      console.log('📝 Creating new daily details record');
     } else {
-      // Update existing summary - PRESERVE the original date
-      console.log('🔄 Updating existing summary, preserving original date:', summary.date.toISOString());
-      Object.assign(summary, updateFields);
-      
-      // IMPORTANT: Reset status to pending when production data is updated
-      summary.status = 'pending';
-      console.log('🔄 Status reset to pending due to production data update');
-      
-      // DO NOT modify the date - keep original date
-      console.log('📅 After update, summary date remains:', summary.date.toISOString());
+      console.log('📝 Updating existing daily details record');
     }
 
-    // Only calculate formulas for fields NOT provided in updates
-    // If frontend provides calculated values, preserve them
-    if (!updateFields.hasOwnProperty('productionFinalBatches')) {
-      summary.productionFinalBatches = Math.round((summary.batchAdjusted * summary.qtyPerBatch) * 100) / 100;
-    }
-    
-    if (!updateFields.hasOwnProperty('produceBatches') && summary.qtyPerBatch > 0) {
-      summary.produceBatches = Math.round((summary.toBeProducedDay / summary.qtyPerBatch) * 100) / 100;
-      summary.toBeProducedBatches = summary.produceBatches;
-    }
-    
-    if (!updateFields.hasOwnProperty('expiryShortage')) {
-      summary.expiryShortage = Math.round((summary.productionFinalBatches - summary.toBeProducedDay) * 100) / 100;
-    }
-    
-    console.log('💾 About to save summary with date:', summary.date.toISOString());
-    console.log('📊 Summary fields before save:', {
-      date: summary.date.toISOString(),
-      productName: summary.productName,
-      ...updateFields,
-      finalValues: {
-        produceBatches: summary.produceBatches,
-        productionFinalBatches: summary.productionFinalBatches,
-        toBeProducedDay: summary.toBeProducedDay
+    // Apply updates to daily details
+    Object.keys(updates).forEach(key => {
+      if (dailyDetails.schema.paths[key] && key !== '_id' && key !== '__v') {
+        dailyDetails[key] = updates[key];
+        console.log(`  ✏️ Updated ${key}: ${updates[key]}`);
       }
     });
-    
-    await summary.save();
-    
-    console.log('✅ Summary saved successfully with date:', summary.date.toISOString());
-    console.log('📅 Final saved date (local):', summary.date.toISOString().split('T')[0]);
+
+    // Calculate formulas using qtyPerBatch from master data
+    dailyDetails.calculateFormulas(masterProduct.qtyPerBatch);
+
+    // Save the daily details
+    await dailyDetails.save();
+
+    console.log('💾 Daily details saved successfully');
+
+    // Return the updated daily details
+    const response = {
+      _id: dailyDetails._id,
+      date: dailyDetails.date,
+      productId: dailyDetails.productId,
+      productName: masterProduct.productName,
+      companyId: dailyDetails.companyId,
+      qtyPerBatch: masterProduct.qtyPerBatch,
+      
+      // Daily fields
+      packing: dailyDetails.packing,
+      physicalStock: dailyDetails.physicalStock,
+      batchAdjusted: dailyDetails.batchAdjusted,
+      totalQuantity: dailyDetails.totalQuantity,
+      totalIndent: dailyDetails.totalIndent,
+      productionFinalBatches: dailyDetails.productionFinalBatches,
+      toBeProducedDay: dailyDetails.toBeProducedDay,
+      toBeProducedBatches: dailyDetails.toBeProducedBatches,
+      produceBatches: dailyDetails.produceBatches,
+      expiryShortage: dailyDetails.expiryShortage,
+      balanceFinalBatches: dailyDetails.balanceFinalBatches,
+      status: dailyDetails.status,
+      
+      updatedAt: dailyDetails.updatedAt
+    };
 
     res.json({
       success: true,
-      summary: {
-        productId: summary.productId,
-        productName: summary.productName,
-        date: summary.date.toISOString().split('T')[0],
-        status: summary.status, // Include status in response
-        qtyPerBatch: summary.qtyPerBatch,
-        packing: summary.packing,
-        batchAdjusted: summary.batchAdjusted,
-        physicalStock: summary.physicalStock,
-        totalIndent: summary.totalIndent,
-        productionFinalBatches: summary.productionFinalBatches,
-        toBeProducedDay: summary.toBeProducedDay,
-        toBeProducedBatches: summary.toBeProducedBatches,
-        expiryShortage: summary.expiryShortage,
-        produceBatches: summary.produceBatches,
-      }
+      message: 'Product summary updated successfully',
+      data: response
     });
 
   } catch (error) {

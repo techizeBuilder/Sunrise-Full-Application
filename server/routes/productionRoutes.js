@@ -10,7 +10,8 @@ import {
   getUngroupedItemsForSheet,
   getUngroupedItemGroup,
   getUngroupedItemProduction,
-  updateUngroupedItemProduction
+  updateUngroupedItemProduction,
+  updateUngroupedItemProductionWithBatch
 } from '../controllers/productionController.js';
 
 const router = express.Router();
@@ -22,14 +23,11 @@ router.use(authenticateToken);
 // GET /api/production/dashboard - Get production dashboard stats and recent data
 router.get('/dashboard', getProductionDashboard);
 
-// Test route to verify production routes are working
-router.get('/test', (req, res) => {
-  console.log('✅ Production test route working');
-  res.json({ 
-    success: true, 
-    message: 'Production routes are working!',
-    timestamp: new Date().toISOString()
-  });
+// POST /api/production/ungrouped-items/production - Create/update ungrouped item production with batch tracking
+router.post('/ungrouped-items/production', (req, res, next) => {
+  console.log('🏭 Ungrouped items production route hit:', req.method, req.path);
+  console.log('Request body:', req.body);
+  updateUngroupedItemProductionWithBatch(req, res, next);
 });
 
 // GET /api/production/ungrouped-items - Get items not assigned to any production group (for dashboard)

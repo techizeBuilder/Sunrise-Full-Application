@@ -1,53 +1,95 @@
-import fetch from 'node-fetch';
-import fs from 'fs';
+const mongoose = require('mongoose');
 
-async function testProductionShiftAPI() {
+// Connect to MongoDB
+async function testProductionAPI() {
   try {
-    console.log('🧪 Testing Production Shift API without debug endpoint...');
+    await mongoose.connect('mongodb://localhost:27017/TechiziTestDB');
+    console.log('✅ Connected to MongoDB');
     
-    // First, try to login and get a token
-    console.log('🔐 Attempting login...');
-    const loginResponse = await fetch('http://localhost:5000/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username: 'unit_head',
-        password: 'password123'
-      })
-    });
-
-    if (!loginResponse.ok) {
-      console.log('❌ Server not running or login failed');
-      console.log('📝 This means either:');
-      console.log('   1. Server is not started');
-      console.log('   2. Auth endpoints are not working');
-      console.log('   3. Database connection issue');
-      return;
+    // Import models
+    const ProductDailySummary = require('./server/models/ProductDailySummary');
+    const ProductDetailsDailySummary = require('./server/models/ProductDetailsDailySummary');
+    
+    console.log('\n📊 Testing Model Separation:');
+    
+    // Test ProductDailySummary (master data)
+    console.log('\n1. ProductDailySummary (Master Data):');
+    const masterData = await ProductDailySummary.find({}).limit(3).lean();
+    if (masterData.length > 0) {
+      console.log('Sample record:', {
+        productId: masterData[0].productId,
+        qtyPerBatch: masterData[0].qtyPerBatch,
+        hasStatus: 'status' in masterData[0],
+        hasBatchAdjusted: 'batchAdjusted' in masterData[0]
+      });
+    } else {
+      console.log('No ProductDailySummary records found');
     }
-
-    const loginData = await loginResponse.json();
-    if (!loginData.token) {
-      console.log('❌ No token received');
-      return;
-    }
-
-    console.log('✅ Login successful');
-    fs.writeFileSync('token.txt', loginData.token);
-
-    // Test production shift endpoint
-    console.log('📊 Testing production shift endpoint...');
-    const shiftResponse = await fetch('http://localhost:5000/api/production/production-shift', {
-      headers: {
-        'Authorization': `Bearer ${loginData.token}`,
-        'Content-Type': 'application/json'
+    
+    // Test ProductDetailsDailySummary (daily data)
+    console.log('\n2. ProductDetailsDailySummary (Daily Data):');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const dailyData = await ProductDetailsDailySummary.find({
+      date: {
+        $gte: today,
+        $lt: tomorrow
       }
-    });
-
-    const shiftData = await shiftResponse.json();
-    console.log('Response status:', shiftResponse.status);
+    }).limit(3).lean();
     
-    if (shiftData.success && shiftData.data) {
-      console.log(`✅ Found ${shiftData.data.length} production groups`);
+    if (dailyData.length > 0) {
+      console.log('Sample record:', {
+        productId: dailyData[0].productId,
+        date: dailyData[0].date,
+        batchAdjusted: dailyData[0].batchAdjusted,
+        hasQtyPerBatch: 'qtyPerBatch' in dailyData[0]
+      });
+    } else {
+      console.log('No ProductDetailsDailySummary records found for today');
+    }
+    
+    // Test the relationship simulation
+    console.log('\n3. Testing API Query Pattern:');
+    if (masterData.length > 0) {
+      const testProductId = masterData[0].productId;
+      
+      // Get master data (qtyPerBatch)
+      const itemSummary = await ProductDailySummary.findOne({
+        productId: testProductId
+      }).lean();
+      
+      // Get today's daily data (batchAdjusted)
+      const todayDetails = await ProductDetailsDailySummary.findOne({
+        productId: testProductId,
+        date: {
+          $gte: today,
+          $lt: tomorrow
+        }
+      }).lean();
+      
+      console.log('Combined result:', {
+        productId: testProductId,
+        qtyPerBatch: itemSummary?.qtyPerBatch || 0,
+        batchAdjusted: todayDetails?.batchAdjusted || 0,
+        masterFound: !!itemSummary,
+        dailyFound: !!todayDetails
+      });
+    }
+    
+    console.log('\n✅ Production API model separation test completed');
+    
+  } catch (error) {
+    console.error('❌ Test failed:', error);
+  } finally {
+    await mongoose.disconnect();
+    console.log('📤 Disconnected from MongoDB');
+  }
+}
+
+testProductionAPI();
       
       shiftData.data.forEach((group, index) => {
         console.log(`\n📦 Group ${index + 1}: ${group.name}`);

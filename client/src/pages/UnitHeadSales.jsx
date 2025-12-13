@@ -74,6 +74,7 @@ import {
 import { showSmartToast } from '@/lib/toast-utils';
 import { toast } from '@/hooks/use-toast';
 import { usePermissions } from '@/hooks/usePermissions';
+import { getCutoffTime, setCutoffTime, toggleCutoffTime } from '@/services/api';
 
 const SORT_OPTIONS = [
   { value: 'createdAt', label: 'Date Created' },
@@ -102,6 +103,13 @@ export default function UnitHeadSales() {
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
   const [formData, setFormData] = useState(initialFormData);
+  
+  // Cutoff Time Modal State
+  const [isCutoffModalOpen, setIsCutoffModalOpen] = useState(false);
+  const [cutoffFormData, setCutoffFormData] = useState({
+    cutoffTime: '',
+    description: ''
+  });
   
   const [filters, setFilters] = useState({
     page: 1,
@@ -271,6 +279,75 @@ export default function UnitHeadSales() {
         title: 'Error',
         description: error.message || 'Failed to delete sales person'
       });
+    }
+  });
+
+  // Cutoff Time Queries and Mutations
+  const { data: cutoffData } = useQuery({
+    queryKey: ['cutoff-time'],
+    queryFn: () => getCutoffTime()
+  });
+
+  const setCutoffTimeMutation = useMutation({
+    mutationFn: (data) => setCutoffTime(data),
+    onSuccess: (response) => {
+      console.log('Cutoff time mutation success:', response);
+      try {
+        toast({
+          title: 'Success',
+          description: 'Cutoff time updated successfully',
+          variant: 'default'
+        });
+        setIsCutoffModalOpen(false);
+        // Delay the query invalidation slightly
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ['cutoff-time'] });
+        }, 100);
+      } catch (error) {
+        console.error('Error in success handler:', error);
+      }
+    },
+    onError: (error) => {
+      console.error('Cutoff time mutation error:', error);
+      try {
+        toast({
+          title: 'Error',
+          description: error.message || 'Failed to update cutoff time',
+          variant: 'destructive'
+        });
+      } catch (toastError) {
+        console.error('Error showing toast:', toastError);
+      }
+    }
+  });
+
+  const toggleCutoffTimeMutation = useMutation({
+    mutationFn: () => toggleCutoffTime(),
+    onSuccess: () => {
+      try {
+        toast({
+          title: 'Success',
+          description: 'Cutoff time status updated successfully',
+          variant: 'default'
+        });
+        // Delay the query invalidation slightly
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ['cutoff-time'] });
+        }, 100);
+      } catch (error) {
+        console.error('Error in toggle success handler:', error);
+      }
+    },
+    onError: (error) => {
+      try {
+        toast({
+          title: 'Error',
+          description: error.message || 'Failed to update cutoff time status',
+          variant: 'destructive'
+        });
+      } catch (toastError) {
+        console.error('Error showing toggle toast:', toastError);
+      }
     }
   });
 
@@ -481,6 +558,58 @@ export default function UnitHeadSales() {
     setOrdersPage(1);
   };
 
+  // Cutoff Time Handlers
+  const handleOpenCutoffModal = () => {
+    // Initialize form with existing data or defaults
+    if (cutoffData?.data) {
+      setCutoffFormData({
+        time: cutoffData.data.cutoffTime || '',
+        description: cutoffData.data.description || ''
+      });
+    } else {
+      setCutoffFormData({
+        time: '',
+        description: ''
+      });
+    }
+    setIsCutoffModalOpen(true);
+  };
+
+  const handleCutoffFormSubmit = (e) => {
+    e.preventDefault();
+    
+    if (!cutoffFormData.time) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please enter a cutoff time',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setCutoffTimeMutation.mutate(cutoffFormData);
+  };
+
+  const handleToggleCutoffStatus = () => {
+    if (cutoffData?.data) {
+      toggleCutoffTimeMutation.mutate();
+    } else {
+      toast({
+        title: 'Error',
+        description: 'Please set a cutoff time first',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const handleCutoffFormChange = (field, value) => {
+    setCutoffFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  // Utility Functions
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
@@ -545,12 +674,27 @@ export default function UnitHeadSales() {
             Manage sales persons and view their performance
           </p>
         </div>
-        {canAdd && (
-           <Button onClick={handleCreateSalesPerson}>
-             <Plus className="w-4 h-4 mr-2" />
-             Add Sales Person
-           </Button>
-       )}
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={handleOpenCutoffModal}
+            className="relative"
+          >
+            <Clock className="w-4 h-4 mr-2" />
+            Manage Cutoff Time
+            {cutoffData?.data?.isActive && (
+              <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                Active
+              </span>
+            )}
+          </Button>
+          {canAdd && (
+             <Button onClick={handleCreateSalesPerson}>
+               <Plus className="w-4 h-4 mr-2" />
+               Add Sales Person
+             </Button>
+         )}
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -1123,6 +1267,99 @@ export default function UnitHeadSales() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Cutoff Time Management Modal */}
+      <Dialog open={isCutoffModalOpen} onOpenChange={setIsCutoffModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Manage Cutoff Time</DialogTitle>
+            <DialogDescription>
+              Set the daily cutoff time after which sales persons cannot create or edit orders.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {/* Current Status Banner */}
+          {cutoffData?.data && (
+            <div className={`p-3 rounded-lg mb-4 ${
+              cutoffData.data.isActive 
+                ? 'bg-green-50 border border-green-200' 
+                : 'bg-gray-50 border border-gray-200'
+            }`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4" />
+                    <span className="font-medium">
+                      Current Cutoff: {cutoffData.data.cutoffTime}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {cutoffData.data.description || 'No description provided'}
+                  </p>
+                </div>
+                <Button
+                  variant={cutoffData.data.isActive ? "destructive" : "default"}
+                  size="sm"
+                  onClick={handleToggleCutoffStatus}
+                  disabled={toggleCutoffTimeMutation.isPending}
+                >
+                  {toggleCutoffTimeMutation.isPending 
+                    ? 'Updating...' 
+                    : cutoffData.data.isActive 
+                      ? 'Disable' 
+                      : 'Enable'
+                  }
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <form onSubmit={handleCutoffFormSubmit} className="space-y-4">
+            <div>
+              <Label htmlFor="cutoff-time">Cutoff Time</Label>
+              <Input
+                id="cutoff-time"
+                type="time"
+                value={cutoffFormData.time}
+                onChange={(e) => handleCutoffFormChange('time', e.target.value)}
+                required
+                className="mt-1"
+              />
+              <p className="text-sm text-gray-500 mt-1">
+                Sales persons won't be able to create or edit orders after this time
+              </p>
+            </div>
+            
+            <div>
+              <Label htmlFor="cutoff-description">Description (Optional)</Label>
+              <Input
+                id="cutoff-description"
+                type="text"
+                placeholder="e.g., Daily cutoff for order processing"
+                value={cutoffFormData.description}
+                onChange={(e) => handleCutoffFormChange('description', e.target.value)}
+                className="mt-1"
+              />
+            </div>
+
+            <DialogFooter>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setIsCutoffModalOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={setCutoffTimeMutation.isPending}
+              >
+                {setCutoffTimeMutation.isPending ? 'Saving...' : 'Save Cutoff Time'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

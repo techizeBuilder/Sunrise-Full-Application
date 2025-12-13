@@ -12,7 +12,8 @@ import {
   getPriorityProducts,
   addPriorityProduct,
   removePriorityProduct,
-  updatePriorityProductUsage
+  updatePriorityProductUsage,
+  getSalesCutoffTimeStatus
 } from '../controllers/salesController.js';
 // Import with different names to avoid conflicts
 import { 
@@ -159,6 +160,9 @@ salesRouter.get('/priority-products', getPriorityProducts);
 salesRouter.post('/priority-products', addPriorityProduct);
 salesRouter.delete('/priority-products/:id', removePriorityProduct);
 salesRouter.post('/priority-products/usage', updatePriorityProductUsage);
+
+// Cutoff time status for sales persons
+salesRouter.get('/cutoff-time-status', getSalesCutoffTimeStatus);
 
 // Sales-specific customer routes (filtered by salesperson assignment)
 salesRouter.get('/customers', getSalespersonCustomers);

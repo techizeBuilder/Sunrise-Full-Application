@@ -402,14 +402,53 @@ export default function UnitManagerDashboard() {
         </Card> */}
       </div>
 
-      {/* Approved Product Summaries Overview */}
+   
+
+      {/* Charts and Tables Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Order Status Distribution */}
+        {/* <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <BarChart3 className="h-5 w-5 mr-2" />
+              Order Status Distribution
+            </CardTitle>
+            <CardDescription>Current month order breakdown by status</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {Object.entries(orders.statusDistribution || {}).map(([status, count]) => {
+                const total = Object.values(orders.statusDistribution || {}).reduce((a, b) => a + b, 0);
+                const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
+                
+                return (
+                  <div key={status} className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center space-x-2">
+                        <Badge className={getStatusColor(status)}>
+                          {status.replace('_', ' ').toUpperCase()}
+                        </Badge>
+                        <span className="text-sm font-medium">{count}</span>
+                      </div>
+                      <span className="text-sm text-muted-foreground">{percentage}%</span>
+                    </div>
+                    <Progress value={percentage} className="h-2" />
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card> */}
+
+        {/* Top Inventory Categories */}
+           {/* Approved Product Summaries Overview */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
             <Package className="h-5 w-5 mr-2" />
             Approved Product Summary Overview
             <Badge className="ml-2 bg-green-100 text-green-800">
-              {productSummariesStats.totalApprovedWithBatches || 0} Available
+              {productSummariesStats.totalApproved || 0} Available
             </Badge>
           </CardTitle>
           <CardDescription>
@@ -446,14 +485,12 @@ export default function UnitManagerDashboard() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Product Name</TableHead>
-                    <TableHead>Code</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead className="text-right">Qty Per Batch</TableHead>
+                    {/* <TableHead className="text-right">Qty Per Batch</TableHead> */}
                     <TableHead className="text-right">Batch Adjusted</TableHead>
-                    <TableHead className="text-right">Production Final Batches</TableHead>
+                    {/* <TableHead className="text-right">Production Final Batches</TableHead> */}
                     {/* <TableHead className="text-right">Total Quantity</TableHead>
                     <TableHead className="text-right">Physical Stock</TableHead> */}
-                    <TableHead className="text-center">Status</TableHead>
+                    {/* <TableHead className="text-center">Status</TableHead> */}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -476,91 +513,38 @@ export default function UnitManagerDashboard() {
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="font-mono text-sm">
-                        {summary.productCode}
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <div className="font-medium text-sm">{summary.category}</div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right font-medium">
+                      {/* <TableCell className="text-right font-medium">
                         {summary.qtyPerBatch || 0}
-                      </TableCell>
+                      </TableCell> */}
                       <TableCell className="text-right">
                         <span className={`font-medium ${summary.batchAdjusted > 0 ? 'text-green-600' : 'text-gray-400'}`}>
                           {summary.batchAdjusted || 0}
                         </span>
                       </TableCell>
-                      <TableCell className="text-right">
+                      {/* <TableCell className="text-right">
                         <span className={`font-bold ${summary.productionFinalBatches > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
                           {summary.productionFinalBatches || 0}
                         </span>
-                      </TableCell>
+                      </TableCell> */}
                       {/* <TableCell className="text-right">
                         {summary.totalQuantity || 0}
                       </TableCell>
                       <TableCell className="text-right">
                         {summary.physicalStock || 0}
                       </TableCell> */}
-                      <TableCell className="text-center">
+                      {/* <TableCell className="text-center">
                         <Badge className="bg-green-100 text-green-800 capitalize">
                           {summary.status}
                         </Badge>
-                      </TableCell>
+                      </TableCell> */}
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
-              
-              {productSummaries.length > 0 && (
-                <div className="mt-4 text-sm text-muted-foreground text-center">
-                  Showing {productSummaries.length} approved product{productSummaries.length !== 1 ? 's' : ''} with available batches
-                </div>
-              )}
             </div>
           )}
         </CardContent>
       </Card>
-
-      {/* Charts and Tables Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Order Status Distribution */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <BarChart3 className="h-5 w-5 mr-2" />
-              Order Status Distribution
-            </CardTitle>
-            <CardDescription>Current month order breakdown by status</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {Object.entries(orders.statusDistribution || {}).map(([status, count]) => {
-                const total = Object.values(orders.statusDistribution || {}).reduce((a, b) => a + b, 0);
-                const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
-                
-                return (
-                  <div key={status} className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center space-x-2">
-                        <Badge className={getStatusColor(status)}>
-                          {status.replace('_', ' ').toUpperCase()}
-                        </Badge>
-                        <span className="text-sm font-medium">{count}</span>
-                      </div>
-                      <span className="text-sm text-muted-foreground">{percentage}%</span>
-                    </div>
-                    <Progress value={percentage} className="h-2" />
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Top Inventory Categories */}
-        
 
         {/* Sales Team Performance */}
         <Card>

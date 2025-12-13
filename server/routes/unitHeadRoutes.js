@@ -28,7 +28,11 @@ import {
   createUnitHeadProductionGroup,
   updateUnitHeadProductionGroup,
   deleteUnitHeadProductionGroup,
-  getUnitHeadAvailableItems
+  getUnitHeadAvailableItems,
+  // Cutoff Time functions
+  getCutoffTime,
+  setCutoffTime,
+  toggleCutoffTime
 } from '../controllers/unitHeadController.js';
 
 // Import Unit User management functions (all unit roles)
@@ -414,6 +418,31 @@ router.delete('/production-groups/:id',
 // Get available inventory items for assignment
 router.get('/production-groups/items/available', 
   getUnitHeadAvailableItems
+);
+
+// ============ CUTOFF TIME MANAGEMENT ROUTES ============
+
+// Get current cutoff time setting
+router.get('/cutoff-time',
+  checkPermission('unitHead', 'sales', 'view'),
+  getCutoffTime
+);
+
+// Set or update cutoff time
+router.post('/cutoff-time',
+  checkPermission('unitHead', 'sales', 'add'),
+  setCutoffTime
+);
+
+router.put('/cutoff-time',
+  checkPermission('unitHead', 'sales', 'edit'),
+  setCutoffTime
+);
+
+// Toggle cutoff time active status
+router.patch('/cutoff-time/toggle',
+  checkPermission('unitHead', 'sales', 'edit'),
+  toggleCutoffTime
 );
 
 export default router;

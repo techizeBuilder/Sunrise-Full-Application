@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -8,6 +8,19 @@ import { Input } from '@/components/ui/input';
 import { CheckCircle, XCircle, ArrowRight, Package, User, Settings, Clock, TrendingUp, AlertTriangle, BarChart, Filter, Search, X, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { config } from '@/config/environment';
+
+// Utility function for debouncing
+const debounce = (func, wait) => {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+};
 
 const SalesApproval = () => {
   const [orders, setOrders] = useState([]); // Product-grouped data for grid
@@ -28,8 +41,8 @@ const SalesApproval = () => {
 
   // Search and Filter states
   const [searchTerm, setSearchTerm] = useState('');
-  // COMMENTED OUT: Date filter removed to show all data by default
-  // const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  // Date filter restored
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [showFilters, setShowFilters] = useState(false);
   const [filteredProducts, setFilteredProducts] = useState([]);
 
@@ -52,42 +65,25 @@ const SalesApproval = () => {
   const [saveTimers, setSaveTimers] = useState({}); // Store timers for each field
   
   // Date filter handler
-  const handleDateChange = async (newDate) => {
+  const handleDateChange = (newDate) => {
     console.log('📅 Date changed to:', newDate);
-    setSelectedDate(newDate);
     setLoading(true);
-    
-    try {
-      // Reload data for the new date
-      await fetchData(newDate);
-    } catch (error) {
-      console.error('❌ Error loading data for new date:', error);
-      // Don't show toast for empty data - let the UI show "No data found" instead
-      // Only show toast for actual errors (network, auth, etc)
-      if (error.message && !error.message.includes('No data') && !error.message.includes('404')) {
-        toast({
-          title: "Error",
-          description: "Failed to load data for selected date",
-          variant: "destructive"
-        });
-      }
-    } finally {
-      setLoading(false);
-    }
+    setSelectedDate(newDate);
+    // fetchData will be triggered by useEffect when selectedDate changes
   };
 
   // Clear date filter and set to current date
-  const clearDateFilter = async () => {
+  const clearDateFilter = () => {
     const currentDate = new Date().toISOString().split('T')[0];
     console.log('🗑️ Clearing date filter, setting to current date:', currentDate);
-    await handleDateChange(currentDate);
+    handleDateChange(currentDate);
   };
 
   // Set to today's date
-  const setToday = async () => {
+  const setToday = () => {
     const currentDate = new Date().toISOString().split('T')[0];
     console.log('📅 Setting to today:', currentDate);
-    await handleDateChange(currentDate);
+    handleDateChange(currentDate);
   };
 
   const { toast } = useToast();
@@ -110,6 +106,33 @@ const SalesApproval = () => {
           toBeProducedDay: 0
         }
       }));
+    }
+  };
+
+  // Debounced refresh to avoid too many API calls
+  const debouncedRefresh = useCallback(
+    debounce(async () => {
+      console.log('🔄 Performing debounced data refresh...');
+      await refreshProductionData(selectedDate);
+      await loadSummaryStatusData();
+    }, 1000), // Wait 1 second after last update before refreshing
+    [selectedDate] // Include selectedDate to avoid stale closure
+  );
+
+  // Quick refresh function for immediate UI feedback
+  const quickRefreshAfterUpdate = async (productName, description) => {
+    try {
+      // Show immediate success feedback
+      toast({
+        title: 'Success',
+        description: description
+      });
+      
+      // Trigger debounced refresh to get latest data
+      debouncedRefresh();
+      
+    } catch (error) {
+      console.error('Error in quick refresh:', error);
     }
   };
 
@@ -189,14 +212,44 @@ const SalesApproval = () => {
   // Individual approve function
   const handleIndividualApprove = async (productName) => {
     console.log('🔴 APPROVE BUTTON CLICKED for product:', productName);
+    console.log('📊 Available products:', products.map(p => ({ name: p.productName, id: p.productId, _id: p._id })));
     
-    const summaryId = getSummaryId(productName);
-    console.log('Summary ID for', productName, ':', summaryId);
+    // Find the product in the current data to get its productId
+    let product = products.find(p => p.productName === productName);
     
-    if (!summaryId) {
+    // If not found in products, check in the raw API data (summaryStatusData might have more info)
+    if (!product) {
+      console.log('🔍 Product not found in products array, checking API data...');
+      console.log('❌ Available products:', products.map(p => p.productName));
       toast({
-        title: 'No Summary Found',
-        description: `No ProductDailySummary found for ${productName}`,
+        title: 'Product Not Found',
+        description: `Product ${productName} not found in current data. Please refresh the page.`,
+        variant: 'warning'
+      });
+      return;
+    }
+    
+    if (!product || !product.productId) {
+      console.log('❌ Product details:', { product, productName, allProducts: products.length });
+      toast({
+        title: 'No Product Found',
+        description: `Product ${productName} not found or missing productId`,
+        variant: 'warning'
+      });
+      return;
+    }
+    
+    // Extract productId - we need the actual product ID, not the daily summary ID
+    let actualProductId;
+    if (typeof product.productId === 'string') {
+      actualProductId = product.productId;
+    } else if (typeof product.productId === 'object' && product.productId._id) {
+      actualProductId = product.productId._id;  // This is the key fix
+    } else {
+      console.log('❌ Invalid productId structure:', product.productId);
+      toast({
+        title: 'Invalid Product Data',
+        description: `Invalid productId structure for ${productName}`,
         variant: 'warning'
       });
       return;
@@ -206,24 +259,46 @@ const SalesApproval = () => {
       // Add this product to approving state
       setApprovingProducts(prev => new Set([...prev, productName]));
       
-      console.log('🚀 Making API call for:', productName, 'with summaryId:', summaryId);
+      console.log(`🚀 Making API call for:`, productName);
+      console.log('🔍 Product found:', product);
+      console.log('📧 Extracted productId:', actualProductId);
       
-      // Use the new single approve API
-      const response = await fetch(`${config.baseURL}/api/unit-manager/product-summary/approve`, {
+      // Get selected date for the update (not current date)
+      console.log('📅 Using selected date for update:', selectedDate);
+      
+      const requestBody = {
+        date: selectedDate,
+        productId: actualProductId,
+        updates: {
+          status: 'approved'
+        }
+      };
+      console.log('📤 Request body:', JSON.stringify(requestBody, null, 2));
+      
+      // Use the sales update API to approve the product
+      const response = await fetch(`${config.baseURL}/api/sales/update-product-summary`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
-        body: JSON.stringify({
-          summaryId: summaryId
-        })
+        body: JSON.stringify(requestBody)
       });
 
       console.log('📡 API Response status:', response.status);
+      console.log('📡 API Response headers:', [...response.headers.entries()]);
+
+      const responseText = await response.text();
+      console.log('📡 Raw response:', responseText);
 
       if (response.ok) {
-        const result = await response.json();
+        let result;
+        try {
+          result = JSON.parse(responseText);
+        } catch (parseError) {
+          console.error('❌ Failed to parse response as JSON:', parseError);
+          throw new Error('Invalid response format from server');
+        }
         console.log('✅ API Success:', result);
         
         // Update local state immediately for better UX
@@ -240,23 +315,32 @@ const SalesApproval = () => {
           description: result.message || `Approved ${productName} successfully`
         });
         
-        // Refresh data to show updated values
-        await refreshProductionData();
+        // Auto-refresh data to show latest values without manual refresh
+        console.log('🔄 Auto-refreshing data after approval...');
+        await refreshProductionData(selectedDate);
         await loadSummaryStatusData();
       } else {
-        const errorData = await response.json();
-        console.log('❌ API Error:', errorData);
+        let errorData;
+        try {
+          errorData = JSON.parse(responseText);
+        } catch (parseError) {
+          errorData = { message: `HTTP ${response.status}: ${responseText}` };
+        }
+        console.log('❌ API Error Response:', errorData);
+        console.log('❌ API Error Status:', response.status);
+        console.log('❌ API Error Status Text:', response.statusText);
         toast({
           title: 'Approval Failed',
-          description: errorData.message || `Failed to approve ${productName}`,
+          description: errorData.message || `Failed to approve ${productName}: ${response.status}`,
           variant: 'destructive'
         });
       }
     } catch (error) {
       console.error('💥 Error approving product:', error);
+      console.error('💥 Error stack:', error.stack);
       toast({
         title: 'Error',
-        description: `Network error while approving ${productName}`,
+        description: `Network error while approving ${productName}: ${error.message}`,
         variant: 'destructive'
       });
     } finally {
@@ -284,40 +368,61 @@ const SalesApproval = () => {
       setBulkApproving(true);
       
       const selectedProductNames = Array.from(selectedProducts);
-      
-      // Get summary IDs for the selected products
-      const summaryIds = selectedProductNames.map(productName => {
-        return getSummaryId(productName);
-      }).filter(id => id !== null);
-      
-      if (summaryIds.length === 0) {
-        toast({
-          title: 'No Summaries Found',
-          description: 'No ProductDailySummary found for selected products',
-          variant: 'warning'
-        });
-        return;
-      }
-
       console.log('🔄 Bulk approving products:', selectedProductNames);
-      console.log('📋 Summary IDs:', summaryIds);
 
-      // Use the new bulk approve API
-      const response = await fetch(`${config.baseURL}/api/unit-manager/product-summary/approve`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({
-          summaryIds: summaryIds
+      // Use selected date for the updates (not current date)
+      console.log('📅 Using selected date for bulk approval:', selectedDate);
+      
+      // Process each product individually using the update API
+      const results = await Promise.allSettled(
+        selectedProductNames.map(async (productName) => {
+          const product = products.find(p => p.productName === productName);
+          
+          if (!product || !product.productId) {
+            throw new Error(`Product ${productName} not found or missing productId`);
+          }
+
+          // Extract productId - we need the actual product ID, not the daily summary ID
+          let actualProductId;
+          if (typeof product.productId === 'string') {
+            actualProductId = product.productId;
+          } else if (typeof product.productId === 'object' && product.productId._id) {
+            actualProductId = product.productId._id;  // This is the key fix
+          } else {
+            throw new Error(`Invalid productId structure for ${productName}`);
+          }
+
+          const response = await fetch(`${config.baseURL}/api/sales/update-product-summary`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({
+              date: selectedDate,
+              productId: actualProductId,
+              updates: {
+                status: 'approved'
+              }
+            })
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || `Failed to approve ${productName}`);
+          }
+
+          return await response.json();
         })
-      });
+      );
 
-      if (response.ok) {
-        const result = await response.json();
-        console.log('✅ Bulk approval success:', result);
-        
+      // Count successful and failed approvals
+      const successful = results.filter(r => r.status === 'fulfilled').length;
+      const failed = results.filter(r => r.status === 'rejected').length;
+
+      console.log(`✅ Bulk approval completed: ${successful} successful, ${failed} failed`);
+
+      if (successful > 0) {
         // Update local state for all approved products
         setSummaryStatusData(prev => {
           const newData = { ...prev };
@@ -334,21 +439,27 @@ const SalesApproval = () => {
         
         toast({
           title: 'Bulk Approval Success',
-          description: `Approved ${selectedProductNames.length} product summaries`
+          description: `Approved ${successful} product summaries${failed > 0 ? ` (${failed} failed)` : ''}`
         });
         
         setSelectedProducts(new Set());
         setIsAllSelected(false);
         
-        // Refresh data to show updated values
-        await refreshProductionData();
+        // Auto-refresh data to show latest values without manual refresh
+        console.log('🔄 Auto-refreshing data after bulk approval...');
+        await refreshProductionData(selectedDate);
         await loadSummaryStatusData();
-      } else {
-        const errorData = await response.json();
-        console.log('❌ Bulk approval error:', errorData);
+      }
+
+      if (failed > 0) {
+        const failedReasons = results
+          .filter(r => r.status === 'rejected')
+          .map(r => r.reason.message)
+          .join(', ');
+        
         toast({
-          title: 'Bulk Approval Failed',
-          description: errorData.message || 'Failed to approve selected product summaries',
+          title: 'Some Approvals Failed',
+          description: failedReasons,
           variant: 'destructive'
         });
       }
@@ -382,7 +493,7 @@ const SalesApproval = () => {
       setSelectedProducts(new Set());
       setIsAllSelected(false);
     } else {
-      setSelectedProducts(new Set(filteredProducts));
+      setSelectedProducts(new Set(filteredProducts.map(p => p.productName)));
       setIsAllSelected(true);
     }
   };
@@ -405,15 +516,15 @@ const SalesApproval = () => {
       const qtyPerBatch = Number(updatedData.qtyPerBatch) || 1;
       
       console.log(`🔥 FORCE SAVE ${productName}.${field}=${value} | physicalStock=${physicalStock}, batchAdjusted=${batchAdjusted}, qtyPerBatch=${qtyPerBatch}`);
+      console.log(`📅 Using selected date for force save: ${selectedDate}`);
       
-      const today = new Date().toISOString().split('T')[0];
       const productionFinalBatches = parseFloat((batchAdjusted * qtyPerBatch).toFixed(2));
       const totalIndentSalesman = product.totalQuantity || 0;
       const toBeProducedDay = Math.max(0, totalIndentSalesman - physicalStock);
       const produceBatches = parseFloat((toBeProducedDay / qtyPerBatch).toFixed(2));
 
       const apiPayload = {
-        date: today,
+        date: selectedDate,
         productId: product.productId || product._id,
         updates: {
           productionFinalBatches: productionFinalBatches,
@@ -421,7 +532,8 @@ const SalesApproval = () => {
           batchAdjusted: batchAdjusted,
           qtyPerBatch: qtyPerBatch,
           toBeProducedDay: toBeProducedDay,
-          produceBatches: produceBatches
+          produceBatches: produceBatches,
+          status: 'pending'  // Auto-reset status to pending when any field changes
         }
       };
       
@@ -436,43 +548,81 @@ const SalesApproval = () => {
         body: JSON.stringify(apiPayload)
       });
 
+      console.log('📡 Save response status:', response.status);
+      console.log('📡 Save response headers:', [...response.headers.entries()]);
+
+      const responseText = await response.text();
+      console.log('📡 Save raw response:', responseText);
+
       if (response.ok) {
-        const result = await response.json();
-        console.log(`✅ SAVED ${productName}.${field}=${value}:`, result.summary);
+        let result;
+        try {
+          result = JSON.parse(responseText);
+        } catch (parseError) {
+          console.error('❌ Failed to parse save response:', parseError);
+          throw new Error('Invalid response format from server');
+        }
+        console.log(`✅ SAVED ${productName}.${field}=${value}:`, result.data);
         
         // Update local state with ALL values from backend response
-        if (result.summary) {
+        if (result.data) {
           setProductionData(prev => ({
             ...prev,
             [productName]: {
               ...prev[productName],
-              physicalStock: result.summary.physicalStock || 0,
-              batchAdjusted: result.summary.batchAdjusted || 0,
-              qtyPerBatch: result.summary.qtyPerBatch || 0,
-              toBeProducedDay: result.summary.toBeProducedDay || 0,
-              productionFinalBatches: result.summary.productionFinalBatches || 0,
-              produceBatches: result.summary.produceBatches || 0,
-              expiryShortage: result.summary.expiryShortage || 0,
-              toBeProducedBatches: result.summary.toBeProducedBatches || 0,
-              totalIndent: result.summary.totalIndent || 0
+              physicalStock: result.data.physicalStock || 0,
+              batchAdjusted: result.data.batchAdjusted || 0,
+              qtyPerBatch: result.data.qtyPerBatch || 0,
+              toBeProducedDay: result.data.toBeProducedDay || 0,
+              productionFinalBatches: result.data.productionFinalBatches || 0,
+              produceBatches: result.data.produceBatches || 0,
+              expiryShortage: result.data.expiryShortage || 0,
+              toBeProducedBatches: result.data.toBeProducedBatches || 0,
+              totalIndent: result.data.totalIndent || 0
             }
           }));
         }
 
         // Update status data if available
-        if (result.summary?.status) {
+        if (result.data?.status) {
           setSummaryStatusData(prev => ({
             ...prev,
             [productName]: {
               ...prev[productName],
-              status: result.summary.status,
-              summaryId: result.summary._id || prev[productName]?.summaryId
+              status: result.data.status,
+              summaryId: result.data._id || prev[productName]?.summaryId
             }
           }));
         }
+
+        // Show success toast with status reset notification
+        toast({
+          title: 'Field Updated',
+          description: `${field} updated for ${productName}. Status reset to pending for re-approval.`
+        });
+        
+        // Auto-refresh data to show latest values without manual refresh
+        console.log('🔄 Auto-refreshing data after field update...');
+        await refreshProductionData(selectedDate);
+        await loadSummaryStatusData();
+      } else {
+        let errorData;
+        try {
+          errorData = JSON.parse(responseText);
+        } catch (parseError) {
+          errorData = { message: `HTTP ${response.status}: ${responseText}` };
+        }
+        console.error('❌ Save failed:', errorData);
+        throw new Error(errorData.message || `Failed to save ${field}`);
       }
     } catch (error) {
       console.error('Error saving with value:', error);
+      console.error('Error stack:', error.stack);
+      toast({
+        title: 'Update Failed',
+        description: `Failed to update ${field} for ${productName}: ${error.message}`,
+        variant: 'destructive'
+      });
     }
   };
 
@@ -502,8 +652,7 @@ const SalesApproval = () => {
       
       console.log(`🚀 Saving ${productName}: physicalStock=${physicalStock}, batchAdjusted=${batchAdjusted}, qtyPerBatch=${qtyPerBatch}`);
       console.log(`📝 Input values used: physicalStock="${physicalStockInput}", batchAdjusted="${batchAdjustedInput}", qtyPerBatch="${qtyPerBatchInput}"`);
-      
-      const today = new Date().toISOString().split('T')[0];
+      console.log(`📅 Using selected date for update: ${selectedDate}`);
 
       // Calculate dependent fields
       const productionFinalBatches = parseFloat((batchAdjusted * qtyPerBatch).toFixed(2));
@@ -514,7 +663,7 @@ const SalesApproval = () => {
       const produceBatches = parseFloat((toBeProducedDay / qtyPerBatch).toFixed(2));
 
       const apiPayload = {
-        date: today,
+        date: selectedDate,
         productId: product.productId || product._id,
         updates: {
           productionFinalBatches: productionFinalBatches,
@@ -522,7 +671,8 @@ const SalesApproval = () => {
           batchAdjusted: batchAdjusted,  // Use parsed value
           qtyPerBatch: qtyPerBatch,      // Use parsed value
           toBeProducedDay: toBeProducedDay,
-          produceBatches: produceBatches
+          produceBatches: produceBatches,
+          status: 'pending'  // Auto-reset status to pending when any field changes
         }
       };
       
@@ -537,41 +687,51 @@ const SalesApproval = () => {
         body: JSON.stringify(apiPayload)
       });
 
+      console.log('📡 Production save response status:', response.status);
+      const responseText = await response.text();
+      console.log('📡 Production save raw response:', responseText);
+
       if (response.ok) {
-        const result = await response.json();
+        let result;
+        try {
+          result = JSON.parse(responseText);
+        } catch (parseError) {
+          console.error('❌ Failed to parse production save response:', parseError);
+          throw new Error('Invalid response format from server');
+        }
         console.log('Production data saved with calculations:', result);
-        console.log('Status from API response:', result.summary?.status);
+        console.log('Status from API response:', result.data?.status);
 
         // Update local state with ALL values from backend response (including calculations)
-        if (result.summary) {
+        if (result.data) {
           setProductionData(prev => ({
             ...prev,
             [productName]: {
               ...prev[productName],
-              physicalStock: result.summary.physicalStock || 0,
-              batchAdjusted: result.summary.batchAdjusted || 0,
-              qtyPerBatch: result.summary.qtyPerBatch || 0,
-              toBeProducedDay: result.summary.toBeProducedDay || 0,
-              productionFinalBatches: result.summary.productionFinalBatches || 0,
-              produceBatches: result.summary.produceBatches || 0,
-              expiryShortage: result.summary.expiryShortage || 0,
-              toBeProducedBatches: result.summary.toBeProducedBatches || 0,
-              totalIndent: result.summary.totalIndent || 0
+              physicalStock: result.data.physicalStock || 0,
+              batchAdjusted: result.data.batchAdjusted || 0,
+              qtyPerBatch: result.data.qtyPerBatch || 0,
+              toBeProducedDay: result.data.toBeProducedDay || 0,
+              productionFinalBatches: result.data.productionFinalBatches || 0,
+              produceBatches: result.data.produceBatches || 0,
+              expiryShortage: result.data.expiryShortage || 0,
+              toBeProducedBatches: result.data.toBeProducedBatches || 0,
+              totalIndent: result.data.totalIndent || 0
             }
           }));
         }
 
         // IMPORTANT: Update status data when production data changes
-        if (result.summary?.status) {
+        if (result.data?.status) {
           setSummaryStatusData(prev => ({
             ...prev,
             [productName]: {
               ...prev[productName],
-              status: result.summary.status,
-              summaryId: result.summary._id || prev[productName]?.summaryId
+              status: result.data.status,
+              summaryId: result.data._id || prev[productName]?.summaryId
             }
           }));
-          console.log(`✅ Status updated to '${result.summary.status}' for ${productName}`);
+          console.log(`✅ Status updated to '${result.data.status}' for ${productName}`);
         }
 
         // Clear any pending input values since we got fresh data from backend
@@ -585,18 +745,33 @@ const SalesApproval = () => {
 
         console.log(`🔄 Updated production data for ${productName}:`, result.summary);
 
+        // Show success toast notification
         toast({
           title: 'Success',
-          description: `Production data saved for ${productName}`
+          description: `Production data saved successfully for ${productName}`,
+          variant: 'default'
         });
+
+        // Auto-refresh data to show latest values without manual refresh
+        console.log('🔄 Auto-refreshing data after production save...');
+        await refreshProductionData(selectedDate);
+        await loadSummaryStatusData();
       } else {
-        throw new Error('Failed to save production data');
+        let errorData;
+        try {
+          errorData = JSON.parse(responseText);
+        } catch (parseError) {
+          errorData = { message: `HTTP ${response.status}: ${responseText}` };
+        }
+        console.error('❌ Production save failed:', errorData);
+        throw new Error(errorData.message || 'Failed to save production data');
       }
     } catch (error) {
       console.error('Error saving production data:', error);
+      console.error('Error stack:', error.stack);
       toast({
         title: 'Error',
-        description: 'Failed to save production data',
+        description: `Failed to save production data: ${error.message}`,
         variant: 'destructive'
       });
     }
@@ -662,7 +837,7 @@ const SalesApproval = () => {
     // Apply search filter
     if (searchTerm.trim()) {
       filtered = filtered.filter(product =>
-        product.toLowerCase().includes(searchTerm.toLowerCase())
+        product.productName.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -672,8 +847,10 @@ const SalesApproval = () => {
   // Clear all filters
   const clearFilters = () => {
     setSearchTerm('');
-    setSelectedDate(new Date().toISOString().split('T')[0]);
+    const currentDate = new Date().toISOString().split('T')[0];
+    setSelectedDate(currentDate);
     setFilteredProducts(products);
+    // Data will be refreshed by useEffect when selectedDate changes
   };
 
   // Apply filters when search term or products change
@@ -708,19 +885,19 @@ const SalesApproval = () => {
   // Load production summary status data
   const loadSummaryStatusData = async (filterDate = null) => {
     console.log('🔄 Loading summary status data...');
-    // COMMENTED OUT: Date filter removed to show all data by default
-    // const targetDate = filterDate || selectedDate;
-    // console.log('📅 Loading data for date:', targetDate);
+    // Date filter restored
+    const targetDate = filterDate || selectedDate;
+    console.log('📅 Loading data for date:', targetDate);
     
     try {
-      // Build URL without date parameter to show all data
+      // Build URL with date parameter
       const url = new URL(`${config.baseURL}/api/sales/product-summary`);
-      // COMMENTED OUT: Date filter removed
-      // if (targetDate) {
-      //   url.searchParams.append('date', targetDate);
-      // }
+      // Date filter restored
+      if (targetDate) {
+        url.searchParams.append('date', targetDate);
+      }
       
-      console.log('🔗 API URL (no date filter):', url.toString());
+      console.log('🔗 API URL (with date filter):', url.toString());
       
       const response = await fetch(url, {
         headers: {
@@ -747,10 +924,10 @@ const SalesApproval = () => {
               group.products.forEach(product => {
                 allProducts.push(product);
                 newStatusData[product.productName] = {
-                  status: product.summary?.status || 'pending',
-                  summaryId: product.summary?._id || null,
-                  category: product.category || 'Unknown Category', // Add category
-                  subCategory: product.subCategory || '', // Add subCategory
+                  status: product.status || 'pending',
+                  summaryId: product._id || null,
+                  category: product.productId?.category || 'Unknown Category',
+                  subCategory: product.productId?.subCategory || '',
                   productionGroup: {
                     groupId: group.groupId,
                     groupName: group.groupName,
@@ -767,10 +944,10 @@ const SalesApproval = () => {
             result.ungroupedProducts.forEach(product => {
               allProducts.push(product);
               newStatusData[product.productName] = {
-                status: product.summary?.status || 'pending',
-                summaryId: product.summary?._id || null,
-                category: product.category || 'Unknown Category', // Add category
-                subCategory: product.subCategory || '', // Add subCategory
+                status: product.status || 'pending',
+                summaryId: product._id || null,
+                category: product.productId?.category || 'Unknown Category',
+                subCategory: product.productId?.subCategory || '',
                 productionGroup: null // No production group - won't show any tag
               };
             });
@@ -824,10 +1001,19 @@ const SalesApproval = () => {
   };
 
   // Refresh production data from backend
-  const refreshProductionData = async () => {
+  const refreshProductionData = async (filterDate = null) => {
     console.log('🔄 Refreshing production data from backend...');
     try {
-      const response = await fetch(`${config.baseURL}/api/sales/product-summary`, {
+      // Use selected date for refresh
+      const targetDate = filterDate || selectedDate;
+      const url = new URL(`${config.baseURL}/api/sales/product-summary`);
+      if (targetDate) {
+        url.searchParams.append('date', targetDate);
+      }
+      
+      console.log('🔗 Refreshing from URL:', url.toString());
+      
+      const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -858,16 +1044,16 @@ const SalesApproval = () => {
           const newProductionData = {};
           allProducts.forEach(product => {
             newProductionData[product.productName] = {
-              packing: product.summary?.packing || 0,
-              physicalStock: product.summary?.physicalStock || 0,
-              batchAdjusted: product.summary?.batchAdjusted || 0,
+              packing: product.packing || 0,
+              physicalStock: product.physicalStock || 0,
+              batchAdjusted: product.batchAdjusted || 0,
               qtyPerBatch: product.qtyPerBatch || 1,
-              toBeProducedDay: product.summary?.toBeProducedDay || 0,
-              productionFinalBatches: product.summary?.productionFinalBatches || 0,
-              produceBatches: product.summary?.produceBatches || 0,
-              totalIndent: product.summary?.totalIndent || 0,
-              toBeProducedBatches: product.summary?.toBeProducedBatches || 0,
-              expiryShortage: product.summary?.expiryShortage || 0
+              toBeProducedDay: product.toBeProducedDay || 0,
+              productionFinalBatches: product.productionFinalBatches || 0,
+              produceBatches: product.produceBatches || 0,
+              totalIndent: product.totalIndent || 0,
+              toBeProducedBatches: product.toBeProducedBatches || 0,
+              expiryShortage: product.expiryShortage || 0
             };
           });
           
@@ -881,9 +1067,18 @@ const SalesApproval = () => {
   };
 
   // Load production summary data
-  const loadProductionSummary = async () => {
+  const loadProductionSummary = async (filterDate = null) => {
     try {
-      const response = await fetch(`${config.baseURL}/api/sales/product-summary`, {
+      // Use selected date for loading
+      const targetDate = filterDate || selectedDate;
+      const url = new URL(`${config.baseURL}/api/sales/product-summary`);
+      if (targetDate) {
+        url.searchParams.append('date', targetDate);
+      }
+      
+      console.log('🔗 Loading from URL:', url.toString());
+      
+      const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -915,17 +1110,17 @@ const SalesApproval = () => {
           const newProductionData = {};
           allProducts.forEach(product => {
             newProductionData[product.productName] = {
-              packing: product.summary.packing || 0,
-              physicalStock: product.summary.physicalStock || 0,
-              batchAdjusted: product.summary.batchAdjusted || 0,
+              packing: product.packing || 0,
+              physicalStock: product.physicalStock || 0,
+              batchAdjusted: product.batchAdjusted || 0,
               qtyPerBatch: product.qtyPerBatch || 0,
-              toBeProducedDay: product.summary.toBeProducedDay || 0,
-              productionFinalBatches: product.summary.productionFinalBatches || 0,
+              toBeProducedDay: product.toBeProducedDay || 0,
+              productionFinalBatches: product.productionFinalBatches || 0,
               // Add calculated fields for display
-              totalIndent: product.summary.totalIndent || 0,
-              toBeProducedBatches: product.summary.toBeProducedBatches || 0,
-              expiryShortage: product.summary.expiryShortage || 0,
-              produceBatches: product.summary.produceBatches || 0
+              totalIndent: product.totalIndent || 0,
+              toBeProducedBatches: product.toBeProducedBatches || 0,
+              expiryShortage: product.expiryShortage || 0,
+              produceBatches: product.produceBatches || 0
             };
           });
           setProductionData(newProductionData);
@@ -1002,16 +1197,16 @@ const SalesApproval = () => {
     try {
       setLoading(true);
       
-      // COMMENTED OUT: Date filter removed to show all data by default
-      // const targetDate = filterDate || selectedDate;
-      // console.log('📅 Fetching data for date:', targetDate);
+      // Date filter restored
+      const targetDate = filterDate || selectedDate;
+      console.log('📅 Fetching data for date:', targetDate);
 
-      // Build URL without date parameter to show all data
+      // Build URL with date parameter
       const url = new URL(`${config.baseURL}/api/sales/product-summary`);
-      // COMMENTED OUT: Date filter removed
-      // if (targetDate) {
-      //   url.searchParams.append('date', targetDate);
-      // }
+      // Date filter restored
+      if (targetDate) {
+        url.searchParams.append('date', targetDate);
+      }
       
       const productSummaryResponse = await fetch(url, {
         headers: {
@@ -1019,11 +1214,16 @@ const SalesApproval = () => {
         }
       });
       
-      console.log('🔗 API URL (no date filter):', url.toString());
+      console.log('🔗 API URL (with date filter):', url.toString());
       console.log('📡 Product Summary Response Status:', productSummaryResponse.status);
 
-      // Fetch individual orders for status counting
-      const individualOrdersResponse = await fetch(`${config.baseURL}/api/orders`, {
+      // Fetch individual orders for status counting with date filter
+      const ordersUrl = new URL(`${config.baseURL}/api/orders`);
+      if (targetDate) {
+        ordersUrl.searchParams.append('date', targetDate);
+      }
+      
+      const individualOrdersResponse = await fetch(ordersUrl, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -1082,7 +1282,7 @@ const SalesApproval = () => {
             setIndividualOrders([]);
             
             // Load production summary data even if no sales data
-            await loadProductionSummary();
+            await loadProductionSummary(selectedDate);
             await loadSummaryStatusData();
             return; // Exit early - this is successful empty state
           }
@@ -1119,9 +1319,15 @@ const SalesApproval = () => {
 
           // Set the transformed data to match the expected format
           setOrders(transformedData);
+          
+          console.log('🔍 Debug orders set:', {
+            transformedDataLength: transformedData.length,
+            firstTransformed: transformedData[0],
+            sampleSalesBreakdown: transformedData[0]?.salesBreakdown
+          });
 
           // Extract products and sales persons from the transformed response
-          const products = transformedData.map(item => item.productName);
+          const products = allProducts; // Use the full product objects instead of just names
           const allSalesPersons = new Map(); // Use Map to store unique salespeople with full info
 
           // Collect all sales persons from ALL products (even empty ones)
@@ -1249,7 +1455,7 @@ const SalesApproval = () => {
       }
 
       // Load production summary data
-      await loadProductionSummary();
+      await loadProductionSummary(selectedDate);
       
       // Load summary status data
       await loadSummaryStatusData();
@@ -1267,11 +1473,17 @@ const SalesApproval = () => {
   };
 
   useEffect(() => {
-    console.log('🔄 SalesApproval component mounted, fetching data...');
-    // COMMENTED OUT: Date filter removed to show all data by default
-    // fetchData(selectedDate);
-    fetchData();
+    console.log('🔄 SalesApproval component mounted');
+    // selectedDate is already initialized, so the fetch useEffect will trigger automatically
   }, []); // Load data on mount
+
+  // Fetch data when selectedDate changes (after initial mount)
+  useEffect(() => {
+    if (selectedDate) {
+      console.log('📅 Date changed, fetching data for:', selectedDate);
+      fetchData(selectedDate);
+    }
+  }, [selectedDate]); // Trigger when date changes
 
   // Force refresh function for debugging
   const forceRefresh = async () => {
@@ -1284,10 +1496,9 @@ const SalesApproval = () => {
       setInputValues({});
       
       // Fetch fresh data from backend
-      // COMMENTED OUT: Date filter removed to show all data by default
-      // await fetchData(selectedDate);
-      await fetchData();
-      await refreshProductionData();
+      // Date filter restored
+      await fetchData(selectedDate);
+      await refreshProductionData(selectedDate);
     } catch (error) {
       console.error('Error during force refresh:', error);
     } finally {
@@ -1533,7 +1744,8 @@ const SalesApproval = () => {
         // Group products by production group
         const productGroups = {};
         filteredProducts.forEach(product => {
-          const group = getProductionGroup(product);
+          const productName = product.productName;
+          const group = getProductionGroup(productName);
           const groupName = group?.groupName || 'Ungrouped';
           
           if (!productGroups[groupName]) {
@@ -1687,8 +1899,8 @@ const SalesApproval = () => {
                         </Button>
                       )}
                     </div>
-                     {/* COMMENTED OUT: Date Filter removed to show all data by default */}
-            {/* <div className="flex items-center gap-2">
+                    {/* Date Filter restored */}
+            <div className="flex items-center gap-2">
               <div className="flex flex-col gap-1">
                 <Input
                   id="date-filter"
@@ -1698,23 +1910,21 @@ const SalesApproval = () => {
                   className="w-40"
                 />
               </div>
-            
-             
-            </div> */}
+            </div>
                   </div>
 
-                  {/* COMMENTED OUT: Clear Button removed since date filter is disabled */}
-                  {/* <div className="flex items-center gap-2">
+                  {/* Clear Date Filter Button restored */}
+                  <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={clearDateFilter}
                       className="flex items-center gap-1"
+                      title="Reset to today's date"
                     >
                       <X className="h-3 w-3" />
-                      Clear
-                    </Button> */}
-                  <div className="flex items-center gap-2">
+                      Today
+                    </Button>
 
                     <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
                       {filteredProducts.length} of {products.length}
@@ -1840,44 +2050,56 @@ const SalesApproval = () => {
               <tbody>
                 {filteredProducts.map((product, index) => {
                   // Get product data from our new API structure
-                  const productData = orders.find(p => p.productName === product);
+                  const productData = orders.find(p => p.productName === product.productName);
                   const totalQuantity = productData ? productData.totalQuantity : 0;
                   const totalOrderCount = productData ? productData.totalOrders : 0;
+
+                  // Debug log to see what we're getting
+                  if (index === 0) {
+                    console.log('🔍 Debug product lookup:', {
+                      product,
+                      productData,
+                      totalQuantity,
+                      totalOrderCount,
+                      ordersLength: orders.length,
+                      firstOrder: orders[0]
+                    });
+                  }
 
                   // Get all orders for this product from all sales persons for modal functionality
                   const productOrders = productData ?
                     productData.salesPersons.flatMap(sp => sp.orders || []) : [];
 
                   return (
-                    <tr key={`${product}-${index}`} className="border-b hover:bg-gray-50/50 transition-colors">
+                    <tr key={`${product.productName}-${index}`} className="border-b hover:bg-gray-50/50 transition-colors">
                       {/* 1. Selection Checkbox Column */}
                       <td className="bg-white p-1 lg:p-2 text-center border-r">
                         <input
                           type="checkbox"
-                          checked={selectedProducts.has(product)}
-                          onChange={() => toggleProductSelection(product)}
+                          checked={selectedProducts.has(product.productName)}
+                          onChange={() => toggleProductSelection(product.productName)}
                           className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                          title={`Select ${product}`}
+                          title={`Select ${product.productName}`}
                         />
                       </td>
                       {/* 2. Product Name Column */}
                       <td className="bg-white p-1 lg:p-2 font-medium text-gray-900 border-r max-w-[100px] lg:max-w-[160px]">
                         <div className="flex flex-col">
                           <span className="text-xs font-semibold text-gray-900 leading-tight break-words">
-                            {product} - {getProductCategory(product)}
-                            {getProductSubCategory(product)}
+                            {product.productName} - {getProductCategory(product.productName)}
+                            {getProductSubCategory(product.productName)}
                           </span>
                           <span className="text-xs text-gray-500">
                             Total Qty: {totalQuantity} ({totalOrderCount} orders)
                           </span>
                           {/* Production Group Tag */}
                           {(() => {
-                            const group = getProductionGroup(product);
-                            console.log(`🏷️ Product ${product} group:`, group);
+                            const group = getProductionGroup(product.productName);
+                            console.log(`🏷️ Product ${product.productName} group:`, group);
                             if (group?.groupId) {
                               return (
                                 <span className="inline-block mt-1 px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded-full">
-                                  {getProductionGroupName(product)}
+                                  {getProductionGroupName(product.productName)}
                                 </span>
                               );
                             }
@@ -1890,7 +2112,7 @@ const SalesApproval = () => {
                       <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
                         <div className="text-center">
                           <div className="text-sm font-bold text-green-600">
-                            {getProductionWithFinalBatches(product)}
+                            {getProductionWithFinalBatches(product.productName)}
                           </div>
                         </div>
                       </td>
@@ -1899,7 +2121,7 @@ const SalesApproval = () => {
                       <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
                         <div className="text-center">
                           <div className="text-sm font-bold text-green-600">
-                            {getProduceBatches(product)}
+                            {getProduceBatches(product.productName)}
                           </div>
                         </div>
                       </td>
@@ -1909,9 +2131,9 @@ const SalesApproval = () => {
                         <div className="text-center">
                           <Input
                             type="text"
-                            value={getInputValue(product, 'physicalStock')}
-                            onChange={(e) => updateProductionField(product, 'physicalStock', e.target.value)}
-                            onBlur={() => handleInputBlur(product, 'physicalStock')}
+                            value={getInputValue(product.productName, 'physicalStock')}
+                            onChange={(e) => updateProductionField(product.productName, 'physicalStock', e.target.value)}
+                            onBlur={() => handleInputBlur(product.productName, 'physicalStock')}
                             className="w-24 h-8 text-center text-lg font-bold text-purple-600 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-purple-300 focus:border-purple-400"
                             placeholder="0"
                           />
@@ -1923,9 +2145,9 @@ const SalesApproval = () => {
                         <div className="text-center">
                           <Input
                             type="text"
-                            value={getInputValue(product, 'batchAdjusted')}
-                            onChange={(e) => updateProductionField(product, 'batchAdjusted', e.target.value)}
-                            onBlur={() => handleInputBlur(product, 'batchAdjusted')}
+                            value={getInputValue(product.productName, 'batchAdjusted')}
+                            onChange={(e) => updateProductionField(product.productName, 'batchAdjusted', e.target.value)}
+                            onBlur={() => handleInputBlur(product.productName, 'batchAdjusted')}
                             className="w-24 h-8 text-center text-sm font-bold text-cyan-600 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-cyan-300 focus:border-cyan-400"
                             placeholder="0"
                           />
@@ -1936,18 +2158,18 @@ const SalesApproval = () => {
                       <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
                         <div className="text-center">
                           <div className="text-sm font-bold text-amber-600">
-                            {Math.max(0, totalQuantity - (getProductionData(product).physicalStock || 0))}
+                            {Math.max(0, totalQuantity - (getProductionData(product.productName).physicalStock || 0))}
                           </div>
                         </div>
                       </td>
 
                       {/* Dynamic Sales Person Columns */}
                       {salesPersons.map((salesPersonName) => {
-                        const salesPersonData = gridData[product]?.[salesPersonName] || [];
+                        const salesPersonData = gridData[product.productName]?.[salesPersonName] || [];
                         const totalQty = salesPersonData.reduce((sum, order) => sum + (order.quantity || 0), 0);
 
                         return (
-                          <td key={`${product}-${salesPersonName}`} className="bg-white p-1 lg:p-2 border-r text-center align-middle">
+                          <td key={`${product.productName}-${salesPersonName}`} className="bg-white p-1 lg:p-2 border-r text-center align-middle">
                             {salesPersonData.length === 0 ? (
                               <span className="text-gray-400 text-sm">0</span>
                             ) : (
@@ -1981,7 +2203,7 @@ const SalesApproval = () => {
                       <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
                         <div className="text-center">
                           <div className="text-sm font-bold text-orange-600">
-                            {getProductionData(product).qtyPerBatch || 0}
+                            {getProductionData(product.productName).qtyPerBatch || 0}
                           </div>
                         </div>
                       </td>
@@ -1989,10 +2211,10 @@ const SalesApproval = () => {
                       <td className="bg-white p-1 lg:p-2 border-r text-center align-middle">
                         <div className="text-center">
                           <Badge 
-                            variant={getSummaryStatus(product) === 'approved' ? 'default' : 'secondary'}
-                            className={`text-xs ${getSummaryStatus(product) === 'approved' ? 'bg-green-100 text-green-800 border-green-200' : 'bg-yellow-100 text-yellow-800 border-yellow-200'}`}
+                            variant={getSummaryStatus(product.productName) === 'approved' ? 'default' : 'secondary'}
+                            className={`text-xs ${getSummaryStatus(product.productName) === 'approved' ? 'bg-green-100 text-green-800 border-green-200' : 'bg-yellow-100 text-yellow-800 border-yellow-200'}`}
                           >
-                            {getSummaryStatus(product)}
+                            {getSummaryStatus(product.productName)}
                           </Badge>
                         </div>
                       </td>
@@ -2000,15 +2222,15 @@ const SalesApproval = () => {
                       <td className="bg-white p-1 lg:p-2 text-center align-middle">
                         <div className="flex items-center justify-center gap-1">
                           <Button
-                            onClick={() => handleIndividualApprove(product)}
-                            disabled={approvingProducts.has(product) || getSummaryStatus(product) === 'approved'}
+                            onClick={() => handleIndividualApprove(product.productName)}
+                            disabled={approvingProducts.has(product.productName) || getSummaryStatus(product.productName) === 'approved'}
                             size="sm"
                             className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 h-7 text-xs disabled:opacity-50"
-                            title={`Approve summary for ${product}`}
+                            title={`Approve summary for ${product.productName}`}
                           >
-                            {approvingProducts.has(product) ? (
+                            {approvingProducts.has(product.productName) ? (
                               <Clock className="h-3 w-3 animate-spin" />
-                            ) : getSummaryStatus(product) === 'approved' ? (
+                            ) : getSummaryStatus(product.productName) === 'approved' ? (
                               <>
                                 <CheckCircle className="h-3 w-3 mr-1" />
                                 Approved

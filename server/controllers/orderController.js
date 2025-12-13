@@ -2,6 +2,7 @@ import Order from '../models/Order.js';
 import Customer from '../models/Customer.js';
 import { Item } from '../models/Inventory.js';
 import ProductDailySummary from '../models/ProductDailySummary.js';
+import CutoffTime from '../models/CutoffTime.js';
 import notificationService from '../services/notificationService.js';
 
 // Create new order
@@ -56,6 +57,34 @@ const createOrder = async (req, res) => {
         message: 'Validation failed.',
         errors
       });
+    }
+
+    // ============ CUTOFF TIME VALIDATION ============
+    // Check if order creation is allowed based on cutoff time (only for Sales role)
+    if (req.user.role === 'Sales' || req.user.role === 'sales') {
+      console.log('🕐 Checking cutoff time for Sales user:', req.user.username, 'Company:', req.user.companyId);
+      
+      if (req.user.companyId) {
+        try {
+          const orderPermission = await CutoffTime.canPlaceOrder(req.user.companyId);
+          
+          if (!orderPermission.allowed) {
+            console.log('❌ Order blocked by cutoff time:', orderPermission.message);
+            return res.status(403).json({
+              status: false,
+              message: orderPermission.message,
+              cutoffTime: orderPermission.cutoffTime,
+              isPastCutoff: true
+            });
+          }
+          
+          console.log('✅ Order allowed by cutoff time check:', orderPermission.message);
+        } catch (cutoffError) {
+          console.error('Error checking cutoff time:', cutoffError);
+          // If cutoff time check fails, allow order creation (fail-safe approach)
+          console.log('⚠️ Cutoff time check failed, allowing order creation');
+        }
+      }
     }
 
     // Calculate total amount
@@ -155,6 +184,7 @@ const getOrders = async (req, res) => {
       limit = 10,
       search = '',
       status = '',
+      date = '',
       startDate = '',
       endDate = '',
       customerId = '',
@@ -248,7 +278,18 @@ const getOrders = async (req, res) => {
       filter.customer = customerId;
     }
 
-    if (startDate || endDate) {
+    // Date filtering - support both single date and date range
+    if (date) {
+      // Single date filter
+      const filterDate = new Date(date);
+      filterDate.setUTCHours(0, 0, 0, 0);
+      const nextDay = new Date(filterDate.getTime() + 24 * 60 * 60 * 1000);
+      filter.orderDate = {
+        $gte: filterDate,
+        $lt: nextDay
+      };
+    } else if (startDate || endDate) {
+      // Date range filter
       filter.orderDate = {};
       if (startDate) {
         filter.orderDate.$gte = new Date(startDate);
@@ -362,6 +403,34 @@ const updateOrder = async (req, res) => {
         success: false,
         message: 'Order not found'
       });
+    }
+
+    // ============ CUTOFF TIME VALIDATION ============
+    // Check if order editing is allowed based on cutoff time (only for Sales role)
+    if (req.user.role === 'Sales' || req.user.role === 'sales') {
+      console.log('🕐 Checking cutoff time for order edit by Sales user:', req.user.username, 'Company:', req.user.companyId);
+      
+      if (req.user.companyId) {
+        try {
+          const orderPermission = await CutoffTime.canPlaceOrder(req.user.companyId);
+          
+          if (!orderPermission.allowed) {
+            console.log('❌ Order edit blocked by cutoff time:', orderPermission.message);
+            return res.status(403).json({
+              success: false,
+              message: `Order editing ${orderPermission.message.toLowerCase()}`,
+              cutoffTime: orderPermission.cutoffTime,
+              isPastCutoff: true
+            });
+          }
+          
+          console.log('✅ Order edit allowed by cutoff time check:', orderPermission.message);
+        } catch (cutoffError) {
+          console.error('Error checking cutoff time for order edit:', cutoffError);
+          // If cutoff time check fails, allow order editing (fail-safe approach)
+          console.log('⚠️ Cutoff time check failed, allowing order editing');
+        }
+      }
     }
 
     // Update basic fields

@@ -579,6 +579,11 @@ export default function UnitManagerProductionGroup() {
                           <div className="text-xs sm:text-sm text-gray-500">
                             {item.code} | {item.category}
                           </div>
+                          {item.batch && (
+                            <div className="text-xs sm:text-sm text-blue-600 font-medium">
+                              Batch: {item.batch}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -659,6 +664,11 @@ export default function UnitManagerProductionGroup() {
                             <div className="text-xs sm:text-sm text-gray-500">
                               {item.code} | {item.category}
                             </div>
+                            {item.batch && (
+                              <div className="text-xs sm:text-sm text-blue-600 font-medium">
+                                Batch: {item.batch}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -693,6 +703,11 @@ export default function UnitManagerProductionGroup() {
                             <div className="text-xs sm:text-sm text-gray-500">
                               {item.code} | {item.category}
                             </div>
+                            {item.batch && (
+                              <div className="text-xs sm:text-sm text-blue-600 font-medium">
+                                Batch: {item.batch}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -766,6 +781,11 @@ export default function UnitManagerProductionGroup() {
                           <div className="text-xs sm:text-sm text-gray-500">
                             Quantity: {item.qty} {item.unit}
                           </div>
+                          {item.batch && (
+                            <div className="text-xs sm:text-sm text-blue-600 font-medium">
+                              Batch: {item.batch}
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))

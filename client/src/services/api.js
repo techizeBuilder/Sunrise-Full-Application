@@ -594,6 +594,58 @@ class APIService {
   async getCompanyStats() {
     return this.get('/super-admin/companies/stats');
   }
+
+  // ============ CUTOFF TIME MANAGEMENT APIs ============
+  
+  // Get current cutoff time setting for unit head's company
+  async getCutoffTime() {
+    return this.get('/unit-head/cutoff-time');
+  }
+
+  // Set or update cutoff time
+  async setCutoffTime(data) {
+    // Map frontend data structure to backend expected format
+    const requestData = {
+      cutoffTime: data.time,  // Map 'time' to 'cutoffTime'
+      description: data.description
+    };
+    
+    // Use POST - backend handles both create and update logic
+    return this.post('/unit-head/cutoff-time', requestData);
+  }
+
+  // Toggle cutoff time active status
+  async toggleCutoffTime(isActive) {
+    return this.request('/unit-head/cutoff-time/toggle', {
+      method: 'PATCH',
+      body: JSON.stringify({ isActive })
+    });
+  }
+
+  // Check if orders are currently allowed (utility function)
+  async canPlaceOrder() {
+    try {
+      const response = await this.getCutoffTime();
+      if (response.data && response.data.currentStatus) {
+        return {
+          allowed: response.data.currentStatus.allowed,
+          message: response.data.currentStatus.message,
+          cutoffTime: response.data.cutoffTime
+        };
+      }
+      // If no cutoff time set, orders are allowed
+      return { allowed: true, message: 'No cutoff restrictions' };
+    } catch (error) {
+      console.error('Error checking order permission:', error);
+      // Fail-safe: if can't check, allow orders
+      return { allowed: true, message: 'Unable to check cutoff time' };
+    }
+  }
+
+  // Sales-specific cutoff time status check
+  async getSalesCutoffTimeStatus() {
+    return this.get('/sales/cutoff-time-status');
+  }
 }
 
 export const api = new APIService();
@@ -610,3 +662,12 @@ export const getCustomers = (params) => api.getCustomers(params);
 export const getInventoryItems = (params) => api.getItems(params);
 export const getItems = (params) => api.getItems(params);
 export const getOrderById = (id) => api.getOrderById(id);
+
+// Cutoff Time API exports
+export const getCutoffTime = () => api.getCutoffTime();
+export const setCutoffTime = (data) => api.setCutoffTime(data);
+export const toggleCutoffTime = (isActive) => api.toggleCutoffTime(isActive);
+export const canPlaceOrder = () => api.canPlaceOrder();
+
+// Sales Cutoff Time API
+export const getSalesCutoffTimeStatus = () => api.getSalesCutoffTimeStatus();

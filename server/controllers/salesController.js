@@ -7,6 +7,7 @@ import { Company } from '../models/Company.js';
 import { USER_ROLES } from '../../shared/schema.js';
 import User from '../models/User.js';
 import PriorityProduct from '../models/PriorityProduct.js';
+import CutoffTime from '../models/CutoffTime.js';
 
 export const getSales = async (req, res) => {
   try {
@@ -1366,6 +1367,55 @@ export const updatePriorityProductUsage = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to update priority product usage',
+      error: error.message
+    });
+  }
+};
+
+// Get cutoff time status for sales persons
+export const getSalesCutoffTimeStatus = async (req, res) => {
+  try {
+    const salesPerson = req.user;
+    
+    console.log('🕐 Getting cutoff time status for sales person:', salesPerson.username);
+
+    // Validation
+    if (!salesPerson.companyId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Sales person is not assigned to any company. Please contact system administrator.'
+      });
+    }
+
+    // Get current order status for the company
+    const orderStatus = await CutoffTime.canPlaceOrder(salesPerson.companyId);
+    
+    // Get cutoff time setting for additional details
+    const cutoffSetting = await CutoffTime.findOne({ companyId: salesPerson.companyId });
+    
+    console.log('✅ Cutoff time status retrieved:', {
+      allowed: orderStatus.allowed,
+      cutoffTime: cutoffSetting?.cutoffTime || null,
+      isActive: cutoffSetting?.isActive || false
+    });
+
+    res.json({
+      success: true,
+      data: {
+        allowed: orderStatus.allowed,
+        message: orderStatus.message,
+        cutoffTime: cutoffSetting?.cutoffTime || null,
+        isActive: cutoffSetting?.isActive || false,
+        isPastCutoff: orderStatus.isPastCutoff || false,
+        description: cutoffSetting?.description || null
+      }
+    });
+
+  } catch (error) {
+    console.error('Error getting cutoff time status:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get cutoff time status',
       error: error.message
     });
   }

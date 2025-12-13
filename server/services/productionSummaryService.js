@@ -82,35 +82,38 @@ export const updateProductSummary = async (productId, date, companyId) => {
  * @param {Date} date - Date
  * @param {string} companyId - Company ID
  */
-export const getSalesBreakdown = async (productId, date, companyId) => {
+export const getSalesBreakdown = async (productIds, date, companyId) => {
   try {
-    console.log(`🔍 Getting sales breakdown for productId: ${productId}, date: ${date}, companyId: ${companyId}`);
+    console.log(`🔍 Getting sales breakdown for ${Array.isArray(productIds) ? productIds.length : 1} products, date: ${date}, companyId: ${companyId}`);
+
+    // Handle single productId or array of productIds
+    const productIdArray = Array.isArray(productIds) ? productIds : [productIds];
+    const objectIds = productIdArray.map(id => new mongoose.Types.ObjectId(id._id || id));
 
     // Build match filter for orders
     const matchFilter = {
-      companyId: new mongoose.Types.ObjectId(companyId),
-      'products.product': new mongoose.Types.ObjectId(productId),
       status: 'approved' // Only count approved orders for production summary
     };
 
-    // COMMENTED OUT: Date filter removed to show all data by default
+    // Add company filter if provided
+    if (companyId) {
+      matchFilter.companyId = new mongoose.Types.ObjectId(companyId);
+    }
+
     // Apply date filter if provided
-    // if (date) {
-    //   const filterDate = new Date(date);
-    //   filterDate.setUTCHours(0, 0, 0, 0);
-    //   const nextDay = new Date(filterDate.getTime() + 24 * 60 * 60 * 1000);
-    //   
-    //   matchFilter.orderDate = {
-    //     $gte: filterDate,
-    //     $lt: nextDay
-    //   };
-    //   console.log(`📅 Applying date filter: ${filterDate.toISOString()} to ${nextDay.toISOString()}`);
-    // } else {
-    //   console.log(`📅 No date filter applied - getting all orders`);
-    // }
-    
-    // Show all orders by default - no date filtering
-    console.log(`📅 Date filter disabled - showing all orders`);
+    if (date) {
+      const filterDate = new Date(date);
+      filterDate.setUTCHours(0, 0, 0, 0);
+      const nextDay = new Date(filterDate.getTime() + 24 * 60 * 60 * 1000);
+      
+      matchFilter.orderDate = {
+        $gte: filterDate,
+        $lt: nextDay
+      };
+      console.log(`📅 Applying date filter: ${filterDate.toISOString()} to ${nextDay.toISOString()}`);
+    } else {
+      console.log(`📅 No date filter applied - getting all orders`);
+    }
 
     console.log('🔍 Match filter for orders:', matchFilter);
 
@@ -127,47 +130,85 @@ export const getSalesBreakdown = async (productId, date, companyId) => {
         }
       },
       {
+        $lookup: {
+          from: 'customers', 
+          localField: 'customer',
+          foreignField: '_id',
+          as: 'customerDetails'
+        }
+      },
+      {
         $unwind: '$products'
       },
       {
         $match: {
-          'products.product': new mongoose.Types.ObjectId(productId)
+          'products.product': { $in: objectIds }
         }
       },
-      // STEP 1: Group by ORDER to get total quantity per order per salesperson
       {
         $group: {
           _id: {
-            orderId: '$_id',
+            productId: '$products.product',
             salesPersonId: '$salesPerson'
           },
-          salesPersonName: { $first: { $ifNull: [{ $arrayElemAt: ['$salesPersonDetails.fullName', 0] }, { $arrayElemAt: ['$salesPersonDetails.username', 0] }] } },
-          orderQuantity: { $sum: '$products.quantity' } // Sum quantity for this product in this order
+          productId: { $first: '$products.product' },
+          salesPersonId: { $first: '$salesPerson' },
+          salesPersonName: { 
+            $first: { 
+              $ifNull: [
+                { $arrayElemAt: ['$salesPersonDetails.fullName', 0] }, 
+                { $arrayElemAt: ['$salesPersonDetails.username', 0] },
+                'Unknown'
+              ] 
+            } 
+          },
+          totalQuantity: { $sum: '$products.quantity' },
+          orderCount: { $sum: 1 }
         }
       },
-      // STEP 2: Group by SALESPERSON to get total across all their orders
+      // Group by product to collect all salesperson data for each product
       {
         $group: {
-          _id: '$_id.salesPersonId',
-          salesPersonName: { $first: '$salesPersonName' },
-          totalQuantity: { $sum: '$orderQuantity' }, // Sum all order quantities
-          orderCount: { $sum: 1 } // Count number of orders
+          _id: '$productId',
+          productId: { $first: '$productId' },
+          salesBreakdown: {
+            $push: {
+              salesPersonId: '$salesPersonId',
+              salesPersonName: '$salesPersonName',
+              totalQuantity: '$totalQuantity',
+              orderCount: '$orderCount'
+            }
+          },
+          totalIndent: { $sum: '$totalQuantity' },
+          totalOrderCount: { $sum: '$orderCount' }
         }
       },
       {
         $project: {
-          salesPersonId: '$_id',
-          salesPersonName: { $ifNull: ['$salesPersonName', 'Unknown'] },
-          totalQuantity: 1,
-          orderCount: 1,
-          _id: 0
+          _id: 0,
+          productId: 1,
+          summary: {
+            totalIndent: '$totalIndent',
+            orderCount: '$totalOrderCount'
+          },
+          salesBreakdown: 1
         }
       }
     ]);
 
-    console.log(`📊 Sales breakdown result: ${breakdown.length} sales persons found`);
-    if (breakdown.length === 0) {
-      console.log(`📭 No orders found for productId: ${productId} on date: ${date || 'all dates'}`);
+    console.log(`📊 Sales breakdown result: ${breakdown.length} products found with salesperson data`);
+    
+    // Log sample data
+    if (breakdown.length > 0) {
+      console.log('📋 Sample breakdown:', JSON.stringify(breakdown[0], null, 2));
+      console.log('📋 Full breakdown structure:', breakdown.map(b => ({
+        productId: b.productId,
+        salesBreakdownCount: b.salesBreakdown?.length || 0,
+        totalIndent: b.summary?.totalIndent || 0
+      })));
+    } else {
+      console.log(`📭 No orders found for products on date: ${date || 'all dates'}`);
+      console.log('📋 Match filter used:', matchFilter);
     }
 
     return breakdown;

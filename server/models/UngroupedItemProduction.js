@@ -19,6 +19,12 @@ const ungroupedItemProductionSchema = new mongoose.Schema({
     min: 1
   },
   
+  // Formatted batch number (BATNO01, BATNO02, etc.)
+  batchNo: {
+    type: String,
+    default: 'BATNO01'
+  },
+  
   // Production Timing Fields
   mouldingTime: {
     type: Date,
@@ -81,7 +87,7 @@ const ungroupedItemProductionSchema = new mongoose.Schema({
 
 // Compound index to ensure one production record per item per batch per day per company
 ungroupedItemProductionSchema.index(
-  { companyId: 1, itemId: 1, batchNumber: 1, productionDate: 1 }, 
+  { companyId: 1, itemId: 1, batchNo: 1, productionDate: 1 }, 
   { unique: true }
 );
 

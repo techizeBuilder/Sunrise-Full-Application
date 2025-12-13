@@ -6,6 +6,8 @@ const AuthContext = createContext(null);
 export const useAuthContext = () => {
   const context = useContext(AuthContext);
   if (!context) {
+    console.error('useAuthContext called outside AuthProvider. Current location:', window.location.href);
+    console.error('Component stack:', new Error().stack);
     throw new Error('useAuthContext must be used within an AuthProvider');
   }
   return context;
